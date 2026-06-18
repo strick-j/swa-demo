@@ -1,0 +1,23 @@
+---
+# Configure the RHEL host and bring up a single-node minikube cluster.
+- name: Configure swa-demo host and minikube
+  hosts: swa_host
+  become: true
+  gather_facts: true
+
+  vars:
+    minikube_user: "{{ ansible_user | default('ec2-user') }}"
+
+  roles:
+    - role: common
+      tags: [common]
+    - role: kubectl_helm
+      tags: [tools]
+    - role: minikube
+      tags: [minikube]
+    - role: swa_images
+      tags: [images]
+    - role: swa_agent_prereqs
+      tags: [swa]
+    - role: swa_tooling
+      tags: [tooling]

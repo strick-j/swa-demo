@@ -1,0 +1,72 @@
+# Values for the SWA Agent chart (helm/charts/swa-agent-0.1.0.tgz).
+# Rendered by scripts/deploy-swa.sh. Keys match the chart's values.yaml exactly.
+
+# Image is pre-loaded into minikube from the S3 .tar (repo:tag auto-detected).
+image:
+  repository: "${SWA_AGENT_IMAGE_REPO}"
+  tag: "${SWA_AGENT_IMAGE_TAG}"
+  pullPolicy: Never
+
+# Must match the control plane trust domain (terraform-swa trust_domain_name).
+trustDomain:
+  name: "${SWA_TRUST_DOMAIN}"
+
+# Reach the in-cluster SWA Server Service.
+server:
+  address: "swa-server.${NS_SWA}.svc.cluster.local:8443"
+
+agent:
+  healthAddr: "0.0.0.0:8082"
+  # Workload API socket the demo webapp connects to (inside the pod path).
+  socketPath: /tmp/swa-agent/public/api.sock
+
+nodeAttestor:
+  type: k8s_psat
+  k8s_psat:
+    # Must match the server_group cluster key in terraform-swa.
+    cluster: "${SWA_CLUSTER_NAME}"
+    audience: "swa-server"
+    tokenPath: /var/run/secrets/swa/serviceaccount/token
+
+workloadAttestors:
+  - type: k8s
+    config:
+      skipKubeletVerification: false
+      nodeNameEnv: MY_NODE_NAME
+
+serviceAccount:
+  create: true
+  name: "swa-agent"
+
+rbac:
+  create: true
+
+# Host path exposing the Workload API socket to pods on the same node.
+socketHostPath: /tmp/swa-agent
+
+# Node group label consumed by the server's agent SPIFFE ID template (k8s_psat).
+podLabels:
+  swa_nodegroup: "${SWA_NODE_GROUP}"
+
+hostPID: true
+hostNetwork: true
+setNodeNameEnv: true
+dnsPolicy: ClusterFirstWithHostNet
+
+securityContext:
+  runAsUser: 65532
+  runAsGroup: 65532
+  privileged: false
+  allowPrivilegeEscalation: false
+
+telemetry:
+  logging:
+    level: info
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi

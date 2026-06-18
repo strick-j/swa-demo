@@ -1,0 +1,48 @@
+---
+# Stage the project on the host and prepare namespaces + the agent socket dir.
+
+- name: Stage project directories on the host
+  ansible.posix.synchronize:
+    src: "{{ playbook_dir }}/../{{ item }}"
+    dest: "{{ project_stage_dir }}/"
+    rsync_opts:
+      - "--exclude=.terraform"
+      - "--exclude=*.tfstate*"
+      - "--exclude=.env"
+      - "--exclude=webapp/bin"
+  loop:
+    - helm
+    - tenant
+    - k8s
+    - scripts
+    - webapp
+    - .env
+  become: true
+  become_user: "{{ minikube_user }}"
+
+- name: Ensure namespaces exist
+  ansible.builtin.command: "kubectl create namespace {{ item }} --dry-run=client -o yaml"
+  register: ns_yaml
+  changed_when: false
+  loop:
+    - "{{ ns_swa }}"
+    - "{{ ns_demo }}"
+  become: true
+  become_user: "{{ minikube_user }}"
+
+- name: Apply namespaces
+  ansible.builtin.shell: "echo '{{ item.stdout }}' | kubectl apply -f -"
+  loop: "{{ ns_yaml.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  register: ns_apply
+  changed_when: "'created' in ns_apply.stdout"
+  become: true
+  become_user: "{{ minikube_user }}"
+
+- name: Ensure agent Workload API socket directory exists
+  ansible.builtin.file:
+    path: "{{ swa_agent_socket_dir }}"
+    state: directory
+    mode: "0755"
+  become: true

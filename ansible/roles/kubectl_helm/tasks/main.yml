@@ -1,0 +1,25 @@
+---
+# Install kubectl and helm system-wide.
+
+- name: Install kubectl
+  ansible.builtin.get_url:
+    url: "https://dl.k8s.io/release/{{ kubectl_version }}/bin/linux/amd64/kubectl"
+    dest: /usr/local/bin/kubectl
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Check whether helm is installed
+  ansible.builtin.command: helm version --short
+  register: helm_check
+  failed_when: false
+  changed_when: false
+
+- name: Install helm via official script
+  ansible.builtin.shell: |
+    set -o pipefail
+    curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+  args:
+    executable: /bin/bash
+  when: helm_check.rc != 0
+  changed_when: true

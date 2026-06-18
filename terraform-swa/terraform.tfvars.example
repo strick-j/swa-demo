@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars. Most defaults work for the minikube demo.
+trust_domain = "swa-demo.example.com"
+server_group = "minikube-servers"
+node_group   = "minikube-nodes"
+cluster_name = "minikube"
+
+workload_namespace       = "swa-demo"
+workload_service_account = "swa-demo-webapp"
+
+# Server JWT auth to the control plane. On minikube the control plane CANNOT
+# reach the cluster JWKS, so leave server_jwks_uri empty and let
+# scripts/fetch-cluster-jwks.sh populate server_issuer + server_public_keys via
+# cluster-jwks.auto.tfvars.json. Override here only if you expose a public JWKS.
+# server_jwks_uri = "https://your-public-oidc/.well-known/jwks.json"

@@ -1,0 +1,9 @@
+---
+# Namespaces created up-front so Helm/manifests can target them.
+ns_swa: "swa-system"
+ns_demo: "swa-demo"
+# Host directory the agent DaemonSet exposes its Workload API socket under
+# (chart socketHostPath). Pre-created so the webapp hostPath mount is satisfied.
+swa_agent_socket_dir: "/tmp/swa-agent"
+# Where the project is staged on the host for host-side deploy scripts.
+project_stage_dir: "/home/{{ minikube_user }}/swa-demo"

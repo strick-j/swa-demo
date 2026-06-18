@@ -1,0 +1,98 @@
+---
+# Pull SWA image tarballs from S3 and load them into minikube's container runtime,
+# auto-detecting the repo:tag of each so no registry or imagePullSecret is needed.
+# Skipped entirely when images_s3_uri is not provided.
+
+- name: Skip image load when no S3 URI is configured
+  ansible.builtin.debug:
+    msg: "images_s3_uri not set; skipping SWA image load (configure SWA_IMAGES_S3_URI)."
+  when: images_s3_uri | default('') | length == 0
+
+- name: Load SWA images from S3
+  when: images_s3_uri | default('') | length > 0
+  block:
+    - name: Install unzip (awscli v2 prerequisite)
+      ansible.builtin.dnf:
+        name: unzip
+        state: present
+
+    - name: Download AWS CLI v2 installer
+      ansible.builtin.get_url:
+        url: https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+        dest: /tmp/awscliv2.zip
+        mode: "0644"
+
+    - name: Unpack AWS CLI v2 installer
+      ansible.builtin.unarchive:
+        src: /tmp/awscliv2.zip
+        dest: /tmp
+        remote_src: true
+
+    - name: Install AWS CLI v2
+      ansible.builtin.command: /tmp/aws/install --update
+      args:
+        creates: /usr/local/bin/aws
+
+    - name: Ensure local image directory exists
+      ansible.builtin.file:
+        path: "{{ images_local_dir }}"
+        state: directory
+        owner: "{{ minikube_user }}"
+        group: "{{ minikube_user }}"
+        mode: "0755"
+
+    - name: Sync image tarballs from S3 (instance-profile auth)
+      ansible.builtin.command: >-
+        /usr/local/bin/aws s3 sync {{ images_s3_uri }} {{ images_local_dir }}
+        --exclude "*" --include "*.tar"
+      environment:
+        AWS_DEFAULT_REGION: "{{ aws_region }}"
+      become_user: "{{ minikube_user }}"
+      register: s3_sync
+      changed_when: "'download:' in s3_sync.stdout"
+
+    - name: Find downloaded tarballs for this architecture
+      ansible.builtin.find:
+        paths: "{{ images_local_dir }}"
+        patterns: "{{ image_arch_glob }}"
+      register: tarballs
+
+    - name: Fail if no architecture-matching tarballs were found
+      ansible.builtin.fail:
+        msg: "No {{ image_arch_glob }} images found under {{ images_s3_uri }}."
+      when: tarballs.matched | int == 0
+
+    - name: Load each image into minikube and capture its repo:tag
+      ansible.builtin.shell: |
+        set -euo pipefail
+        eval "$(minikube -p minikube docker-env)"
+        docker load -i "{{ item.path }}" | sed -n 's/^Loaded image: //p'
+      args:
+        executable: /bin/bash
+      environment:
+        MINIKUBE_HOME: "/home/{{ minikube_user }}/.minikube"
+      become_user: "{{ minikube_user }}"
+      loop: "{{ tarballs.files }}"
+      loop_control:
+        label: "{{ item.path | basename }}"
+      register: image_loads
+      changed_when: true
+
+    - name: Aggregate detected image references
+      ansible.builtin.set_fact:
+        loaded_images: >-
+          {{ image_loads.results
+             | map(attribute='stdout_lines') | flatten
+             | map('trim') | select('string') | list }}
+
+    - name: Record detected image references on the host
+      ansible.builtin.copy:
+        dest: "{{ image_tags_file }}"
+        content: "{{ loaded_images | join('\n') }}\n"
+        owner: "{{ minikube_user }}"
+        group: "{{ minikube_user }}"
+        mode: "0644"
+
+    - name: Show loaded images
+      ansible.builtin.debug:
+        var: loaded_images

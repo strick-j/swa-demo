@@ -1,0 +1,73 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: swa-demo-webapp
+  namespace: swa-demo
+  labels:
+    app: swa-demo-webapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: swa-demo-webapp
+  template:
+    metadata:
+      labels:
+        app: swa-demo-webapp
+    spec:
+      serviceAccountName: swa-demo-webapp
+      containers:
+        - name: webapp
+          image: swa-demo-webapp:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PORT
+              value: "8080"
+            - name: WEBAPP_JWT_AUDIENCE
+              value: "swa-demo-audience"
+            - name: SWA_TRUST_DOMAIN
+              value: "swa-demo.example.com"
+            - name: NS_DEMO
+              value: "swa-demo"
+            - name: WEBAPP_SA
+              value: "swa-demo-webapp"
+            - name: SWA_NODE_GROUP
+              value: "minikube-nodes"
+            # Workload API socket exposed by the SWA Agent DaemonSet hostPath.
+            - name: SPIFFE_ENDPOINT_SOCKET
+              value: "unix:///tmp/swa-agent/public/api.sock"
+            # Set to "true" to force the visual demo without a live agent.
+            - name: DEMO_MODE
+              value: "false"
+          volumeMounts:
+            - name: swa-agent-socket
+              mountPath: /tmp/swa-agent
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+      volumes:
+        # The SWA Agent DaemonSet exposes the Workload API socket on this hostPath.
+        - name: swa-agent-socket
+          hostPath:
+            path: /tmp/swa-agent
+            type: Directory

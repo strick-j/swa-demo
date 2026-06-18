@@ -1,0 +1,42 @@
+# --- Secrets / local config (NEVER commit) ---
+.env
+*.tfvars
+!*.tfvars.example
+*.auto.tfvars
+inventory.ini
+*.pem
+*.key
+kubeconfig
+.swa/
+tenant/.authn_id
+terraform-swa/outputs.env
+terraform-swa/cluster-jwks.auto.tfvars.json
+
+# --- Terraform ---
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+.terraform.lock.hcl
+
+# --- Ansible ---
+*.retry
+ansible/inventory.ini
+
+# --- Vendor artifacts (SWA charts/images) ---
+helm/charts/*.tgz
+*.tar.gz
+
+# --- Go ---
+webapp/bin/
+webapp/dist/
+*.test
+*.out
+
+# --- Editor / OS ---
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.claude

@@ -1,0 +1,54 @@
+# Values for the SWA Server chart (helm/charts/swa-server-0.1.0.tgz).
+# Rendered by scripts/deploy-swa.sh from .env + terraform-swa outputs.
+# Keys match the chart's values.yaml exactly.
+
+replicaCount: 1
+
+# Image is pre-loaded into minikube from the S3 .tar (repo:tag auto-detected),
+# so never pull and use no imagePullSecret.
+image:
+  repository: "${SWA_SERVER_IMAGE_REPO}"
+  tag: "${SWA_SERVER_IMAGE_TAG}"
+  pullPolicy: Never
+
+controlPlane:
+  # Control plane (Conjur Cloud / Secrets Manager - SaaS) URL.
+  url: "${SWA_CONTROLPLANE_URL}"
+  auth:
+    type: jwt
+    # authn_id from terraform-swa (swa_server.authn_id).
+    authnID: "${SWA_AUTHN_ID}"
+    tokenPath: "/var/run/secrets/tokens/swa-token"
+    audience: "conjur"
+  # controlPlane.token is provided separately via `helm --set-file
+  # controlPlane.token=<token.json>` in deploy-swa.sh when available.
+
+server:
+  apiAddr: "0.0.0.0:8443"
+  webAddr: "0.0.0.0:8080"
+  trustRootDir: /var/swa/certs
+
+service:
+  type: ClusterIP
+  apiPort: 8443
+  webPort: 8080
+
+serviceAccount:
+  create: true
+  name: "swa-server"
+
+# Required for the k8s_psat node attestor (TokenReview API access).
+rbac:
+  createTokenReviewRole: true
+
+telemetry:
+  logging:
+    level: info
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
