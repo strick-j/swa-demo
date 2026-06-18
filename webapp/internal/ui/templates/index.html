@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SWA Demo · SPIFFE JWT-SVID</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header>
+    <h1>CyberArk SWA · Workload Identity Demo</h1>
+    <p class="sub">
+      Trust domain <code>{{.TrustDomain}}</code> ·
+      audience <code>{{.Audience}}</code> ·
+      svid source <code>{{.Source}}</code>
+    </p>
+  </header>
+
+  <main>
+    <section class="panel">
+      <button id="request-btn">Request JWT-SVID from SWA Agent</button>
+      <span id="status" class="status"></span>
+    </section>
+
+    <section class="panel">
+      <h2>1 · Identity lifecycle</h2>
+      <ol id="timeline" class="timeline"></ol>
+    </section>
+
+    <section class="grid">
+      <div class="panel">
+        <h2>2 · SPIFFE ID</h2>
+        <pre id="spiffe-id" class="mono">—</pre>
+        <h3>Validity</h3>
+        <pre id="validity" class="mono">—</pre>
+      </div>
+      <div class="panel">
+        <h2>3 · Decoded JWT-SVID</h2>
+        <h3>Header</h3>
+        <pre id="jwt-header" class="mono">—</pre>
+        <h3>Claims</h3>
+        <pre id="jwt-claims" class="mono">—</pre>
+        <h3>Compact token</h3>
+        <pre id="jwt-token" class="mono token">—</pre>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>swa-demo · POST <code>/api/svid</code> · <code>/healthz</code></p>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

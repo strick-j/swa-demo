@@ -1,0 +1,11 @@
+# Copy to terraform.tfvars (gitignored) or rely on TF_VAR_* env from .env.
+project         = "swa-demo"
+aws_region      = "us-east-1"
+rhel_version    = "9"
+instance_type   = "m5.xlarge"
+root_volume_gb  = 60
+
+# Lock these down for anything beyond a throwaway demo:
+admin_cidr      = "0.0.0.0/0" # set to YOUR.IP.ADDR.ESS/32
+key_pair_name   = ""          # empty => Terraform generates swa-demo-key.pem
+webapp_nodeport = 30080

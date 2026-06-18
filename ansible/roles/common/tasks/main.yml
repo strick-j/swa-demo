@@ -1,0 +1,53 @@
+---
+# Base host prep: packages, Docker engine (minikube driver), swap off.
+
+- name: Ensure base packages are present
+  ansible.builtin.dnf:
+    name:
+      - conntrack-tools
+      - socat
+      - curl
+      - tar
+      - jq
+      - git
+      - firewalld
+    state: present
+
+- name: Add Docker CE repository
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/rhel/docker-ce.repo
+    dest: /etc/yum.repos.d/docker-ce.repo
+    mode: "0644"
+
+- name: Install Docker engine
+  ansible.builtin.dnf:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+    state: present
+
+- name: Enable and start Docker
+  ansible.builtin.systemd:
+    name: docker
+    enabled: true
+    state: started
+
+- name: Add the login user to the docker group
+  ansible.builtin.user:
+    name: "{{ minikube_user }}"
+    groups: docker
+    append: true
+
+- name: Disable swap immediately
+  ansible.builtin.command: swapoff -a
+  changed_when: false
+
+- name: Remove swap entries from fstab
+  ansible.posix.mount:
+    name: swap
+    fstype: swap
+    state: absent
+
+- name: Reset SSH connection so docker group membership applies
+  ansible.builtin.meta: reset_connection

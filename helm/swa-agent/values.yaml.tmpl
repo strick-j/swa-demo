@@ -1,0 +1,43 @@
+# Values for the CyberArk SWA Agent Helm chart (rendered by scripts/deploy-swa.sh).
+# The agent runs as a DaemonSet and exposes the Workload API over a Unix socket on
+# a hostPath, which the demo webapp pod mounts read-only.
+#
+# NOTE: Confirm key names against `helm show values <swa-agent-chart>`.
+
+image:
+  repository: "${SWA_IMAGE_REGISTRY}/swa-agent"
+  tag: "${SWA_AGENT_IMAGE_TAG}"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets:
+  - name: swa-registry
+
+# How the agent reaches the in-cluster SWA Server.
+server:
+  address: "swa-server.${NS_SWA}.svc.cluster.local"
+  port: 8443
+  trustDomain: "${SWA_TRUST_DOMAIN}"
+
+# Workload API socket exposed to workloads. hostPath dir is created by Ansible
+# (swa_agent_prereqs) and mounted into the webapp via k8s/webapp-deployment.yaml.
+workloadApi:
+  socketHostPath: "/run/swa-agent"
+  socketName: "api.sock"
+
+serviceAccount:
+  create: true
+  name: swa-agent
+
+# DaemonSet: one agent per node (single node on minikube).
+daemonset:
+  hostPID: false
+  tolerations:
+    - operator: Exists
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi

@@ -1,0 +1,42 @@
+# Values for the CyberArk SWA Server Helm chart (rendered by scripts/deploy-swa.sh).
+# Placeholders ${...} are substituted from .env + the registered authn_id.
+#
+# NOTE: Key names below follow the documented SWA server chart. Confirm against the
+# chart version you pull (helm show values <swa-server-chart>) and adjust as needed.
+
+image:
+  repository: "${SWA_IMAGE_REGISTRY}/swa-server"
+  tag: "${SWA_SERVER_IMAGE_TAG}"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets:
+  - name: swa-registry
+
+# Tenant / control-plane connection.
+tenant:
+  url: "${SWA_TENANT_URL}"
+  trustDomain: "${SWA_TRUST_DOMAIN}"
+  serverGroup: "${SWA_SERVER_GROUP}"
+  # authn_id captured during server registration (tenant/03-register-server.sh).
+  authnId: "${SWA_AUTHN_ID}"
+
+# The server authenticates to the tenant using a projected Kubernetes SA token.
+serviceAccount:
+  create: true
+  name: swa-server
+
+# Node attestation method advertised by this server (k8s SA token).
+nodeAttestation:
+  method: k8s_sat
+
+persistence:
+  enabled: true
+  size: 1Gi
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
