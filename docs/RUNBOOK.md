@@ -10,9 +10,22 @@
 ## Prerequisites (CyberArk)
 
 - Active **Secrets Manager – SaaS** tenant + **Admin** role → set `SWA_TENANT_URL`, `SWA_TENANT_API_TOKEN`.
-- **SWA** SKU entitlement + container registry credentials → `SWA_IMAGE_REGISTRY`, `SWA_REGISTRY_USERNAME/PASSWORD`.
-- Confirm the SWA **Helm chart refs** and **REST API routes** for your tenant
-  version (see "Version-specific values" below).
+- **SWA** SKU entitlement. The server/agent images arrive as `*.tar.gz`.
+- Upload those tarballs to an S3 prefix and set `SWA_IMAGES_S3_URI`
+  (e.g. `s3://my-bucket/swa-images`). The host's IAM instance profile gets
+  read access automatically; Ansible loads them into minikube — **no registry**.
+- If the Helm **charts** are not pullable, drop `swa-server*.tgz` / `swa-agent*.tgz`
+  into `helm/charts/`.
+- Confirm the SWA **REST API routes** for your tenant version (see "Version-specific
+  values" below).
+
+### Upload the image tarballs
+
+```bash
+aws s3 cp swa-server.tar.gz s3://my-bucket/swa-images/
+aws s3 cp swa-agent.tar.gz  s3://my-bucket/swa-images/
+# any number of *.tar.gz under the prefix are auto-detected and loaded
+```
 
 ## 1. Configure
 
@@ -58,7 +71,8 @@ These are centralized so you only edit them in one place:
 |------|------|-------|
 | Tenant REST routes | `tenant/lib.sh` (`SWA_API_*`) | trust-domains / server-groups / node-groups / servers |
 | `authn_id` field name | `tenant/03-register-server.sh` | parser handles `authnId`/`authn_id`/`id` |
-| Helm chart refs | `.env` (`SWA_SERVER_CHART`, `SWA_AGENT_CHART`) or `scripts/deploy-swa.sh` | OCI vs classic repo |
+| Image tarballs | `SWA_IMAGES_S3_URI` | auto-loaded; tags auto-detected to `~/.swa-images` |
+| Helm charts | `helm/charts/*.tgz` or `.env` (`SWA_SERVER_CHART`/`SWA_AGENT_CHART`) | local package vs OCI ref |
 | Chart value keys | `helm/swa-*/values.yaml.tmpl` | verify with `helm show values <chart>` |
 | Attestation method | `tenant/01-server-group.sh` | `k8s_sat` for minikube |
 
@@ -67,7 +81,9 @@ These are centralized so you only edit them in one place:
 | Symptom | Likely cause | Action |
 |---------|--------------|--------|
 | `make tenant` HTTP 401/404 | wrong API base/route or token | check `SWA_TENANT_URL`, token scope, adjust `SWA_API_*` in `tenant/lib.sh` |
-| `helm install` ImagePullBackOff | registry creds / chart ref | verify `SWA_REGISTRY_*`, `SWA_*_CHART`; `kubectl -n cyberark-swa describe pod` |
+| pod `ErrImageNeverPull` | image not loaded / tag mismatch | check `~/.swa-images` on host vs `helm/swa-*` repo:tag; re-run `make configure` (loads tarballs) |
+| `make configure` S3 AccessDenied | instance profile / wrong prefix | verify `SWA_IMAGES_S3_URI` and that `TF_VAR_images_s3_uri` was set at `tf-apply` |
+| `helm install` chart not found | chart ref/package missing | place `helm/charts/swa-*.tgz` or set `SWA_*_CHART` |
 | webapp shows "demo (no agent socket)" | socket not mounted / agent down | confirm DaemonSet Running and `/run/swa-agent/api.sock` exists on the node |
 | webapp 502 on `/api/svid` | agent reachable but issuance denied | check node-group workload selectors match `ns=swa-demo, sa=swa-demo-webapp` |
 | minikube won't start | docker group / resources | re-login for docker group; ensure instance ≥ 4 vCPU / 16 GB |

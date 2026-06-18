@@ -46,8 +46,10 @@ make down                   # tear down AWS infra
 
 - Terraform >= 1.5, Ansible >= 2.15, AWS CLI configured, Go >= 1.22 (local build), `kubectl`, `helm`.
 - An active **Secrets Manager – SaaS** tenant with the **Admin** role.
-- **SWA** SKU entitlement (Palo Alto Networks Marketplace) + registry pull credentials.
-- AWS account/credentials permitted to create VPC/EC2 resources.
+- **SWA** SKU entitlement (Palo Alto Networks Marketplace). Images are delivered as
+  `*.tar.gz` and hosted in **your S3 bucket** — no registry needed; the host loads
+  them into minikube directly (set `SWA_IMAGES_S3_URI`).
+- AWS account/credentials permitted to create VPC/EC2/IAM resources.
 
 ## Security
 

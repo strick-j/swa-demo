@@ -59,8 +59,10 @@ tf-destroy: ## Tear down all AWS infra
 # Phase 2 — Ansible (host config + minikube)
 # ---------------------------------------------------------------------------
 .PHONY: configure
-configure: ## Run Ansible: configure host + start minikube
-	ansible-playbook -i $(INVENTORY) $(ANSIBLE_DIR)/site.yml
+configure: ## Run Ansible: configure host + start minikube + load SWA images from S3
+	ansible-playbook -i $(INVENTORY) $(ANSIBLE_DIR)/site.yml \
+	  -e images_s3_uri="$(SWA_IMAGES_S3_URI)" \
+	  -e aws_region="$(AWS_REGION)"
 
 # ---------------------------------------------------------------------------
 # Phase 3 — Tenant wiring + SWA server/agent (Helm). These run ON the host,

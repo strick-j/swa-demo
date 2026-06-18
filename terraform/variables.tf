@@ -77,3 +77,18 @@ variable "ssh_username" {
   type        = string
   default     = "ec2-user"
 }
+
+variable "images_s3_uri" {
+  description = <<-EOT
+    S3 URI prefix holding the SWA image tarballs (*.tar.gz), e.g.
+    s3://my-bucket/swa-images. The host receives read-only access (GetObject +
+    scoped ListBucket). Leave empty to skip granting S3 access.
+  EOT
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.images_s3_uri == "" || startswith(var.images_s3_uri, "s3://")
+    error_message = "images_s3_uri must be empty or start with s3://."
+  }
+}

@@ -4,13 +4,12 @@
 #
 # NOTE: Confirm key names against `helm show values <swa-agent-chart>`.
 
+# Image is pre-loaded into minikube from the S3 tarball (repo:tag auto-detected),
+# so we never pull and need no imagePullSecret.
 image:
-  repository: "${SWA_IMAGE_REGISTRY}/swa-agent"
+  repository: "${SWA_AGENT_IMAGE_REPO}"
   tag: "${SWA_AGENT_IMAGE_TAG}"
-  pullPolicy: IfNotPresent
-
-imagePullSecrets:
-  - name: swa-registry
+  pullPolicy: Never
 
 # How the agent reaches the in-cluster SWA Server.
 server:

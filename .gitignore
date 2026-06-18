@@ -22,6 +22,10 @@ crash.*.log
 *.retry
 ansible/inventory.ini
 
+# --- Vendor artifacts (SWA charts/images) ---
+helm/charts/*.tgz
+*.tar.gz
+
 # --- Go ---
 webapp/bin/
 webapp/dist/

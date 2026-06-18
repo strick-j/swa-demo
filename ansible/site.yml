@@ -15,5 +15,7 @@
       tags: [tools]
     - role: minikube
       tags: [minikube]
+    - role: swa_images
+      tags: [images]
     - role: swa_agent_prereqs
       tags: [swa]

@@ -66,9 +66,20 @@ and displays validity (`iat`/`exp`).
   `Fetcher` interface, so it tests without a live agent and falls back to a
   `DEMO_MODE` Fake when no socket is present.
 
+## Image distribution (no registry)
+
+SWA images are delivered as `*.tar.gz` and hosted in **your S3 bucket**. The EC2
+host reads them via an **IAM instance profile** (scoped `s3:GetObject` on the
+prefix — no static keys), Ansible runs `minikube image load` on each, and the
+repo:tag is **auto-detected** into `~/.swa-images`. Helm references those tags
+with `pullPolicy: Never`, so the cluster never contacts a registry and no
+`imagePullSecret` exists. The webapp image is likewise built straight into
+minikube's docker. See [RUNBOOK.md](RUNBOOK.md) for the upload step.
+
 ## Trust boundaries / secrets
 
-- Tenant API token, registry pull credentials, and AWS creds live only in `.env`
-  (gitignored) and become Terraform vars / Kubernetes secrets at deploy time.
+- Tenant API token and AWS creds live only in `.env` (gitignored) and become
+  Terraform vars / Kubernetes secrets at deploy time. Image pulls need **no**
+  credentials (loaded locally); S3 read is via the host's IAM instance profile.
 - The agent socket is mounted **read-only** into the webapp pod.
 - The Security Group restricts SSH and the NodePort to `admin_cidr`.

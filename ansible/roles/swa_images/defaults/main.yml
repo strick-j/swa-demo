@@ -1,0 +1,8 @@
+---
+# S3 URI prefix holding the SWA image tarballs (passed via -e from the Makefile).
+images_s3_uri: ""
+# AWS region for the s3 client (instance profile supplies credentials).
+aws_region: "us-east-1"
+# Where tarballs land on the host and where detected repo:tags are recorded.
+images_local_dir: "/home/{{ minikube_user }}/swa-images"
+image_tags_file: "/home/{{ minikube_user }}/.swa-images"
