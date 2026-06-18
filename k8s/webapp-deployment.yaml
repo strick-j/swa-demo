@@ -34,15 +34,17 @@ spec:
               value: "swa-demo"
             - name: WEBAPP_SA
               value: "swa-demo-webapp"
-            # Workload API socket mounted from the agent's hostPath.
+            - name: SWA_NODE_GROUP
+              value: "minikube-nodes"
+            # Workload API socket exposed by the SWA Agent DaemonSet hostPath.
             - name: SPIFFE_ENDPOINT_SOCKET
-              value: "unix:///run/swa-agent/api.sock"
+              value: "unix:///tmp/swa-agent/public/api.sock"
             # Set to "true" to force the visual demo without a live agent.
             - name: DEMO_MODE
               value: "false"
           volumeMounts:
             - name: swa-agent-socket
-              mountPath: /run/swa-agent
+              mountPath: /tmp/swa-agent
               readOnly: true
           readinessProbe:
             httpGet:
@@ -67,5 +69,5 @@ spec:
         # The SWA Agent DaemonSet exposes the Workload API socket on this hostPath.
         - name: swa-agent-socket
           hostPath:
-            path: /run/swa-agent
+            path: /tmp/swa-agent
             type: Directory

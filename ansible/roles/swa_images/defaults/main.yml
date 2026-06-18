@@ -6,3 +6,6 @@ aws_region: "us-east-1"
 # Where tarballs land on the host and where detected repo:tags are recorded.
 images_local_dir: "/home/{{ minikube_user }}/swa-images"
 image_tags_file: "/home/{{ minikube_user }}/.swa-images"
+# CyberArk ships arch-specific .tar images (amd64 + arm64v8). minikube on an
+# x86_64 EC2 host needs amd64. Only tarballs matching this glob are loaded.
+image_arch_glob: "*-amd64.tar"

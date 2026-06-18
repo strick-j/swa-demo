@@ -44,22 +44,22 @@
     - name: Sync image tarballs from S3 (instance-profile auth)
       ansible.builtin.command: >-
         /usr/local/bin/aws s3 sync {{ images_s3_uri }} {{ images_local_dir }}
-        --exclude "*" --include "*.tar.gz"
+        --exclude "*" --include "*.tar"
       environment:
         AWS_DEFAULT_REGION: "{{ aws_region }}"
       become_user: "{{ minikube_user }}"
       register: s3_sync
       changed_when: "'download:' in s3_sync.stdout"
 
-    - name: Find downloaded tarballs
+    - name: Find downloaded tarballs for this architecture
       ansible.builtin.find:
         paths: "{{ images_local_dir }}"
-        patterns: "*.tar.gz"
+        patterns: "{{ image_arch_glob }}"
       register: tarballs
 
-    - name: Fail if no tarballs were found
+    - name: Fail if no architecture-matching tarballs were found
       ansible.builtin.fail:
-        msg: "No *.tar.gz found under {{ images_s3_uri }}."
+        msg: "No {{ image_arch_glob }} images found under {{ images_s3_uri }}."
       when: tarballs.matched | int == 0
 
     - name: Load each image into minikube and capture its repo:tag

@@ -32,15 +32,15 @@ else
 fi
 
 head "SWA server + agent pods"
-if on_host "kubectl -n ${NS_SWA:-cyberark-swa} get pods --no-headers | grep -vq 'Running\\|Completed' ; test \$? -ne 0"; then
-  ok "all ${NS_SWA:-cyberark-swa} pods Running"
+if on_host "kubectl -n ${NS_SWA:-swa-system} get pods --no-headers | grep -vq 'Running\\|Completed' ; test \$? -ne 0"; then
+  ok "all ${NS_SWA:-swa-system} pods Running"
 else
-  bad "some ${NS_SWA:-cyberark-swa} pods not Running"
+  bad "some ${NS_SWA:-swa-system} pods not Running"
 fi
 
 head "Agent Workload API socket"
-if on_host "test -S /run/swa-agent/api.sock"; then
-  ok "socket present at /run/swa-agent/api.sock"
+if on_host "test -S /tmp/swa-agent/public/api.sock"; then
+  ok "socket present at /tmp/swa-agent/public/api.sock"
 else
   bad "Workload API socket missing"
 fi

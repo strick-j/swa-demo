@@ -65,14 +65,39 @@ configure: ## Run Ansible: configure host + start minikube + load SWA images fro
 	  -e aws_region="$(AWS_REGION)"
 
 # ---------------------------------------------------------------------------
-# Phase 3 — Tenant wiring + SWA server/agent (Helm). These run ON the host,
-# which has minikube/kubectl/helm and egress to the tenant + registry.
+# Phase 3 — Tenant wiring (local, via cyberark/swa provider) + SWA server/agent
+# Helm install (on the host). Tenant outputs are bridged to the host as
+# outputs.env so deploy-swa.sh can consume authn_id / trust domain.
 # ---------------------------------------------------------------------------
-.PHONY: tenant swa
-tenant: ## Create trust domain/server group/node group + register server in tenant
+SWA_RELEASE_DIR ?= $(HOME)/Downloads/Secure Workload Access/Secure Workload Access/swa-release-v1.0.0
+TFSWA_DIR := terraform-swa
+
+.PHONY: swa-provider-install vendor-charts fetch-jwks tenant-tf tenant swa
+swa-provider-install: ## Install the cyberark/swa Terraform provider from the bundle
+	"$(SWA_RELEASE_DIR)/install-terraform-provider.sh"
+
+vendor-charts: ## Copy bundled SWA helm charts into helm/charts/
+	mkdir -p helm/charts && cp "$(SWA_RELEASE_DIR)"/helm/*.tgz helm/charts/
+	@echo "Vendored: $$(ls helm/charts/*.tgz)"
+
+fetch-jwks: ## Fetch cluster issuer + JWKS for the server JWT (minikube case)
+	bash scripts/fetch-cluster-jwks.sh
+
+tenant-tf: fetch-jwks ## Apply tenant resources via cyberark/swa provider (needs `conjur login`)
+	cd $(TFSWA_DIR) && terraform init -input=false && terraform apply -auto-approve
+	@cd $(TFSWA_DIR) && { \
+	  echo "SWA_AUTHN_ID=$$(terraform output -raw authn_id)"; \
+	  echo "SWA_TRUST_DOMAIN=$$(terraform output -raw trust_domain_name)"; \
+	  echo "SWA_CLUSTER_NAME=$$(terraform output -raw cluster_name)"; \
+	  echo "SWA_NODE_GROUP=$$(terraform output -raw node_group_name)"; \
+	} > outputs.env
+	@echo "Wrote $(TFSWA_DIR)/outputs.env"
+
+tenant: ## (Fallback) create tenant resources via REST scripts on the host
 	bash scripts/host-exec.sh "bash tenant/00-trust-domain.sh && bash tenant/01-server-group.sh && bash tenant/02-node-group.sh && bash tenant/03-register-server.sh"
 
 swa: ## Helm-install SWA server + agent into minikube (on host)
+	bash scripts/host-push.sh $(TFSWA_DIR)/outputs.env outputs.env
 	bash scripts/host-exec.sh "bash scripts/deploy-swa.sh"
 
 # ---------------------------------------------------------------------------
@@ -92,8 +117,9 @@ webapp-deploy: ## Deploy webapp manifests into the demo namespace
 # Phase 5 — End to end
 # ---------------------------------------------------------------------------
 .PHONY: up down verify demo
-up: preflight webapp-test tf-apply configure tenant swa webapp-build webapp-deploy verify ## Full bring-up
+up: preflight webapp-test vendor-charts tf-apply configure tenant-tf swa webapp-build webapp-deploy verify ## Full bring-up
 	@echo "swa-demo is up. Run 'make demo' to open the UI."
+	@echo "Prereqs assumed: 'make swa-provider-install' + 'conjur login' done."
 
 down: tf-destroy ## Tear everything down
 	@echo "Destroyed."

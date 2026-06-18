@@ -51,6 +51,7 @@ type config struct {
 	port        string
 	audience    string
 	trustDomain string
+	nodeGroup   string
 	namespace   string
 	serviceAcct string
 	socketAddr  string
@@ -62,6 +63,7 @@ func loadConfig() config {
 		port:        env("PORT", "8080"),
 		audience:    env("WEBAPP_JWT_AUDIENCE", "swa-demo-audience"),
 		trustDomain: env("SWA_TRUST_DOMAIN", "swa-demo.example.com"),
+		nodeGroup:   env("SWA_NODE_GROUP", "minikube-nodes"),
 		namespace:   env("NS_DEMO", "swa-demo"),
 		serviceAcct: env("WEBAPP_SA", "swa-demo-webapp"),
 		socketAddr:  socketAddr(),
@@ -89,7 +91,7 @@ func socketAddr() string {
 func buildFetcher(cfg config) svid.Fetcher {
 	if cfg.demoMode || cfg.socketAddr == "" {
 		log.Printf("using DEMO svid source (demoMode=%v, socket=%q)", cfg.demoMode, cfg.socketAddr)
-		return svid.NewFake(cfg.trustDomain, cfg.namespace, cfg.serviceAcct)
+		return svid.NewFake(cfg.trustDomain, cfg.nodeGroup, cfg.namespace, cfg.serviceAcct)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -98,7 +100,7 @@ func buildFetcher(cfg config) svid.Fetcher {
 	client, err := spiffe.New(ctx, cfg.socketAddr)
 	if err != nil {
 		log.Printf("WARNING: could not connect to Workload API at %s (%v); falling back to DEMO mode", cfg.socketAddr, err)
-		return svid.NewFake(cfg.trustDomain, cfg.namespace, cfg.serviceAcct)
+		return svid.NewFake(cfg.trustDomain, cfg.nodeGroup, cfg.namespace, cfg.serviceAcct)
 	}
 	return client
 }

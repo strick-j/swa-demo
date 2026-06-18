@@ -1,42 +1,72 @@
-# Values for the CyberArk SWA Agent Helm chart (rendered by scripts/deploy-swa.sh).
-# The agent runs as a DaemonSet and exposes the Workload API over a Unix socket on
-# a hostPath, which the demo webapp pod mounts read-only.
-#
-# NOTE: Confirm key names against `helm show values <swa-agent-chart>`.
+# Values for the SWA Agent chart (helm/charts/swa-agent-0.1.0.tgz).
+# Rendered by scripts/deploy-swa.sh. Keys match the chart's values.yaml exactly.
 
-# Image is pre-loaded into minikube from the S3 tarball (repo:tag auto-detected),
-# so we never pull and need no imagePullSecret.
+# Image is pre-loaded into minikube from the S3 .tar (repo:tag auto-detected).
 image:
   repository: "${SWA_AGENT_IMAGE_REPO}"
   tag: "${SWA_AGENT_IMAGE_TAG}"
   pullPolicy: Never
 
-# How the agent reaches the in-cluster SWA Server.
-server:
-  address: "swa-server.${NS_SWA}.svc.cluster.local"
-  port: 8443
-  trustDomain: "${SWA_TRUST_DOMAIN}"
+# Must match the control plane trust domain (terraform-swa trust_domain_name).
+trustDomain:
+  name: "${SWA_TRUST_DOMAIN}"
 
-# Workload API socket exposed to workloads. hostPath dir is created by Ansible
-# (swa_agent_prereqs) and mounted into the webapp via k8s/webapp-deployment.yaml.
-workloadApi:
-  socketHostPath: "/run/swa-agent"
-  socketName: "api.sock"
+# Reach the in-cluster SWA Server Service.
+server:
+  address: "swa-server.${NS_SWA}.svc.cluster.local:8443"
+
+agent:
+  healthAddr: "0.0.0.0:8082"
+  # Workload API socket the demo webapp connects to (inside the pod path).
+  socketPath: /tmp/swa-agent/public/api.sock
+
+nodeAttestor:
+  type: k8s_psat
+  k8s_psat:
+    # Must match the server_group cluster key in terraform-swa.
+    cluster: "${SWA_CLUSTER_NAME}"
+    audience: "swa-server"
+    tokenPath: /var/run/secrets/swa/serviceaccount/token
+
+workloadAttestors:
+  - type: k8s
+    config:
+      skipKubeletVerification: false
+      nodeNameEnv: MY_NODE_NAME
 
 serviceAccount:
   create: true
-  name: swa-agent
+  name: "swa-agent"
 
-# DaemonSet: one agent per node (single node on minikube).
-daemonset:
-  hostPID: false
-  tolerations:
-    - operator: Exists
+rbac:
+  create: true
+
+# Host path exposing the Workload API socket to pods on the same node.
+socketHostPath: /tmp/swa-agent
+
+# Node group label consumed by the server's agent SPIFFE ID template (k8s_psat).
+podLabels:
+  swa_nodegroup: "${SWA_NODE_GROUP}"
+
+hostPID: true
+hostNetwork: true
+setNodeNameEnv: true
+dnsPolicy: ClusterFirstWithHostNet
+
+securityContext:
+  runAsUser: 65532
+  runAsGroup: 65532
+  privileged: false
+  allowPrivilegeEscalation: false
+
+telemetry:
+  logging:
+    level: info
 
 resources:
   requests:
-    cpu: 100m
-    memory: 128Mi
+    cpu: 50m
+    memory: 64Mi
   limits:
-    cpu: 500m
-    memory: 256Mi
+    cpu: 200m
+    memory: 128Mi

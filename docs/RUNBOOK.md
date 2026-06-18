@@ -36,20 +36,33 @@ make preflight
 make webapp-test              # fast local gate before provisioning
 ```
 
-## 2. Bring up (phase by phase, or all at once)
+## 2. One-time SWA bundle setup
 
 ```bash
-make tf-apply     # Phase 1: VPC + RHEL EC2; writes ansible/inventory.ini
-make configure    # Phase 2: host config + minikube; stages project to ~/swa-demo
-make tenant       # Phase 3a: trust domain + server/node groups + register server
-make swa          # Phase 3b: helm install SWA server + agent
+export SWA_RELEASE_DIR=".../swa-release-v1.0.0"   # also in .env
+make swa-provider-install   # install cyberark/swa Terraform provider from bundle
+make vendor-charts          # copy bundle helm/*.tgz into helm/charts/
+conjur login                # authenticate to your Secrets Manager - SaaS tenant
+# Upload images once (see "Upload the image tarballs" above):
+aws s3 cp "$SWA_RELEASE_DIR"/container-images/ s3://my-bucket/swa-images/ --recursive --exclude '*' --include '*-amd64.tar'
+```
+
+## 3. Bring up (phase by phase, or all at once)
+
+```bash
+make tf-apply     # Phase 1: VPC + RHEL EC2 + IAM; writes ansible/inventory.ini
+make configure    # Phase 2: host config + minikube + load SWA images from S3
+make tenant-tf    # Phase 3a: tenant resources via cyberark/swa provider (-> authn_id)
+make swa          # Phase 3b: helm install SWA server + agent (authn_id bridged to host)
 make webapp-build # Phase 4a: build image in minikube docker
 make webapp-deploy# Phase 4b: deploy webapp manifests
 make verify       # Phase 5: health-check every layer
 make demo         # open the UI
 ```
 
-Or simply: `make up` (runs all of the above), then `make demo`.
+`make tenant` is the REST-script fallback if you prefer not to use the provider.
+
+Or simply: `make up` (runs all of the above; assumes the one-time setup), then `make demo`.
 
 ## 3. Use the demo
 
@@ -69,10 +82,13 @@ These are centralized so you only edit them in one place:
 
 | Item | File | Notes |
 |------|------|-------|
-| Tenant REST routes | `tenant/lib.sh` (`SWA_API_*`) | trust-domains / server-groups / node-groups / servers |
-| `authn_id` field name | `tenant/03-register-server.sh` | parser handles `authnId`/`authn_id`/`id` |
-| Image tarballs | `SWA_IMAGES_S3_URI` | auto-loaded; tags auto-detected to `~/.swa-images` |
-| Helm charts | `helm/charts/*.tgz` or `.env` (`SWA_SERVER_CHART`/`SWA_AGENT_CHART`) | local package vs OCI ref |
+| Tenant resources (primary) | `terraform-swa/` | cyberark/swa provider; `conjur login` auth |
+| Provider version pin | `terraform-swa/providers.tf` | must match `install-terraform-provider.sh` output |
+| Server JWT to control plane | `terraform-swa` `server_*` vars | minikube → inline `public_keys` via `fetch-cluster-jwks.sh` |
+| Tenant REST routes (fallback) | `tenant/lib.sh` (`SWA_API_*`) | only if using REST scripts instead of provider |
+| Image tarballs | `SWA_IMAGES_S3_URI` | `*-amd64.tar`, auto-loaded; tags to `~/.swa-images` |
+| Helm charts | `helm/charts/*.tgz` (`make vendor-charts`) | from the release bundle |
+| Control-plane token | `SWA_CONTROLPLANE_TOKEN_FILE` | optional `--set-file controlPlane.token` |
 | Chart value keys | `helm/swa-*/values.yaml.tmpl` | verify with `helm show values <chart>` |
 | Attestation method | `tenant/01-server-group.sh` | `k8s_sat` for minikube |
 

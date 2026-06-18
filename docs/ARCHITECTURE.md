@@ -17,10 +17,10 @@ Demonstrate CyberArk **Secure Workload Access (SWA)** issuing a SPIFFE
                                          │ (1) server auth via projected k8s SA JWT  +  config/inventory sync
 AWS  ──Terraform──▶  EC2 RHEL 8/9  ──Ansible──▶  minikube (docker driver)
                                          │
-   ┌─────────────────────────────────── namespace: cyberark-swa ───────────────────────────────────┐
-   │  SWA Server  ── node attestation, signs SVIDs, holds trust-domain keys                          │
-   │  SWA Agent (DaemonSet)  ── workload attestation; serves Workload API on /run/swa-agent/api.sock  │
-   └───────────────▲───────────────────────────────────────────────────────────────────────────────┘
+   ┌─────────────────────────────────── namespace: swa-system ──────────────────────────────────────────┐
+   │  SWA Server  ── node attestation, signs SVIDs, holds trust-domain keys                                │
+   │  SWA Agent (DaemonSet)  ── workload attestation; Workload API on /tmp/swa-agent/public/api.sock        │
+   └───────────────▲────────────────────────────────────────────────────────────────────────────────────┘
                    │ (2) Workload API over unix domain socket (hostPath mount)
    ┌───────────────┴──────────── namespace: swa-demo ──────────────┐
    │  demo-webapp (Go)  ── requests JWT-SVID, renders the flow       │
@@ -33,26 +33,32 @@ AWS  ──Terraform──▶  EC2 RHEL 8/9  ──Ansible──▶  minikube (d
 SPIFFE establishes identity through **node attestation** then **workload attestation**:
 
 1. **Node attestation** — the SWA Server verifies the node/cluster identity. For
-   Kubernetes this uses a **projected service-account token** that the server
-   validates against the cluster's API server (method `k8s_sat`). Configured by
-   the **server group**.
+   Kubernetes this uses a **projected service-account token** (method
+   `k8s_psat`, audience `swa-server`) validated via the TokenReview API.
+   Configured by the **server group** (`node_attestation.k8s_psat.clusters`).
 2. **Workload attestation** — once the node is trusted, the **SWA Agent**
    inspects pod runtime attributes (namespace, service account, labels) when a
-   workload calls the Workload API. The **node group** policy decides which
-   workloads receive which SPIFFE IDs.
+   workload calls the Workload API. The **node group** policy + SPIFFE ID
+   template decide which workloads receive which SPIFFE IDs.
+
+Tenant-side resources (trust domain, server group, server, node group) are
+managed by the official **`cyberark/swa` Terraform provider** in `terraform-swa/`
+(`tenant/*.sh` REST scripts remain as a fallback). The server registration emits
+an **`authn_id`** consumed by the swa-server Helm chart.
 
 ## JWT-SVID request flow (what the UI shows)
 
 | # | Step | Where |
 |---|------|-------|
-| 1 | Workload calls the Workload API socket | webapp → `/run/swa-agent/api.sock` |
+| 1 | Workload calls the Workload API socket | webapp → `/tmp/swa-agent/public/api.sock` |
 | 2 | Agent attests pod runtime attributes (`ns=swa-demo`, `sa=swa-demo-webapp`) | SWA Agent |
 | 3 | Server validates attributes against node-group policy | SWA Server |
 | 4 | Short-lived JWT-SVID minted and returned | Server → Agent → webapp |
 
-The resulting SPIFFE ID is `spiffe://<trust-domain>/ns/swa-demo/sa/swa-demo-webapp`,
-carried in the JWT `sub` claim. The webapp decodes the token (header + claims)
-and displays validity (`iat`/`exp`).
+The resulting SPIFFE ID follows the node-group template
+`spiffe://<trust-domain>/<node-group>/ns/swa-demo/sa/swa-demo-webapp`, carried in
+the JWT `sub` claim. The webapp decodes the token (header + claims) and displays
+validity (`iat`/`exp`).
 
 ## Why these choices
 
@@ -68,13 +74,15 @@ and displays validity (`iat`/`exp`).
 
 ## Image distribution (no registry)
 
-SWA images are delivered as `*.tar.gz` and hosted in **your S3 bucket**. The EC2
-host reads them via an **IAM instance profile** (scoped `s3:GetObject` on the
-prefix — no static keys), Ansible runs `minikube image load` on each, and the
+SWA images ship as arch-specific `*.tar` (e.g. `swa-server-1.0.0-amd64.tar`) and
+are hosted in **your S3 bucket**. The EC2 host reads them via an **IAM instance
+profile** (scoped `s3:GetObject` — no static keys), Ansible loads each
+`*-amd64.tar` into minikube (`docker load` in minikube's docker-env), and the
 repo:tag is **auto-detected** into `~/.swa-images`. Helm references those tags
 with `pullPolicy: Never`, so the cluster never contacts a registry and no
-`imagePullSecret` exists. The webapp image is likewise built straight into
-minikube's docker. See [RUNBOOK.md](RUNBOOK.md) for the upload step.
+`imagePullSecret` exists (mirrors the bundle's own `kind-load-images` pattern).
+The webapp image is likewise built straight into minikube's docker. See
+[RUNBOOK.md](RUNBOOK.md) for the upload step.
 
 ## Trust boundaries / secrets
 

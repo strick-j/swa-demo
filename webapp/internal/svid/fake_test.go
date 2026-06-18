@@ -10,7 +10,7 @@ import (
 )
 
 func TestFakeFetchJWTSVID(t *testing.T) {
-	f := NewFake("td.example.com", "swa-demo", "swa-demo-webapp")
+	f := NewFake("td.example.com", "minikube-nodes", "swa-demo", "swa-demo-webapp")
 	fixed := time.Date(2026, 6, 18, 12, 0, 0, 0, time.UTC)
 	f.now = func() time.Time { return fixed }
 
@@ -19,7 +19,7 @@ func TestFakeFetchJWTSVID(t *testing.T) {
 		t.Fatalf("FetchJWTSVID: %v", err)
 	}
 
-	wantID := "spiffe://td.example.com/ns/swa-demo/sa/swa-demo-webapp"
+	wantID := "spiffe://td.example.com/minikube-nodes/ns/swa-demo/sa/swa-demo-webapp"
 	if res.SPIFFEID != wantID {
 		t.Errorf("SPIFFEID = %q, want %q", res.SPIFFEID, wantID)
 	}
@@ -52,7 +52,7 @@ func TestFakeFetchJWTSVID(t *testing.T) {
 }
 
 func TestFakeSource(t *testing.T) {
-	f := NewFake("td", "ns", "sa")
+	f := NewFake("td", "ng", "ns", "sa")
 	if !strings.Contains(f.Source(), "demo") {
 		t.Errorf("Source = %q, want to contain 'demo'", f.Source())
 	}

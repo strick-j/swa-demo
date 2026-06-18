@@ -9,6 +9,8 @@ inventory.ini
 kubeconfig
 .swa/
 tenant/.authn_id
+terraform-swa/outputs.env
+terraform-swa/cluster-jwks.auto.tfvars.json
 
 # --- Terraform ---
 **/.terraform/*

@@ -14,6 +14,7 @@ import (
 // socket is present (DEMO mode), and as a deterministic-shape stand-in in tests.
 type Fake struct {
 	TrustDomain string
+	NodeGroup   string
 	Namespace   string
 	ServiceAcct string
 	TTL         time.Duration
@@ -22,9 +23,10 @@ type Fake struct {
 }
 
 // NewFake builds a Fake fetcher with sensible defaults.
-func NewFake(trustDomain, namespace, serviceAcct string) *Fake {
+func NewFake(trustDomain, nodeGroup, namespace, serviceAcct string) *Fake {
 	return &Fake{
 		TrustDomain: trustDomain,
+		NodeGroup:   nodeGroup,
 		Namespace:   namespace,
 		ServiceAcct: serviceAcct,
 		TTL:         5 * time.Minute,
@@ -39,7 +41,9 @@ func (f *Fake) Source() string { return "demo (no agent socket)" }
 func (f *Fake) FetchJWTSVID(_ context.Context, audience string) (*Result, error) {
 	issued := f.now()
 	expires := issued.Add(f.TTL)
-	spiffeID := fmt.Sprintf("spiffe://%s/ns/%s/sa/%s", f.TrustDomain, f.Namespace, f.ServiceAcct)
+	// Matches the node-group SPIFFE ID template:
+	// spiffe://{trustdomain}/{nodegroup}/ns/{ns}/sa/{sa}
+	spiffeID := fmt.Sprintf("spiffe://%s/%s/ns/%s/sa/%s", f.TrustDomain, f.NodeGroup, f.Namespace, f.ServiceAcct)
 
 	header := map[string]interface{}{
 		"alg": "RS256",

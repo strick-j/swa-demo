@@ -2,7 +2,7 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: cyberark-swa
+  name: swa-system
   labels:
     app.kubernetes.io/part-of: swa-demo
 ---

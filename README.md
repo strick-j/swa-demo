@@ -12,7 +12,7 @@ shows the full request → attestation → JWT-SVID lifecycle.
 ```
 AWS (Terraform)            RHEL host (Ansible)         minikube
 ┌──────────────┐          ┌───────────────────┐       ┌────────────────────────────┐
-│ VPC + subnet │          │ RHEL 8/9 EC2      │       │ ns cyberark-swa            │
+│ VPC + subnet │          │ RHEL 8/9 EC2      │       │ ns swa-system            │
 │ SG, IGW      │ ───────▶ │ docker + minikube │ ────▶ │  SWA Server ──▶ tenant      │
 │ EC2 host     │          │ kubectl + helm    │       │  SWA Agent (DaemonSet)      │
 └──────────────┘          └───────────────────┘       │ ns swa-demo                 │
@@ -26,9 +26,9 @@ AWS (Terraform)            RHEL host (Ansible)         minikube
 | Phase | Dir | What |
 |-------|-----|------|
 | 0 | root | Scaffolding, `.env`, `Makefile`, lint |
-| 1 | `terraform/` | AWS VPC + RHEL EC2 host |
-| 2 | `ansible/` | Host config + minikube + kubectl/helm |
-| 3 | `tenant/`, `helm/`, `scripts/deploy-swa.sh` | Tenant trust domain/groups + SWA server & agent |
+| 1 | `terraform/` | AWS VPC + RHEL EC2 host + IAM (S3 image read) |
+| 2 | `ansible/` | Host config + minikube + load SWA images from S3 |
+| 3 | `terraform-swa/` (provider), `helm/`, `scripts/deploy-swa.sh` | Tenant trust domain/groups/server via cyberark/swa + SWA server & agent. `tenant/` REST scripts are a fallback. |
 | 4 | `webapp/`, `k8s/` | Go SPIFFE webapp + visual JWT-SVID UI |
 | 5 | `scripts/`, `Makefile` | `make up` / `make down` glue, verify, demo |
 
