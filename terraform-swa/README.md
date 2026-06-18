@@ -7,31 +7,39 @@ provider (shipped in the SWA release bundle), creating:
 
 This replaces the hand-rolled `tenant/*.sh` REST scripts (kept as a fallback).
 
-## Prerequisites
+## Auth: runs on the host, uses the instance-profile IAM role
 
-1. **Install the provider** from the release bundle (one time):
-   ```bash
-   "$SWA_RELEASE_DIR"/install-terraform-provider.sh
-   # or:  make swa-provider-install   (set SWA_RELEASE_DIR in .env)
-   ```
-2. **Authenticate to your tenant** (zero-config provider):
-   ```bash
-   conjur login        # to your Secrets Manager - SaaS (Conjur Cloud) tenant
-   ```
+This module is applied **on the EC2 host** (over SSH). The host's IAM role is
+enrolled as a Conjur **authn-iam** host, so the `cyberark/swa` provider (via
+conjur-api-go) mints a Conjur token from the instance identity — **no
+`conjur login`, no API keys**. The Ansible `swa_tooling` role provisions this:
 
-## Apply
+- installs Terraform + the `cyberark/swa` provider (from the bundle in S3),
+- writes `~/.conjurrc` (`authn_type: aws`, `service_id`),
+- writes `~/.swa-conjur.env` (`CONJUR_APPLIANCE_URL`, `CONJUR_ACCOUNT`,
+  `CONJUR_AUTHN_LOGIN=<host_id>`).
+
+Prerequisites (your tenant side): the `conjur/authn-iam/<service_id>`
+authenticator is enabled and the host role is enrolled as a host
+(`host/data/<aws-account-id>/<role-name>`). `<role-name>` is the Terraform output
+`host_role_name`.
+
+## Apply (via make)
 
 ```bash
-cp terraform.tfvars.example terraform.tfvars   # adjust names if desired
-# Populate server_issuer + server_public_keys from the live cluster
-# (control plane can't reach minikube's JWKS):
-../scripts/fetch-cluster-jwks.sh               # writes cluster-jwks.auto.tfvars.json
-terraform init
-terraform apply
+make fetch-jwks    # on host: writes cluster-jwks.auto.tfvars.json (issuer + public_keys)
+make tenant-tf     # on host: sources ~/.swa-conjur.env, terraform init + apply
 ```
 
-`make tenant-tf` runs init+apply and exports `authn_id` / `trust_domain` into the
-Helm deploy.
+`deploy-swa.sh` (also on the host) reads this module's `authn_id` / `trust_domain`
+outputs directly — no cross-host bridge needed.
+
+To run by hand on the host:
+
+```bash
+set -a; . ~/.swa-conjur.env; set +a
+cd ~/swa-demo/terraform-swa && terraform init && terraform apply
+```
 
 ## Why `public_keys` instead of `jwks_uri`
 

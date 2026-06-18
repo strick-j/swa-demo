@@ -18,6 +18,16 @@ output "webapp_url" {
   value       = "http://${aws_instance.host.public_ip}:${var.webapp_nodeport}"
 }
 
+output "host_role_name" {
+  description = "Name of the host IAM role (enroll as a Conjur authn-iam host)."
+  value       = aws_iam_role.host.name
+}
+
+output "host_role_arn" {
+  description = "ARN of the host IAM role. Conjur host_id is host/data/<account-id>/<role-name>."
+  value       = aws_iam_role.host.arn
+}
+
 # Rendered Ansible inventory; `make tf-apply` writes this to ansible/inventory.ini.
 output "ansible_inventory" {
   description = "INI inventory for Ansible."

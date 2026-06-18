@@ -1,6 +1,17 @@
 # Tenant-side SWA configuration via the cyberark/swa provider.
 # Mirrors the values consumed by the Helm charts so the two stay in sync.
 
+variable "conjur_appliance_url" {
+  description = <<-EOT
+    Conjur Cloud / Secrets Manager - SaaS API URL, e.g.
+    https://<subdomain>.secretsmgr.cyberark.cloud/api. Used as the swa provider
+    `url`. Authentication (account, authn-iam service_id, host_id) is supplied to
+    conjur-api-go via the host's ~/.conjurrc + CONJUR_AUTHN_LOGIN.
+  EOT
+  type        = string
+  default     = ""
+}
+
 variable "trust_domain" {
   description = "SWA trust domain name (must match the agent's trustDomain.name)."
   type        = string

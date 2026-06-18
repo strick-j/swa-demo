@@ -36,24 +36,31 @@ make preflight
 make webapp-test              # fast local gate before provisioning
 ```
 
-## 2. One-time SWA bundle setup
+## 2. One-time setup — upload the bundle + enable Conjur authn-iam
+
+Upload the **whole** release bundle to your S3 prefix (images, charts, provider,
+installer). Ansible loads the images and installs the provider/charts/Terraform
+on the host:
 
 ```bash
-export SWA_RELEASE_DIR=".../swa-release-v1.0.0"   # also in .env
-make swa-provider-install   # install cyberark/swa Terraform provider from bundle
-make vendor-charts          # copy bundle helm/*.tgz into helm/charts/
-conjur login                # authenticate to your Secrets Manager - SaaS tenant
-# Upload images once (see "Upload the image tarballs" above):
-aws s3 cp "$SWA_RELEASE_DIR"/container-images/ s3://my-bucket/swa-images/ --recursive --exclude '*' --include '*-amd64.tar'
+aws s3 cp "$SWA_RELEASE_DIR"/ s3://my-bucket/swa-images/ --recursive
 ```
+
+Tenant side (once): enable the `conjur/authn-iam/<service_id>` authenticator and
+enroll the EC2 host role as a Conjur host. After `make tf-apply`, the role name is
+`terraform output host_role_name`; the Conjur host id is
+`host/data/<aws-account-id>/<role-name>` → set `CONJUR_HOST_ID` in `.env`. Also
+set `CONJUR_APPLIANCE_URL` (control-plane URL + `/api`), `CONJUR_ACCOUNT=conjur`,
+`CONJUR_SERVICE_ID`. **No `conjur login` is required** — the host authenticates
+with its IAM role.
 
 ## 3. Bring up (phase by phase, or all at once)
 
 ```bash
-make tf-apply     # Phase 1: VPC + RHEL EC2 + IAM; writes ansible/inventory.ini
-make configure    # Phase 2: host config + minikube + load SWA images from S3
-make tenant-tf    # Phase 3a: tenant resources via cyberark/swa provider (-> authn_id)
-make swa          # Phase 3b: helm install SWA server + agent (authn_id bridged to host)
+make tf-apply     # Phase 1: VPC + RHEL EC2 + IAM role; writes ansible/inventory.ini
+make configure    # Phase 2: minikube + load images + Terraform/provider/charts + ~/.conjurrc
+make tenant-tf    # Phase 3a (on host, IAM auth): tenant resources via cyberark/swa -> authn_id
+make swa          # Phase 3b (on host): helm install SWA server + agent
 make webapp-build # Phase 4a: build image in minikube docker
 make webapp-deploy# Phase 4b: deploy webapp manifests
 make verify       # Phase 5: health-check every layer
@@ -82,7 +89,8 @@ These are centralized so you only edit them in one place:
 
 | Item | File | Notes |
 |------|------|-------|
-| Tenant resources (primary) | `terraform-swa/` | cyberark/swa provider; `conjur login` auth |
+| Tenant resources (primary) | `terraform-swa/` | cyberark/swa provider; host IAM (authn-iam) auth |
+| Conjur authn-iam | `.env` `CONJUR_*`; host `~/.conjurrc` | service_id, account, host_id = `host/data/<acct>/<role>` |
 | Provider version pin | `terraform-swa/providers.tf` | must match `install-terraform-provider.sh` output |
 | Server JWT to control plane | `terraform-swa` `server_*` vars | minikube → inline `public_keys` via `fetch-cluster-jwks.sh` |
 | Tenant REST routes (fallback) | `tenant/lib.sh` (`SWA_API_*`) | only if using REST scripts instead of provider |
@@ -96,6 +104,7 @@ These are centralized so you only edit them in one place:
 
 | Symptom | Likely cause | Action |
 |---------|--------------|--------|
+| `make tenant-tf` auth/401 from Conjur | authn-iam not enrolled / wrong host_id | confirm `CONJUR_HOST_ID=host/data/<acct>/<role>` matches the enrolled host; service_id + appliance_url; role attached to instance |
 | `make tenant` HTTP 401/404 | wrong API base/route or token | check `SWA_TENANT_URL`, token scope, adjust `SWA_API_*` in `tenant/lib.sh` |
 | pod `ErrImageNeverPull` | image not loaded / tag mismatch | check `~/.swa-images` on host vs `helm/swa-*` repo:tag; re-run `make configure` (loads tarballs) |
 | `make configure` S3 AccessDenied | instance profile / wrong prefix | verify `SWA_IMAGES_S3_URI` and that `TF_VAR_images_s3_uri` was set at `tf-apply` |

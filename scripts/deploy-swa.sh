@@ -9,10 +9,6 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "${HERE}/.." && pwd)"
 # shellcheck disable=SC1091
 [[ -f "${ROOT}/.env" ]] && source "${ROOT}/.env"
-# Tenant outputs (authn_id, trust domain, cluster, node group) pushed from the
-# local terraform-swa apply (see Makefile `swa` target / host-push.sh).
-# shellcheck disable=SC1091
-if [[ -f "${ROOT}/outputs.env" ]]; then set -a; source "${ROOT}/outputs.env"; set +a; fi
 
 : "${NS_SWA:=swa-system}"
 : "${NS_DEMO:=swa-demo}"

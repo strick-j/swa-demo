@@ -19,3 +19,5 @@
       tags: [images]
     - role: swa_agent_prereqs
       tags: [swa]
+    - role: swa_tooling
+      tags: [tooling]
