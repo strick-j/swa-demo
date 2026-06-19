@@ -1,7 +1,7 @@
 ---
 # Install with: ansible-galaxy collection install -r ansible/requirements.yml
 collections:
+  # Only ansible.posix is used (synchronize, mount). Keep this list minimal so
+  # `make ansible-venv` stays fast.
   - name: ansible.posix
     version: ">=1.5.0"
-  - name: community.general
-    version: ">=8.0.0"
