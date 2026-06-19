@@ -2,7 +2,11 @@
 
 ## Prerequisites (local)
 
-- Terraform ≥ 1.5, Ansible ≥ 2.15 (`ansible-galaxy collection install -r ansible/requirements.yml`)
+- Terraform ≥ 1.5
+- **Ansible ≥ 2.15 on Python 3.** If your system `ansible-playbook` is missing or
+  stuck on Python 2 (`ImportError: No module named module_utils...`), run
+  `make ansible-venv` once — it creates a `.venv-ansible/` with a modern Ansible +
+  collections, and `make configure`/`make up` use it automatically.
 - AWS CLI configured (`aws sts get-caller-identity` works)
 - Go ≥ 1.22 (for local `make webapp-test`), `kubectl`, `helm` (used on the host)
 - SSH client
