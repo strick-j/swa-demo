@@ -55,6 +55,7 @@
       ansible.builtin.find:
         paths: "{{ images_local_dir }}"
         patterns: "{{ image_arch_glob }}"
+        recurse: true # bundle keeps images under container-images/
       register: tarballs
 
     - name: Fail if no architecture-matching tarballs were found

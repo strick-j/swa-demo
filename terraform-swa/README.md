@@ -7,38 +7,39 @@ provider (shipped in the SWA release bundle), creating:
 
 This replaces the hand-rolled `tenant/*.sh` REST scripts (kept as a fallback).
 
-## Auth: runs on the host, uses the instance-profile IAM role
+## Auth: runs on the CONTROL host, uses its IAM role
 
-This module is applied **on the EC2 host** (over SSH). The host's IAM role is
-enrolled as a Conjur **authn-iam** host, so the `cyberark/swa` provider (via
-conjur-api-go) mints a Conjur token from the instance identity — **no
-`conjur login`, no API keys**. The Ansible `swa_tooling` role provisions this:
+This module is applied **on the control host** (where you run `make`). That host's
+IAM role is enrolled as a Conjur **authn-iam** host, so the `cyberark/swa` provider
+(via conjur-api-go) mints a Conjur token from the host identity — **no
+`conjur login`, no API keys**. `scripts/control-setup.sh` (`make control-setup`)
+provisions this on the control host:
 
-- installs Terraform + the `cyberark/swa` provider (from the bundle in S3),
+- pulls the bundle from S3 + installs the `cyberark/swa` provider,
 - writes `~/.conjurrc` (`authn_type: aws`, `service_id`),
 - writes `~/.swa-conjur.env` (`CONJUR_APPLIANCE_URL`, `CONJUR_ACCOUNT`,
   `CONJUR_AUTHN_LOGIN=<host_id>`).
 
 Prerequisites (your tenant side): the `conjur/authn-iam/<service_id>`
-authenticator is enabled and the host role is enrolled as a host
-(`host/data/<aws-account-id>/<role-name>`). `<role-name>` is the Terraform output
-`host_role_name`.
+authenticator is enabled and the **control host's** role is enrolled as a host
+(`CONJUR_HOST_ID = host/data/<aws-account-id>/<control-host-role-name>`).
 
 ## Apply (via make)
 
 ```bash
-make fetch-jwks    # on host: writes cluster-jwks.auto.tfvars.json (issuer + public_keys)
-make tenant-tf     # on host: sources ~/.swa-conjur.env, terraform init + apply
+make control-setup # control: install provider + write ~/.conjurrc
+make fetch-jwks    # control: kubectl over SSH to the target -> cluster-jwks.auto.tfvars.json
+make tenant-tf     # control: sources ~/.swa-conjur.env, terraform init + apply
 ```
 
-`deploy-swa.sh` (also on the host) reads this module's `authn_id` / `trust_domain`
-outputs directly — no cross-host bridge needed.
+`make swa` then bridges the `authn_id` / `trust_domain` outputs to the target
+(`outputs.env`) where `deploy-swa.sh` Helm-installs the SWA server + agent.
 
-To run by hand on the host:
+To run by hand on the control host:
 
 ```bash
 set -a; . ~/.swa-conjur.env; set +a
-cd ~/swa-demo/terraform-swa && terraform init && terraform apply
+cd terraform-swa && terraform init && terraform apply
 ```
 
 ## Why `public_keys` instead of `jwks_uri`

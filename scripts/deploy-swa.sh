@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
 # Deploy SWA Server + Agent into minikube via the bundled Helm charts. Runs ON
-# the host. Images are pre-loaded into minikube (ansible swa_images), repo:tags
-# auto-detected from ~/.swa-images. authn_id + trust domain come from the
-# terraform-swa outputs (preferred) or .env. Idempotent.
+# the TARGET host. Images are pre-loaded into minikube (ansible swa_images),
+# repo:tags auto-detected from ~/.swa-images. authn_id + trust domain are bridged
+# from the control host's terraform-swa apply via outputs.env. Idempotent.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "${HERE}/.." && pwd)"
 # shellcheck disable=SC1091
 [[ -f "${ROOT}/.env" ]] && source "${ROOT}/.env"
+# Tenant outputs (authn_id, trust domain, cluster, node group) bridged from the
+# control host's terraform-swa apply (Makefile `swa` target -> host-push.sh).
+# shellcheck disable=SC1091
+if [[ -f "${ROOT}/outputs.env" ]]; then set -a; source "${ROOT}/outputs.env"; set +a; fi
 
 : "${NS_SWA:=swa-system}"
 : "${NS_DEMO:=swa-demo}"

@@ -19,12 +19,12 @@ output "webapp_url" {
 }
 
 output "host_role_name" {
-  description = "Name of the host IAM role (enroll as a Conjur authn-iam host)."
+  description = "Name of the TARGET host IAM role (S3 image pulls). Conjur authn-iam uses the CONTROL host's role instead."
   value       = aws_iam_role.host.name
 }
 
 output "host_role_arn" {
-  description = "ARN of the host IAM role. Conjur host_id is host/data/<account-id>/<role-name>."
+  description = "ARN of the target host IAM role (used for S3 read by the minikube host)."
   value       = aws_iam_role.host.arn
 }
 
