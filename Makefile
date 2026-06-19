@@ -42,14 +42,15 @@ preflight: ## Verify required CLIs and .env exist
 	@test -f .env || { echo "Missing .env (cp .env.example .env)"; exit 1; }
 	@echo "preflight OK"
 
-# Upgrade pip FIRST (separately) so the new resolver sees current releases, then
-# install the newest `ansible` the host's Python/index supports (NO version pin —
-# pins like >=9 fail on older Pythons or mirrored indexes). The ansible bundle
-# ships the ansible.posix/community.general collections, so no galaxy step.
-ansible-venv: ## Create a local Python 3 venv with a modern Ansible
+# Install ansible-core (small/fast) rather than the full `ansible` bundle (~40MB
+# sdist that pip would download repeatedly while backtracking on a constrained
+# index — appears to hang). The playbook only uses the ansible.posix collection,
+# installed via galaxy. No version pin so pip picks what the host's Python allows.
+ansible-venv: ## Create a local Python 3 venv with ansible-core + ansible.posix
 	python3 -m venv $(VENV)
-	$(VENV)/bin/pip install -q -U pip setuptools wheel
-	$(VENV)/bin/pip install -q ansible
+	$(VENV)/bin/pip install -U pip
+	$(VENV)/bin/pip install ansible-core
+	$(VENV)/bin/ansible-galaxy collection install ansible.posix
 	@echo "Installed $$($(VENV)/bin/ansible-playbook --version 2>/dev/null | head -1) in $(VENV)"
 	@echo "'make configure' / 'make up' will use it automatically."
 
