@@ -23,6 +23,7 @@ crash.*.log
 # --- Ansible ---
 *.retry
 ansible/inventory.ini
+.venv-ansible/
 
 # --- Vendor artifacts (SWA charts/images) ---
 helm/charts/*.tgz

@@ -16,6 +16,13 @@ ANSIBLE_DIR := ansible
 WEBAPP_DIR  := webapp
 INVENTORY   := $(ANSIBLE_DIR)/inventory.ini
 
+# Local Python 3 virtualenv holding a modern Ansible, so we never depend on a
+# broken/ancient system ansible (e.g. one stuck on Python 2.7). Recipes prefer
+# this venv's ansible-playbook at runtime if it exists; `make ansible-venv`
+# creates it. PICK_ANSIBLE resolves the binary inside a recipe shell.
+VENV         := .venv-ansible
+PICK_ANSIBLE := AP="$$( [ -x $(VENV)/bin/ansible-playbook ] && echo $(VENV)/bin/ansible-playbook || command -v ansible-playbook )"
+
 .PHONY: help
 help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_./-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -24,12 +31,22 @@ help: ## Show this help
 # ---------------------------------------------------------------------------
 # Phase 0 — preflight
 # ---------------------------------------------------------------------------
-.PHONY: preflight
+.PHONY: preflight ansible-venv
 preflight: ## Verify required CLIs and .env exist
 	@command -v terraform >/dev/null || { echo "terraform not found"; exit 1; }
-	@command -v ansible-playbook >/dev/null || { echo "ansible not found"; exit 1; }
+	@$(PICK_ANSIBLE); \
+	  if [ -z "$$AP" ]; then echo "No ansible-playbook found. Run: make ansible-venv"; exit 1; fi; \
+	  if ! "$$AP" --version 2>/dev/null | grep -q 'python version = 3'; then \
+	    echo "ansible-playbook ($$AP) is not running on Python 3 (got: $$("$$AP" --version 2>&1 | grep -i 'python version' || echo unknown))."; \
+	    echo "Run: make ansible-venv   (creates a Python 3 venv with a modern Ansible)"; exit 1; fi
 	@test -f .env || { echo "Missing .env (cp .env.example .env)"; exit 1; }
 	@echo "preflight OK"
+
+ansible-venv: ## Create a local Python 3 venv with a modern Ansible + collections
+	python3 -m venv $(VENV)
+	$(VENV)/bin/pip install -q -U pip 'ansible>=9,<11'
+	$(VENV)/bin/ansible-galaxy collection install -r $(ANSIBLE_DIR)/requirements.yml
+	@echo "Created $(VENV). 'make configure' / 'make up' will use it automatically."
 
 .PHONY: lint
 lint: ## Lint terraform + ansible + go
@@ -61,7 +78,7 @@ tf-destroy: ## Tear down all AWS infra
 # ---------------------------------------------------------------------------
 .PHONY: configure
 configure: ## Run Ansible: host + minikube + images + terraform/provider + Conjur authn-iam
-	$(ENVSH); ansible-playbook -i $(INVENTORY) $(ANSIBLE_DIR)/site.yml \
+	$(ENVSH); $(PICK_ANSIBLE); "$$AP" -i $(INVENTORY) $(ANSIBLE_DIR)/site.yml \
 	  -e images_s3_uri="$$SWA_IMAGES_S3_URI" \
 	  -e aws_region="$$AWS_REGION" \
 	  -e conjur_appliance_url="$$CONJUR_APPLIANCE_URL" \
