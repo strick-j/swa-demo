@@ -4,11 +4,12 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-# Load .env if present and export everything to sub-processes.
-ifneq (,$(wildcard ./.env))
-include .env
-export
-endif
+# .env is SHELL syntax (export VAR="value"), also `source`d by the scripts. Do
+# NOT `include` it in make — make would keep the quotes as literal characters
+# (e.g. TF_VAR_admin_cidr="\"1.2.3.4/32\""). Instead, source it inside recipes
+# that shell out to terraform/ansible. ENVSH exports every var (incl. TF_VAR_*)
+# with proper shell quote handling.
+ENVSH := set -a; [ -f ./.env ] && . ./.env; set +a
 
 TF_DIR      := terraform
 ANSIBLE_DIR := ansible
@@ -42,36 +43,36 @@ lint: ## Lint terraform + ansible + go
 # ---------------------------------------------------------------------------
 .PHONY: tf-init tf-plan tf-apply tf-destroy
 tf-init: ## terraform init
-	cd $(TF_DIR) && terraform init
+	$(ENVSH); cd $(TF_DIR) && terraform init
 
 tf-plan: tf-init ## terraform plan
-	cd $(TF_DIR) && terraform plan
+	$(ENVSH); cd $(TF_DIR) && terraform plan
 
 tf-apply: tf-init ## terraform apply (creates EC2) and writes ansible inventory
-	cd $(TF_DIR) && terraform apply -auto-approve
+	$(ENVSH); cd $(TF_DIR) && terraform apply -auto-approve
 	cd $(TF_DIR) && terraform output -raw ansible_inventory > ../$(INVENTORY)
 	@echo "Wrote $(INVENTORY)"
 
 tf-destroy: ## Tear down all AWS infra
-	cd $(TF_DIR) && terraform destroy -auto-approve
+	$(ENVSH); cd $(TF_DIR) && terraform destroy -auto-approve
 
 # ---------------------------------------------------------------------------
 # Phase 2 — Ansible (host config + minikube)
 # ---------------------------------------------------------------------------
 .PHONY: configure
 configure: ## Run Ansible: host + minikube + images + terraform/provider + Conjur authn-iam
-	ansible-playbook -i $(INVENTORY) $(ANSIBLE_DIR)/site.yml \
-	  -e images_s3_uri="$(SWA_IMAGES_S3_URI)" \
-	  -e aws_region="$(AWS_REGION)" \
-	  -e conjur_appliance_url="$(CONJUR_APPLIANCE_URL)" \
-	  -e conjur_account="$(CONJUR_ACCOUNT)" \
-	  -e conjur_service_id="$(CONJUR_SERVICE_ID)" \
-	  -e conjur_host_id="$(CONJUR_HOST_ID)"
+	$(ENVSH); ansible-playbook -i $(INVENTORY) $(ANSIBLE_DIR)/site.yml \
+	  -e images_s3_uri="$$SWA_IMAGES_S3_URI" \
+	  -e aws_region="$$AWS_REGION" \
+	  -e conjur_appliance_url="$$CONJUR_APPLIANCE_URL" \
+	  -e conjur_account="$$CONJUR_ACCOUNT" \
+	  -e conjur_service_id="$$CONJUR_SERVICE_ID" \
+	  -e conjur_host_id="$$CONJUR_HOST_ID"
 
 # ---------------------------------------------------------------------------
-# Phase 3 — Tenant wiring (local, via cyberark/swa provider) + SWA server/agent
-# Helm install (on the host). Tenant outputs are bridged to the host as
-# outputs.env so deploy-swa.sh can consume authn_id / trust domain.
+# Phase 3 — Tenant wiring + SWA server/agent, all on the host. terraform-swa
+# authenticates to Conjur with the instance-profile IAM role; deploy-swa.sh
+# reads its authn_id / trust-domain outputs directly (same host).
 # ---------------------------------------------------------------------------
 SWA_RELEASE_DIR ?= $(HOME)/Downloads/Secure Workload Access/Secure Workload Access/swa-release-v1.0.0
 TFSWA_DIR := terraform-swa
