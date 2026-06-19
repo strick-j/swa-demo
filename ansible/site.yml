@@ -8,6 +8,12 @@
   vars:
     minikube_user: "{{ ansible_user | default('ec2-user') }}"
 
+  # Tools install to /usr/local/bin, which isn't on the non-login shell PATH that
+  # Ansible's command/shell modules use on RHEL. Put it on PATH for every task so
+  # kubectl/helm/minikube are found.
+  environment:
+    PATH: "/usr/local/bin:{{ ansible_env.PATH | default('/usr/sbin:/usr/bin:/sbin:/bin') }}"
+
   roles:
     - role: common
       tags: [common]
