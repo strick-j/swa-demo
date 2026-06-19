@@ -43,10 +43,16 @@ SPIFFE establishes identity through **node attestation** then **workload attesta
 
 Tenant-side resources (trust domain, server group, server, node group) are
 managed by the official **`cyberark/swa` Terraform provider** in `terraform-swa/`,
-applied **on the EC2 host** so the provider authenticates to Conjur Cloud with the
-host's **instance-profile IAM role** (Conjur **authn-iam** — no `conjur login`, no
-keys). The server registration emits an **`authn_id`** consumed by the swa-server
-Helm chart. (`tenant/*.sh` REST scripts remain as a fallback.)
+applied **on the control host** so the provider authenticates to Conjur Cloud with
+the **control host's IAM role** (Conjur **authn-iam** — no `conjur login`, no
+keys). The server registration emits an **`authn_id`**, bridged to the target
+(`outputs.env`) and consumed by the swa-server Helm chart. (`tenant/*.sh` REST
+scripts remain as a fallback.)
+
+> **Two-host split:** the control host runs Terraform + `terraform-swa` (has S3 +
+> Conjur access); the target host runs minikube/SWA/webapp and pulls images from
+> S3 with its own role. `scripts/host-exec.sh`/`host-push.sh` bridge between them
+> over SSH (connection from Terraform outputs).
 
 ## JWT-SVID request flow (what the UI shows)
 

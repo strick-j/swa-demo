@@ -83,40 +83,49 @@ tf-destroy: ## Tear down all AWS infra
 # Phase 2 — Ansible (host config + minikube)
 # ---------------------------------------------------------------------------
 .PHONY: configure
-configure: ## Run Ansible: host + minikube + images + terraform/provider + Conjur authn-iam
+configure: ## Run Ansible on the TARGET: minikube + load images (S3) + vendor charts
 	$(ENVSH); $(PICK_ANSIBLE); "$$AP" -i $(INVENTORY) $(ANSIBLE_DIR)/site.yml \
 	  -e images_s3_uri="$$SWA_IMAGES_S3_URI" \
-	  -e aws_region="$$AWS_REGION" \
-	  -e conjur_appliance_url="$$CONJUR_APPLIANCE_URL" \
-	  -e conjur_account="$$CONJUR_ACCOUNT" \
-	  -e conjur_service_id="$$CONJUR_SERVICE_ID" \
-	  -e conjur_host_id="$$CONJUR_HOST_ID"
+	  -e aws_region="$$AWS_REGION"
 
 # ---------------------------------------------------------------------------
-# Phase 3 — Tenant wiring + SWA server/agent, all on the host. terraform-swa
-# authenticates to Conjur with the instance-profile IAM role; deploy-swa.sh
-# reads its authn_id / trust-domain outputs directly (same host).
+# Phase 3 — Tenant wiring on the CONTROL host (this machine): terraform-swa
+# authenticates to Conjur with the control host's IAM role (authn-iam). Its
+# authn_id / trust-domain outputs are bridged to the TARGET host (outputs.env)
+# so deploy-swa.sh can Helm-install the SWA server + agent there.
 # ---------------------------------------------------------------------------
 SWA_RELEASE_DIR ?= $(HOME)/Downloads/Secure Workload Access/Secure Workload Access/swa-release-v1.0.0
 TFSWA_DIR := terraform-swa
 
-.PHONY: vendor-charts fetch-jwks tenant-tf tenant swa
+.PHONY: control-setup vendor-charts fetch-jwks tenant-tf tenant swa
+control-setup: ## (Control host) install the SWA provider + write Conjur authn-iam config
+	bash scripts/control-setup.sh
+
 vendor-charts: ## (Local only) copy bundled SWA helm charts into helm/charts/ for `helm template`
 	mkdir -p helm/charts && cp "$(SWA_RELEASE_DIR)"/helm/*.tgz helm/charts/
 	@echo "Vendored: $$(ls helm/charts/*.tgz)"
 
-fetch-jwks: ## Fetch cluster issuer + JWKS for the server JWT (on host)
-	bash scripts/host-exec.sh "bash scripts/fetch-cluster-jwks.sh"
+fetch-jwks: ## Fetch the target cluster's issuer + JWKS (kubectl over SSH) into terraform-swa
+	bash scripts/fetch-cluster-jwks.sh
 
-# Runs ON the host: conjur-api-go authenticates via the instance-profile IAM role
+# Runs on the CONTROL host: conjur-api-go authenticates via this host's IAM role
 # (~/.conjurrc authn_type=aws + CONJUR_AUTHN_LOGIN). No `conjur login` needed.
-tenant-tf: fetch-jwks ## Apply tenant resources via cyberark/swa provider (host IAM auth)
-	bash scripts/host-exec.sh "set -a; . ~/.swa-conjur.env; set +a; cd terraform-swa && terraform init -input=false && terraform apply -auto-approve"
+tenant-tf: fetch-jwks ## Apply tenant resources via cyberark/swa (control-host IAM auth)
+	set -a; . $$HOME/.swa-conjur.env; set +a; \
+	  cd $(TFSWA_DIR) && terraform init -input=false && terraform apply -auto-approve
+	@cd $(TFSWA_DIR) && { \
+	  echo "SWA_AUTHN_ID=$$(terraform output -raw authn_id)"; \
+	  echo "SWA_TRUST_DOMAIN=$$(terraform output -raw trust_domain_name)"; \
+	  echo "SWA_CLUSTER_NAME=$$(terraform output -raw cluster_name)"; \
+	  echo "SWA_NODE_GROUP=$$(terraform output -raw node_group_name)"; \
+	} > outputs.env
+	@echo "Wrote $(TFSWA_DIR)/outputs.env (bridged to the target by 'make swa')"
 
-tenant: ## (Fallback) create tenant resources via REST scripts on the host
+tenant: ## (Fallback) create tenant resources via REST scripts on the target host
 	bash scripts/host-exec.sh "bash tenant/00-trust-domain.sh && bash tenant/01-server-group.sh && bash tenant/02-node-group.sh && bash tenant/03-register-server.sh"
 
-swa: ## Helm-install SWA server + agent into minikube (on host; reads terraform-swa outputs)
+swa: ## Bridge authn_id to the target + Helm-install SWA server + agent there
+	bash scripts/host-push.sh $(TFSWA_DIR)/outputs.env outputs.env
 	bash scripts/host-exec.sh "bash scripts/deploy-swa.sh"
 
 # ---------------------------------------------------------------------------
@@ -136,10 +145,10 @@ webapp-deploy: ## Deploy webapp manifests into the demo namespace
 # Phase 5 — End to end
 # ---------------------------------------------------------------------------
 .PHONY: up down verify demo
-up: preflight webapp-test tf-apply configure tenant-tf swa webapp-build webapp-deploy verify ## Full bring-up
+up: preflight webapp-test tf-apply configure control-setup tenant-tf swa webapp-build webapp-deploy verify ## Full bring-up
 	@echo "swa-demo is up. Run 'make demo' to open the UI."
-	@echo "Assumes the SWA bundle is uploaded to SWA_IMAGES_S3_URI and Conjur authn-iam"
-	@echo "is enabled for the host role (CONJUR_* in .env)."
+	@echo "Assumes the SWA bundle is uploaded to SWA_IMAGES_S3_URI and the CONTROL host's"
+	@echo "IAM role is enrolled as the Conjur authn-iam host (CONJUR_* in .env)."
 
 down: tf-destroy ## Tear everything down
 	@echo "Destroyed."

@@ -1,92 +1,55 @@
 ---
-# Install Terraform, the cyberark/swa provider, SWA charts, and write the Conjur
-# authn-iam config so `terraform-swa` runs on the host with the instance role.
+# Vendor the SWA Helm charts onto the TARGET host (deploy-swa.sh Helm-installs
+# them here). The target pulls from S3 with its own access. Terraform, the SWA
+# provider, and Conjur authn-iam config live on the CONTROL host instead
+# (scripts/control-setup.sh), since that host's role is enrolled in Conjur.
 
-- name: Add HashiCorp yum repository
-  ansible.builtin.get_url:
-    url: https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
-    dest: /etc/yum.repos.d/hashicorp.repo
-    mode: "0644"
-
-- name: Install Terraform
-  ansible.builtin.dnf:
-    name: "terraform-{{ terraform_version }}"
-    state: present
-    disable_gpg_check: false
-  register: tf_install
-  failed_when: false
-
-- name: Install latest Terraform if pinned version unavailable
-  ansible.builtin.dnf:
-    name: terraform
-    state: present
-  when: tf_install is failed or tf_install.rc is defined and tf_install.rc != 0
-
-# --- SWA bundle (charts + provider), synced from S3 (excludes big images) ---
-- name: Sync SWA bundle (non-image artifacts) from S3
-  ansible.builtin.command: >-
-    /usr/local/bin/aws s3 sync {{ images_s3_uri }} {{ bundle_local_dir }} --exclude "*.tar"
-  environment:
-    AWS_DEFAULT_REGION: "{{ aws_region }}"
-  become_user: "{{ minikube_user }}"
-  register: bundle_sync
-  changed_when: "'download:' in bundle_sync.stdout"
+- name: Vendor SWA charts onto the target
   when: images_s3_uri | default('') | length > 0
+  block:
+    - name: Sync SWA helm charts from S3 (target instance-profile auth)
+      ansible.builtin.command: >-
+        /usr/local/bin/aws s3 sync {{ images_s3_uri }} {{ bundle_local_dir }}
+        --exclude "*" --include "*.tgz"
+      environment:
+        AWS_DEFAULT_REGION: "{{ aws_region }}"
+      become_user: "{{ minikube_user }}"
+      register: charts_sync
+      changed_when: "'download:' in charts_sync.stdout"
 
-- name: Install the cyberark/swa Terraform provider (linux/amd64) into the plugin dir
-  ansible.builtin.command: bash {{ bundle_local_dir }}/install-terraform-provider.sh --os linux --arch amd64
-  args:
-    chdir: "{{ bundle_local_dir }}"
-  become_user: "{{ minikube_user }}"
-  register: provider_install
-  changed_when: "'Installing to' in provider_install.stdout"
-  when: images_s3_uri | default('') | length > 0
+    - name: Ensure helm/charts dir exists in the staged project
+      ansible.builtin.file:
+        path: "{{ project_stage_dir }}/helm/charts"
+        state: directory
+        owner: "{{ minikube_user }}"
+        group: "{{ minikube_user }}"
+        mode: "0755"
 
-- name: Ensure helm/charts dir exists in the staged project
-  ansible.builtin.file:
-    path: "{{ project_stage_dir }}/helm/charts"
-    state: directory
-    owner: "{{ minikube_user }}"
-    group: "{{ minikube_user }}"
-    mode: "0755"
+    - name: Find synced chart packages
+      ansible.builtin.find:
+        paths: "{{ bundle_local_dir }}"
+        patterns: "*.tgz"
+        recurse: true # bundle keeps charts under helm/
+      register: chart_pkgs
 
-- name: Vendor SWA helm charts into the staged project
-  ansible.builtin.shell: "cp -f {{ bundle_local_dir }}/helm/*.tgz {{ project_stage_dir }}/helm/charts/"
-  become_user: "{{ minikube_user }}"
-  register: vendor_charts
-  changed_when: true
-  failed_when: vendor_charts.rc != 0
-  when: images_s3_uri | default('') | length > 0
+    - name: Fail if no charts were found
+      ansible.builtin.fail:
+        msg: "No *.tgz charts found under {{ images_s3_uri }} (upload the bundle's helm/*.tgz)."
+      when: chart_pkgs.matched | int == 0
 
-# --- Conjur authn-iam config for conjur-api-go (the swa provider) -----------
-- name: Write ~/.conjurrc (authn-iam)
-  ansible.builtin.copy:
-    dest: "{{ conjurrc_path }}"
-    owner: "{{ minikube_user }}"
-    group: "{{ minikube_user }}"
-    mode: "0600"
-    content: |
-      ---
-      appliance_url: {{ conjur_appliance_url }}
-      account: {{ conjur_account }}
-      authn_type: aws
-      service_id: {{ conjur_service_id }}
-  when: conjur_appliance_url | default('') | length > 0
+    - name: Vendor charts into the staged project
+      ansible.builtin.copy:
+        src: "{{ item.path }}"
+        dest: "{{ project_stage_dir }}/helm/charts/"
+        remote_src: true
+        owner: "{{ minikube_user }}"
+        group: "{{ minikube_user }}"
+        mode: "0644"
+      loop: "{{ chart_pkgs.files }}"
+      loop_control:
+        label: "{{ item.path | basename }}"
 
-- name: Write Conjur env file (sourced when running terraform-swa)
-  ansible.builtin.copy:
-    dest: "{{ conjur_env_file }}"
-    owner: "{{ minikube_user }}"
-    group: "{{ minikube_user }}"
-    mode: "0600"
-    content: |
-      export CONJUR_APPLIANCE_URL="{{ conjur_appliance_url }}"
-      export CONJUR_ACCOUNT="{{ conjur_account }}"
-      export CONJUR_AUTHN_LOGIN="{{ conjur_host_id }}"
-      export TF_VAR_conjur_appliance_url="{{ conjur_appliance_url }}"
-  when: conjur_appliance_url | default('') | length > 0
-
-- name: Note when Conjur authn-iam config is skipped
+- name: Note when chart vendoring is skipped
   ansible.builtin.debug:
-    msg: "conjur_appliance_url not set; skipping ~/.conjurrc (set CONJUR_APPLIANCE_URL)."
-  when: conjur_appliance_url | default('') | length == 0
+    msg: "images_s3_uri not set; skipping chart vendoring (set SWA_IMAGES_S3_URI)."
+  when: images_s3_uri | default('') | length == 0

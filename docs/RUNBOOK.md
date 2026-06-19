@@ -42,33 +42,36 @@ make webapp-test              # fast local gate before provisioning
 
 ## 2. One-time setup — upload the bundle + enable Conjur authn-iam
 
+Two hosts are involved: the **control host** (where you run `make` — needs S3 +
+Conjur access via its IAM role) and the **target host** (the minikube box created
+by Terraform — pulls images from S3 with its own role).
+
 Upload the **whole** release bundle to your S3 prefix (images, charts, provider,
-installer). Ansible loads the images and installs the provider/charts/Terraform
-on the host:
+installer):
 
 ```bash
 aws s3 cp "$SWA_RELEASE_DIR"/ s3://my-bucket/swa-images/ --recursive
 ```
 
 Tenant side (once): enable the `conjur/authn-iam/<service_id>` authenticator and
-enroll the EC2 host role as a Conjur host. After `make tf-apply`, the role name is
-`terraform output host_role_name`; the Conjur host id is
-`host/data/<aws-account-id>/<role-name>` → set `CONJUR_HOST_ID` in `.env`. Also
-set `CONJUR_APPLIANCE_URL` (control-plane URL + `/api`), `CONJUR_ACCOUNT=conjur`,
-`CONJUR_SERVICE_ID`. **No `conjur login` is required** — the host authenticates
-with its IAM role.
+enroll the **control host's** IAM role as a Conjur host. Set in `.env`:
+`CONJUR_HOST_ID=host/data/<aws-account-id>/<control-host-role-name>`,
+`CONJUR_APPLIANCE_URL` (control-plane URL + `/api`), `CONJUR_ACCOUNT=conjur`,
+`CONJUR_SERVICE_ID`. **No `conjur login`** — the control host authenticates with
+its IAM role.
 
 ## 3. Bring up (phase by phase, or all at once)
 
 ```bash
-make tf-apply     # Phase 1: VPC + RHEL EC2 + IAM role; writes ansible/inventory.ini
-make configure    # Phase 2: minikube + load images + Terraform/provider/charts + ~/.conjurrc
-make tenant-tf    # Phase 3a (on host, IAM auth): tenant resources via cyberark/swa -> authn_id
-make swa          # Phase 3b (on host): helm install SWA server + agent
-make webapp-build # Phase 4a: build image in minikube docker
-make webapp-deploy# Phase 4b: deploy webapp manifests
-make verify       # Phase 5: health-check every layer
-make demo         # open the UI
+make tf-apply       # Phase 1 (control): VPC + RHEL EC2 + IAM; writes ansible/inventory.ini
+make configure      # Phase 2 (target): minikube + load images (S3) + vendor charts
+make control-setup  # Phase 3a (control): install SWA provider + write ~/.conjurrc (authn-iam)
+make tenant-tf      # Phase 3b (control): cyberark/swa apply via control-host IAM -> authn_id
+make swa            # Phase 3c: bridge authn_id to target + helm install SWA server + agent
+make webapp-build   # Phase 4a: build image in target's minikube docker
+make webapp-deploy  # Phase 4b: deploy webapp manifests
+make verify         # Phase 5: health-check every layer
+make demo           # open the UI
 ```
 
 `make tenant` is the REST-script fallback if you prefer not to use the provider.
