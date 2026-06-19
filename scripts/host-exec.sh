@@ -14,7 +14,9 @@ SSH_USER="${TF_VAR_ssh_username:-ec2-user}"
 IP="$(terraform -chdir="${TF_DIR}" output -raw host_public_ip)"
 KEY="$(terraform -chdir="${TF_DIR}" output -raw ssh_private_key_path)"
 
-ssh_opts=(-o StrictHostKeyChecking=accept-new)
+# StrictHostKeyChecking=no + /dev/null known-hosts works on old OpenSSH too
+# (accept-new needs >= 7.6, absent on Amazon Linux 2 / RHEL 7 control hosts).
+ssh_opts=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
 if [[ -n "${KEY}" && -f "${KEY}" ]]; then
   ssh_opts+=(-i "${KEY}")
 elif [[ -n "${TF_VAR_key_pair_name:-}" ]]; then

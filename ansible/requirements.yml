@@ -1,7 +1,8 @@
 ---
 # Install with: ansible-galaxy collection install -r ansible/requirements.yml
 collections:
-  # Only ansible.posix is used (synchronize, mount). Keep this list minimal so
-  # `make ansible-venv` stays fast.
+  # Only ansible.posix is used (synchronize, mount). Cap < 2.0.0: 2.0.0 needs
+  # ansible-core >= 2.15, but old controllers (py3.7) get core 2.11. 1.5.x
+  # supports core >= 2.9, so it works everywhere.
   - name: ansible.posix
-    version: ">=1.5.0"
+    version: ">=1.5.0,<2.0.0"

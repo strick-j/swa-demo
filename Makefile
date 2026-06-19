@@ -22,6 +22,9 @@ INVENTORY   := $(ANSIBLE_DIR)/inventory.ini
 # creates it. PICK_ANSIBLE resolves the binary inside a recipe shell.
 VENV         := .venv-ansible
 PICK_ANSIBLE := AP="$$( [ -x $(VENV)/bin/ansible-playbook ] && echo $(VENV)/bin/ansible-playbook || command -v ansible-playbook )"
+# Prefer the newest Python available (older interpreters cap ansible-core: py3.7
+# -> 2.11). Falls back to python3.
+PYTHON       ?= $(shell for p in python3.12 python3.11 python3.10 python3.9 python3.8 python3; do command -v $$p >/dev/null 2>&1 && { echo $$p; break; }; done)
 
 .PHONY: help
 help: ## Show this help
@@ -44,14 +47,15 @@ preflight: ## Verify required CLIs and .env exist
 
 # Install ansible-core (small/fast) rather than the full `ansible` bundle (~40MB
 # sdist that pip would download repeatedly while backtracking on a constrained
-# index — appears to hang). The playbook only uses the ansible.posix collection,
-# installed via galaxy. No version pin so pip picks what the host's Python allows.
+# index — appears to hang). The playbook only uses ansible.posix; pin it < 2.0.0
+# (1.5.x supports ansible-core >= 2.9) so it works on old controllers (py3.7 ->
+# core 2.11) as well as modern ones.
 ansible-venv: ## Create a local Python 3 venv with ansible-core + ansible.posix
-	python3 -m venv $(VENV)
+	$(PYTHON) -m venv $(VENV)
 	$(VENV)/bin/pip install -U pip
 	$(VENV)/bin/pip install ansible-core
-	$(VENV)/bin/ansible-galaxy collection install ansible.posix
-	@echo "Installed $$($(VENV)/bin/ansible-playbook --version 2>/dev/null | head -1) in $(VENV)"
+	$(VENV)/bin/ansible-galaxy collection install 'ansible.posix:>=1.5.0,<2.0.0'
+	@echo "Installed $$($(VENV)/bin/ansible-playbook --version 2>/dev/null | head -1) on $(PYTHON) in $(VENV)"
 	@echo "'make configure' / 'make up' will use it automatically."
 
 .PHONY: lint

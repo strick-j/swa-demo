@@ -33,7 +33,7 @@ output "ansible_inventory" {
   description = "INI inventory for Ansible."
   value       = <<-EOT
     [swa_host]
-    ${aws_instance.host.public_ip} ansible_user=${var.ssh_username} ansible_ssh_private_key_file=${var.key_pair_name == "" ? "../terraform/${var.project}-key.pem" : "~/.ssh/${var.key_pair_name}.pem"} ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new'
+    ${aws_instance.host.public_ip} ansible_user=${var.ssh_username} ansible_ssh_private_key_file=${var.key_pair_name == "" ? "../terraform/${var.project}-key.pem" : "~/.ssh/${var.key_pair_name}.pem"} ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
 
     [swa_host:vars]
     webapp_nodeport=${var.webapp_nodeport}

@@ -19,7 +19,8 @@ SSH_USER="${TF_VAR_ssh_username:-ec2-user}"
 IP="$(terraform -chdir="${TF_DIR}" output -raw host_public_ip)"
 KEY="$(terraform -chdir="${TF_DIR}" output -raw ssh_private_key_path)"
 
-scp_opts=(-o StrictHostKeyChecking=accept-new)
+# Portable host-key handling (accept-new needs OpenSSH >= 7.6, absent on old hosts)
+scp_opts=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
 if [[ -n "${KEY}" && -f "${KEY}" ]]; then
   scp_opts+=(-i "${KEY}")
 elif [[ -n "${TF_VAR_key_pair_name:-}" ]]; then
