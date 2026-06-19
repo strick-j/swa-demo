@@ -42,11 +42,16 @@ preflight: ## Verify required CLIs and .env exist
 	@test -f .env || { echo "Missing .env (cp .env.example .env)"; exit 1; }
 	@echo "preflight OK"
 
-ansible-venv: ## Create a local Python 3 venv with a modern Ansible + collections
+# Upgrade pip FIRST (separately) so the new resolver sees current releases, then
+# install the newest `ansible` the host's Python/index supports (NO version pin —
+# pins like >=9 fail on older Pythons or mirrored indexes). The ansible bundle
+# ships the ansible.posix/community.general collections, so no galaxy step.
+ansible-venv: ## Create a local Python 3 venv with a modern Ansible
 	python3 -m venv $(VENV)
-	$(VENV)/bin/pip install -q -U pip 'ansible>=9,<11'
-	$(VENV)/bin/ansible-galaxy collection install -r $(ANSIBLE_DIR)/requirements.yml
-	@echo "Created $(VENV). 'make configure' / 'make up' will use it automatically."
+	$(VENV)/bin/pip install -q -U pip setuptools wheel
+	$(VENV)/bin/pip install -q ansible
+	@echo "Installed $$($(VENV)/bin/ansible-playbook --version 2>/dev/null | head -1) in $(VENV)"
+	@echo "'make configure' / 'make up' will use it automatically."
 
 .PHONY: lint
 lint: ## Lint terraform + ansible + go
