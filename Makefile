@@ -16,6 +16,12 @@ ANSIBLE_DIR := ansible
 WEBAPP_DIR  := webapp
 INVENTORY   := $(ANSIBLE_DIR)/inventory.ini
 
+# ansible.cfg lives in ansible/, but make runs from the repo root where Ansible
+# would otherwise miss it (it only auto-loads ./ansible.cfg). Export its path so
+# our settings apply: interpreter_python=auto_silent (silences the platform-python
+# warning), pipelining, host_key_checking=False, yaml output, roles_path.
+export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
+
 # Local Python 3 virtualenv holding a modern Ansible, so we never depend on a
 # broken/ancient system ansible (e.g. one stuck on Python 2.7). Recipes prefer
 # this venv's ansible-playbook at runtime if it exists; `make ansible-venv`
