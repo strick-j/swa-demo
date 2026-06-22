@@ -25,7 +25,7 @@ output "webapp_url" {
 }
 
 output "host_role_name" {
-  description = "Name of the TARGET host IAM role (S3 image pulls). Conjur authn-iam uses the CONTROL host's role instead."
+  description = "Name of the TARGET host IAM role (S3 image pulls only). Conjur auth uses an API key on the CONTROL host, not this role."
   value       = aws_iam_role.host.name
 }
 

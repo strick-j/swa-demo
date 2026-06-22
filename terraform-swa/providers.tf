@@ -13,12 +13,11 @@ terraform {
   }
 }
 
-# Auth via Conjur AWS IAM (authn-iam): this module runs ON the CONTROL host,
-# whose IAM role is enrolled as a Conjur host. conjur-api-go reads the host's
-# ~/.conjurrc (authn_type: aws, service_id) + CONJUR_AUTHN_LOGIN (host_id) and
-# signs an STS GetCallerIdentity request to mint a token — no keys, no
-# `conjur login`. Both are written by scripts/control-setup.sh. Only the service
-# URL is passed explicitly here.
+# Auth via Conjur API key (authn_type: authn): conjur-api-go reads
+# CONJUR_AUTHN_LOGIN (the Conjur identity) + CONJUR_AUTHN_API_KEY from the
+# environment (exported by scripts/control-setup.sh into ~/.swa-conjur.env,
+# which `make tenant-tf` sources) to mint a token — no `conjur login`. Only the
+# service URL is passed explicitly here.
 provider "swa" {
   url = var.conjur_appliance_url
 }

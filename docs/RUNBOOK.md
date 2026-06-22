@@ -40,11 +40,11 @@ make preflight
 make webapp-test              # fast local gate before provisioning
 ```
 
-## 2. One-time setup — upload the bundle + enable Conjur authn-iam
+## 2. One-time setup — upload the bundle + provision a Conjur API key
 
-Two hosts are involved: the **control host** (where you run `make` — needs S3 +
-Conjur access via its IAM role) and the **target host** (the minikube box created
-by Terraform — pulls images from S3 with its own role).
+Two hosts are involved: the **control host** (where you run `make` — needs S3
+access via its IAM role + a Conjur identity/API key) and the **target host** (the
+minikube box created by Terraform — pulls images from S3 with its own role).
 
 Upload the **whole** release bundle to your S3 prefix (images, charts, provider,
 installer):
@@ -53,20 +53,19 @@ installer):
 aws s3 cp "$SWA_RELEASE_DIR"/ s3://my-bucket/swa-images/ --recursive
 ```
 
-Tenant side (once): enable the `conjur/authn-iam/<service_id>` authenticator and
-enroll the **control host's** IAM role as a Conjur host. Set in `.env`:
-`CONJUR_HOST_ID=host/data/<aws-account-id>/<control-host-role-name>`,
-`CONJUR_APPLIANCE_URL` (control-plane URL + `/api`), `CONJUR_ACCOUNT=conjur`,
-`CONJUR_SERVICE_ID`. **No `conjur login`** — the control host authenticates with
-its IAM role.
+Tenant side (once): provision a Conjur identity (host or workload) and its API
+key. Set in `.env`: `CONJUR_AUTHN_LOGIN=<conjur-identity>`,
+`CONJUR_AUTHN_API_KEY=<its-api-key>`, `CONJUR_APPLIANCE_URL` (control-plane URL +
+`/api`), `CONJUR_ACCOUNT=conjur`, `CONJUR_AUTHN_TYPE=authn`. **No `conjur login`**
+— `control-setup.sh` writes these into `~/.conjurrc` + `~/.swa-conjur.env`.
 
 ## 3. Bring up (phase by phase, or all at once)
 
 ```bash
 make tf-apply       # Phase 1 (control): VPC + RHEL EC2 + IAM; writes ansible/inventory.ini
 make configure      # Phase 2 (target): minikube + load images (S3) + vendor charts
-make control-setup  # Phase 3a (control): install SWA provider + write ~/.conjurrc (authn-iam)
-make tenant-tf      # Phase 3b (control): cyberark/swa apply via control-host IAM -> authn_id
+make control-setup  # Phase 3a (control): install SWA provider + write ~/.conjurrc (authn API-key)
+make tenant-tf      # Phase 3b (control): cyberark/swa apply via Conjur API-key -> authn_id
 make swa            # Phase 3c: bridge authn_id to target + helm install SWA server + agent
 make webapp-build   # Phase 4a: build image in target's minikube docker
 make webapp-deploy  # Phase 4b: deploy webapp manifests
@@ -96,8 +95,8 @@ These are centralized so you only edit them in one place:
 
 | Item | File | Notes |
 |------|------|-------|
-| Tenant resources (primary) | `terraform-swa/` | cyberark/swa provider; host IAM (authn-iam) auth |
-| Conjur authn-iam | `.env` `CONJUR_*`; host `~/.conjurrc` | service_id, account, host_id = `host/data/<acct>/<role>` |
+| Tenant resources (primary) | `terraform-swa/` | cyberark/swa provider; Conjur API-key (authn) auth |
+| Conjur auth | `.env` `CONJUR_*`; host `~/.conjurrc` + `~/.swa-conjur.env` | authn_type=authn, account, `CONJUR_AUTHN_LOGIN` + `CONJUR_AUTHN_API_KEY` |
 | Provider version pin | `terraform-swa/providers.tf` | must match `install-terraform-provider.sh` output |
 | Server JWT to control plane | `terraform-swa` `server_*` vars | minikube → inline `public_keys` via `fetch-cluster-jwks.sh` |
 | Tenant REST routes (fallback) | `tenant/lib.sh` (`SWA_API_*`) | only if using REST scripts instead of provider |
@@ -111,7 +110,7 @@ These are centralized so you only edit them in one place:
 
 | Symptom | Likely cause | Action |
 |---------|--------------|--------|
-| `make tenant-tf` auth/401 from Conjur | authn-iam not enrolled / wrong host_id | confirm `CONJUR_HOST_ID=host/data/<acct>/<role>` matches the enrolled host; service_id + appliance_url; role attached to instance |
+| `make tenant-tf` auth/401 from Conjur | wrong identity / API key | confirm `CONJUR_AUTHN_LOGIN` + `CONJUR_AUTHN_API_KEY` are valid for the tenant; `CONJUR_AUTHN_TYPE=authn`, appliance_url + account correct |
 | `make tenant` HTTP 401/404 | wrong API base/route or token | check `SWA_TENANT_URL`, token scope, adjust `SWA_API_*` in `tenant/lib.sh` |
 | pod `ErrImageNeverPull` | image not loaded / tag mismatch | check `~/.swa-images` on host vs `helm/swa-*` repo:tag; re-run `make configure` (loads tarballs) |
 | `make configure` S3 AccessDenied | instance profile / wrong prefix | verify `SWA_IMAGES_S3_URI` and that `TF_VAR_images_s3_uri` was set at `tf-apply` |

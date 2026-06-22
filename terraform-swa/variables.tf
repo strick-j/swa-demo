@@ -5,8 +5,8 @@ variable "conjur_appliance_url" {
   description = <<-EOT
     Conjur Cloud / Secrets Manager - SaaS API URL, e.g.
     https://<subdomain>.secretsmgr.cyberark.cloud/api. Used as the swa provider
-    `url`. Authentication (account, authn-iam service_id, host_id) is supplied to
-    conjur-api-go via the host's ~/.conjurrc + CONJUR_AUTHN_LOGIN.
+    `url`. Authentication (account, CONJUR_AUTHN_LOGIN + CONJUR_AUTHN_API_KEY) is
+    supplied to conjur-api-go via the host's ~/.conjurrc + ~/.swa-conjur.env.
   EOT
   type        = string
   default     = ""
