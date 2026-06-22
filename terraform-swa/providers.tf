@@ -14,8 +14,10 @@ terraform {
     # so no static secret lives in .env. Pulled from the public registry, so
     # `terraform init` on the control host needs registry access.
     conjur = {
+      # Pinned to 0.7.1: 0.8.x changed the aws (authn-iam) flow and returns 401
+      # against this tenant. `~> 0.7` would float to 0.8.x, so pin exactly.
       source  = "cyberark/conjur"
-      version = "~> 0.7"
+      version = "0.7.1"
     }
     # Runs scripts/conjur-token.sh to mint the SWA access token (see conjur-auth.tf).
     external = {
