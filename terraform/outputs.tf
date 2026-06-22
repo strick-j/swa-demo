@@ -20,8 +20,18 @@ output "ssh_private_key_path" {
 }
 
 output "webapp_url" {
-  description = "URL for the demo webapp UI once deployed."
+  description = "Direct NodePort URL for the demo webapp UI (plain HTTP)."
   value       = "http://${aws_instance.host.public_ip}:${var.webapp_nodeport}"
+}
+
+output "alb_dns_name" {
+  description = "ALB DNS name to CNAME your domain at (empty when certificate_arn is unset)."
+  value       = local.alb_enabled ? aws_lb.main[0].dns_name : ""
+}
+
+output "https_url" {
+  description = "HTTPS URL once DNS points at the ALB (empty when no ALB)."
+  value       = local.alb_enabled ? "https://${var.domain_name != "" ? var.domain_name : aws_lb.main[0].dns_name}" : ""
 }
 
 output "host_role_name" {

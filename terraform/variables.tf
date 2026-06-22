@@ -44,15 +44,38 @@ variable "key_pair_name" {
   default     = ""
 }
 
-variable "admin_cidr" {
-  description = "CIDR allowed to reach SSH (22) and the demo NodePort. Use your /32."
-  type        = string
-  default     = "0.0.0.0/0"
+variable "admin_cidrs" {
+  description = "CIDRs allowed to reach SSH (22), the demo NodePort, and the ALB (80/443). Use your /32(s)."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
 
   validation {
-    condition     = can(cidrhost(var.admin_cidr, 0))
-    error_message = "admin_cidr must be a valid CIDR block."
+    condition     = alltrue([for c in var.admin_cidrs : can(cidrhost(c, 0))])
+    error_message = "every entry in admin_cidrs must be a valid CIDR block."
   }
+}
+
+# --- HTTPS via ALB (optional) ----------------------------------------------
+# Mirrors the lab-visualizer convention: import your (e.g. Squarespace-issued)
+# cert into ACM out-of-band and pass its ARN. The ALB + HTTPS listener are
+# created only when certificate_arn is set; DNS is external (CNAME domain_name
+# at the alb_dns_name output).
+variable "domain_name" {
+  description = "FQDN you'll point at the ALB (e.g. swa.pineappledev.app). Used for naming/outputs; DNS is managed externally."
+  type        = string
+  default     = ""
+}
+
+variable "certificate_arn" {
+  description = "ARN of an ACM certificate (import your external cert: 'aws acm import-certificate'). Empty => no ALB, plain NodePort HTTP only."
+  type        = string
+  default     = ""
+}
+
+variable "ssl_policy" {
+  description = "TLS policy for the ALB HTTPS listener."
+  type        = string
+  default     = "ELBSecurityPolicy-TLS13-1-2-2021-06"
 }
 
 variable "webapp_nodeport" {

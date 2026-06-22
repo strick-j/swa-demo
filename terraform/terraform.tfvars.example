@@ -6,6 +6,10 @@ instance_type   = "m5.xlarge"
 root_volume_gb  = 60
 
 # Lock these down for anything beyond a throwaway demo:
-admin_cidr      = "0.0.0.0/0" # set to YOUR.IP.ADDR.ESS/32
-key_pair_name   = ""          # empty => Terraform generates swa-demo-key.pem
+admin_cidrs     = ["0.0.0.0/0"] # set to YOUR.IP/32 (add more for other locations)
+key_pair_name   = ""            # empty => Terraform generates swa-demo-key.pem
 webapp_nodeport = 30080
+
+# Optional HTTPS via ALB (import your external cert into ACM, pass the ARN):
+# domain_name     = "swa.pineappledev.app" # CNAME this at the alb_dns_name output
+# certificate_arn = "arn:aws:acm:us-east-1:<acct>:certificate/<id>"

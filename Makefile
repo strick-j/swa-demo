@@ -6,7 +6,7 @@ SHELL := /bin/bash
 
 # .env is SHELL syntax (export VAR="value"), also `source`d by the scripts. Do
 # NOT `include` it in make — make would keep the quotes as literal characters
-# (e.g. TF_VAR_admin_cidr="\"1.2.3.4/32\""). Instead, source it inside recipes
+# (e.g. TF_VAR_instance_type="\"m5.xlarge\""). Instead, source it inside recipes
 # that shell out to terraform/ansible. ENVSH exports every var (incl. TF_VAR_*)
 # with proper shell quote handling.
 ENVSH := set -a; [ -f ./.env ] && . ./.env; set +a

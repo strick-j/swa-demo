@@ -101,4 +101,7 @@ The webapp image is likewise built straight into minikube's docker. See
   Terraform vars / Kubernetes secrets at deploy time. Image pulls need **no**
   credentials (loaded locally); S3 read is via the host's IAM instance profile.
 - The agent socket is mounted **read-only** into the webapp pod.
-- The Security Group restricts SSH and the NodePort to `admin_cidr`.
+- The Security Group restricts SSH, the NodePort, and the ALB (80/443) to `admin_cidrs`.
+- Optional HTTPS: set `certificate_arn` (an imported ACM cert) + `domain_name` to
+  front the webapp with an ALB (TLS termination); CNAME `domain_name` at the
+  `alb_dns_name` output. Left empty, only the plain-HTTP NodePort is exposed.
