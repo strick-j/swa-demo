@@ -39,8 +39,10 @@ else
 fi
 
 head "Agent Workload API socket"
-if on_host "test -S /tmp/swa-agent/public/api.sock"; then
-  ok "socket present at /tmp/swa-agent/public/api.sock"
+# docker-driver minikube: the agent's hostPath socket lives on the minikube
+# node's filesystem, not the EC2 host /tmp. Check inside the node.
+if on_host "minikube ssh -- test -S /tmp/swa-agent/public/api.sock"; then
+  ok "socket present at /tmp/swa-agent/public/api.sock (minikube node)"
 else
   bad "Workload API socket missing"
 fi

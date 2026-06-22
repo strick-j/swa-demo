@@ -10,9 +10,28 @@ ROOT="$(cd "${HERE}/.." && pwd)"
 
 : "${WEBAPP_IMAGE:=swa-demo-webapp:dev}"
 : "${NS_DEMO:=swa-demo}"
+: "${WEBAPP_NODEPORT:=30080}"
 ACTION="${1:-all}"
 
 log() { echo -e "\033[34m[webapp]\033[0m $*"; }
+
+# docker-driver minikube keeps the NodePort on the minikube container IP, not the
+# host's public interface, so the SG-opened public URL is unreachable without a
+# bridge. Forward host:NODEPORT -> minikube:NODEPORT with a transient systemd
+# unit running socat (installed by the common ansible role). Idempotent.
+expose() {
+  local mk_ip
+  mk_ip="$(minikube ip 2>/dev/null || true)"
+  if [[ -z "${mk_ip}" ]]; then
+    log "WARN: could not resolve 'minikube ip'; skipping NodePort forward"
+    return
+  fi
+  log "Bridging host:${WEBAPP_NODEPORT} -> ${mk_ip}:${WEBAPP_NODEPORT} (socat/systemd)"
+  sudo systemctl stop swa-webapp-forward 2>/dev/null || true
+  sudo systemctl reset-failed swa-webapp-forward 2>/dev/null || true
+  sudo systemd-run --unit=swa-webapp-forward --collect \
+    socat "TCP-LISTEN:${WEBAPP_NODEPORT},fork,reuseaddr" "TCP:${mk_ip}:${WEBAPP_NODEPORT}"
+}
 
 build() {
   log "Building image ${WEBAPP_IMAGE}"
@@ -30,7 +49,8 @@ deploy() {
   kubectl apply -f "${ROOT}/k8s/webapp-deployment.yaml"
   kubectl apply -f "${ROOT}/k8s/webapp-service.yaml"
   kubectl -n "${NS_DEMO}" rollout status deploy/swa-demo-webapp --timeout=120s
-  log "Webapp deployed. URL: http://<host>:${WEBAPP_NODEPORT:-30080}"
+  expose
+  log "Webapp deployed. URL: http://<host>:${WEBAPP_NODEPORT}"
 }
 
 case "${ACTION}" in
