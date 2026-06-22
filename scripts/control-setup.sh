@@ -15,6 +15,7 @@ ROOT="$(cd "${HERE}/.." && pwd)"
 : "${SWA_IMAGES_S3_URI:?Set SWA_IMAGES_S3_URI (bundle upload location)}"
 : "${CONJUR_APPLIANCE_URL:?Set CONJUR_APPLIANCE_URL (e.g. https://<sub>.secretsmgr.cyberark.cloud/api)}"
 : "${CONJUR_ACCOUNT:=conjur}"
+: "${CONJUR_AUTHN_TYPE:=aws}"
 : "${CONJUR_SERVICE_ID:=default}"
 : "${CONJUR_HOST_ID:?Set CONJUR_HOST_ID (host/data/<aws-account-id>/<control-role-name>)}"
 : "${AWS_REGION:=us-east-1}"
@@ -45,12 +46,18 @@ cat > "${HOME}/.conjurrc" <<EOF
 ---
 appliance_url: ${CONJUR_APPLIANCE_URL}
 account: ${CONJUR_ACCOUNT}
-authn_type: aws
+authn_type: ${CONJUR_AUTHN_TYPE}
 service_id: ${CONJUR_SERVICE_ID}
 EOF
+# conjur-api-go (used by the cyberark/swa provider) reads authn_type from
+# ~/.conjurrc AND from CONJUR_AUTHN_TYPE in the environment. Export both the
+# type and the service id so the provider picks them up at `terraform apply`
+# time even if it doesn't read ~/.conjurrc.
 cat > "${HOME}/.swa-conjur.env" <<EOF
 export CONJUR_APPLIANCE_URL="${CONJUR_APPLIANCE_URL}"
 export CONJUR_ACCOUNT="${CONJUR_ACCOUNT}"
+export CONJUR_AUTHN_TYPE="${CONJUR_AUTHN_TYPE}"
+export CONJUR_AUTHN_SERVICE_ID="${CONJUR_SERVICE_ID}"
 export CONJUR_AUTHN_LOGIN="${CONJUR_HOST_ID}"
 export TF_VAR_conjur_appliance_url="${CONJUR_APPLIANCE_URL}"
 EOF
