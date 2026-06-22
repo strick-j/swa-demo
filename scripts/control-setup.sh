@@ -28,6 +28,15 @@ AWS_DEFAULT_REGION="${AWS_REGION}" aws s3 sync "${SWA_IMAGES_S3_URI}" "${BUNDLE}
 
 INSTALLER="${BUNDLE}/install-terraform-provider.sh"
 [[ -f "${INSTALLER}" ]] || { echo "Provider installer not found at ${INSTALLER}. Upload the full bundle to S3." >&2; exit 1; }
+# The bundle installer selects the provider binary with
+# `find -name 'terraform-provider-swa_v*' | head -1`, which also matches the
+# detached `.sig` signature shipped alongside the linux_amd64 binary. Depending
+# on filesystem ordering it can install the .sig as the "binary", after which
+# Terraform tries to exec it and fails with "exec format error". Terraform
+# verifies providers via the lock-file hashes, not these detached sigs, so drop
+# them from the synced bundle before installing.
+log "Removing detached provider signatures so the installer can't pick them up"
+find "${BUNDLE}/terraform-provider" -name 'terraform-provider-swa_v*.sig' -delete 2>/dev/null || true
 log "Installing the cyberark/swa Terraform provider"
 bash "${INSTALLER}"
 
