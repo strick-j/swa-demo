@@ -117,9 +117,9 @@ variable "cluster_name" {
 }
 
 variable "agent_service_accounts" {
-  description = "Allowed agent service accounts for PSAT node attestation (namespace/name)."
+  description = "Allowed agent service accounts for PSAT node attestation, as namespace:name (the format the k8s_psat attestor matches; a slash is rejected)."
   type        = list(string)
-  default     = ["swa-system/swa-agent"]
+  default     = ["swa-system:swa-agent"]
 }
 
 variable "psat_audience" {
