@@ -17,8 +17,10 @@
 #                Used by terraform-swa/conjur-auth.tf so the client creds can come
 #                straight from Conjur instead of .env.
 #
-# conjur-api-go (inside the provider) base64-encodes the token for the
-# Authorization header, so we deliberately fetch the RAW (non-base64) form.
+# The swa provider's access_token must be the BASE64-encoded Conjur token (the
+# header-ready form used verbatim in `Authorization: Token token="..."`), so the
+# authenticate call below sends `Accept-Encoding: base64`. A raw-JSON token makes
+# the SWA API return 401 "authorization missing".
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -82,9 +84,14 @@ PY
 
 AUTHN_URL="${CONJUR_APPLIANCE_URL%/}/authn-oidc/${CONJUR_OIDC_SERVICE_ID}/${CONJUR_ACCOUNT}/authenticate"
 log "Exchanging platform token for a Conjur access token at ${AUTHN_URL}"
+# Request the base64-encoded token (Accept-Encoding: base64): the swa provider's
+# access_token expects the header-ready form that goes verbatim into
+# `Authorization: Token token="<...>"` (matching the reference JS flow). Without
+# this the raw-JSON token can't be used and the API returns "authorization missing".
 # Capture body + HTTP status (don't use -f, which hides the body) so a non-200
 # surfaces Conjur's actual reason (e.g. identity not permitted on the authenticator).
 AUTHN_RESP="$(curl -sS -w $'\n%{http_code}' -X POST "${AUTHN_URL}" \
+  -H 'Accept-Encoding: base64' \
   -H 'Content-Type: application/x-www-form-urlencoded' \
   --data-urlencode "id_token=${PLATFORM_TOKEN}")" \
   || { log "Conjur authn-oidc authenticate request failed (network/TLS)"; exit 1; }
