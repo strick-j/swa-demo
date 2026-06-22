@@ -15,7 +15,7 @@ terraform {
     # `terraform init` on the control host needs registry access.
     conjur = {
       source  = "cyberark/conjur"
-      version = "~> 0.6"
+      version = "~> 0.7"
     }
     # Runs scripts/conjur-token.sh to mint the SWA access token (see conjur-auth.tf).
     external = {

@@ -33,22 +33,23 @@ variable "conjur_account" {
 
 variable "conjur_authn_type" {
   description = <<-EOT
-    How the conjur provider authenticates to read the SCA secrets, e.g. 'iam'
-    (keyless, via the control host's role), 'jwt', 'oidc', or the default
+    How the conjur provider authenticates to read the SCA secrets. Use 'aws'
+    for keyless authn-iam via the host's EC2 role (the cyberark/conjur provider
+    spells IAM auth as 'aws'). Other values: 'jwt', 'oidc', or the default
     api-key. Must be a method your tenant has enabled for this identity.
   EOT
   type        = string
-  default     = "iam"
+  default     = "aws"
 }
 
 variable "conjur_authn_service_id" {
-  description = "Authenticator service id for the conjur provider's authn_type (e.g. the authn-iam/authn-jwt service)."
+  description = "Authenticator service id for the conjur provider's authn_type (e.g. the authn-iam service, like 'pin-aws')."
   type        = string
   default     = ""
 }
 
 variable "conjur_host_id" {
-  description = "Conjur host id the conjur provider logs in as (e.g. host/data/<app>/<host>)."
+  description = "Conjur host id the conjur provider logs in as (e.g. host/data/<aws-account-id>/<role-name>)."
   type        = string
   default     = ""
 }
