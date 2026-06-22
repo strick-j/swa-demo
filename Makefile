@@ -140,7 +140,7 @@ tenant: ## (Fallback) create tenant resources via REST scripts on the target hos
 
 swa: ## Bridge authn_id to the target + Helm-install SWA server + agent there
 	bash scripts/host-push.sh $(TFSWA_DIR)/outputs.env outputs.env
-	bash scripts/host-exec.sh "bash scripts/deploy-swa.sh"
+	$(ENVSH); bash scripts/host-exec.sh "SWA_CONTROLPLANE_URL='$$SWA_CONTROLPLANE_URL' SWA_TENANT_URL='$$SWA_TENANT_URL' bash scripts/deploy-swa.sh"
 
 # ---------------------------------------------------------------------------
 # Phase 4 — Demo webapp
