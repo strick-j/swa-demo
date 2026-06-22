@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Prepare the CONTROL host (this machine) to run terraform-swa against Conjur
-# Cloud using a Conjur identity + API key (authn_type=authn):
+# Cloud. Auth uses a short-lived Conjur access token minted per-apply by
+# scripts/conjur-token.sh (CyberArk Identity OIDC flow) — no static API key:
 #   1. pull the SWA bundle from S3 (control host has S3 access),
 #   2. install the cyberark/swa Terraform provider into the local plugin dir,
-#   3. write ~/.conjurrc (authn_type=authn) + ~/.swa-conjur.env for conjur-api-go.
+#   3. write ~/.conjurrc (appliance_url + account) for conjur-api-go.
 # Idempotent; safe to re-run.
 set -euo pipefail
 
@@ -15,10 +16,6 @@ ROOT="$(cd "${HERE}/.." && pwd)"
 : "${SWA_IMAGES_S3_URI:?Set SWA_IMAGES_S3_URI (bundle upload location)}"
 : "${CONJUR_APPLIANCE_URL:?Set CONJUR_APPLIANCE_URL (e.g. https://<sub>.secretsmgr.cyberark.cloud/api)}"
 : "${CONJUR_ACCOUNT:=conjur}"
-: "${CONJUR_AUTHN_TYPE:=authn}"
-: "${CONJUR_SERVICE_ID:=default}"
-: "${CONJUR_AUTHN_LOGIN:?Set CONJUR_AUTHN_LOGIN (the Conjur identity, e.g. host/data/<app>/<host>)}"
-: "${CONJUR_AUTHN_API_KEY:?Set CONJUR_AUTHN_API_KEY (the API key for CONJUR_AUTHN_LOGIN)}"
 : "${AWS_REGION:=us-east-1}"
 
 BUNDLE="${SWA_BUNDLE_DIR:-${HOME}/swa-bundle}"
@@ -42,28 +39,16 @@ find "${BUNDLE}/terraform-provider" -name 'terraform-provider-swa_v*.sig' -delet
 log "Installing the cyberark/swa Terraform provider"
 bash "${INSTALLER}"
 
-log "Writing ~/.conjurrc and ~/.swa-conjur.env (authn API-key)"
+# Minimal ~/.conjurrc so conjur-api-go knows the appliance URL + account. The
+# access token itself is minted per-apply by scripts/conjur-token.sh (Identity
+# OIDC flow) and passed to the provider as TF_VAR_conjur_access_token — no
+# credentials are written here.
+log "Writing ~/.conjurrc (appliance_url + account)"
 cat > "${HOME}/.conjurrc" <<EOF
 ---
 appliance_url: ${CONJUR_APPLIANCE_URL}
 account: ${CONJUR_ACCOUNT}
-authn_type: ${CONJUR_AUTHN_TYPE}
-service_id: ${CONJUR_SERVICE_ID}
 EOF
-# conjur-api-go (used by the cyberark/swa provider) reads these from ~/.conjurrc
-# AND from the environment. Export the login + API key so the provider can
-# authenticate with the 'authn' (username/API-key) method at `terraform apply`
-# time even if it doesn't read ~/.conjurrc. CONJUR_AUTHN_API_KEY is a secret;
-# the file is chmod 600 below.
-cat > "${HOME}/.swa-conjur.env" <<EOF
-export CONJUR_APPLIANCE_URL="${CONJUR_APPLIANCE_URL}"
-export CONJUR_ACCOUNT="${CONJUR_ACCOUNT}"
-export CONJUR_AUTHN_TYPE="${CONJUR_AUTHN_TYPE}"
-export CONJUR_AUTHN_SERVICE_ID="${CONJUR_SERVICE_ID}"
-export CONJUR_AUTHN_LOGIN="${CONJUR_AUTHN_LOGIN}"
-export CONJUR_AUTHN_API_KEY="${CONJUR_AUTHN_API_KEY}"
-export TF_VAR_conjur_appliance_url="${CONJUR_APPLIANCE_URL}"
-EOF
-chmod 600 "${HOME}/.conjurrc" "${HOME}/.swa-conjur.env"
+chmod 600 "${HOME}/.conjurrc"
 
-log "Done. terraform-swa will authenticate to Conjur as ${CONJUR_AUTHN_LOGIN} (authn_type=${CONJUR_AUTHN_TYPE})."
+log "Done. 'make tenant-tf' mints a Conjur access token (Identity OIDC) at apply time."

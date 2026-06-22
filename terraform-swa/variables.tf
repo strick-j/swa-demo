@@ -5,11 +5,78 @@ variable "conjur_appliance_url" {
   description = <<-EOT
     Conjur Cloud / Secrets Manager - SaaS API URL, e.g.
     https://<subdomain>.secretsmgr.cyberark.cloud/api. Used as the swa provider
-    `url`. Authentication (account, CONJUR_AUTHN_LOGIN + CONJUR_AUTHN_API_KEY) is
-    supplied to conjur-api-go via the host's ~/.conjurrc + ~/.swa-conjur.env.
+    `url`.
   EOT
   type        = string
   default     = ""
+}
+
+variable "conjur_access_token" {
+  description = <<-EOT
+    Optional pre-minted Conjur access token (raw JSON) for the swa provider.
+    Leave empty (default) to have data.external.conjur_token mint one in-graph
+    via the Identity OIDC flow. Set TF_VAR_conjur_access_token only to bypass
+    that flow (debugging).
+  EOT
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+# --- Conjur provider bootstrap (reads the SCA OIDC client creds from Conjur) ---
+
+variable "conjur_account" {
+  description = "Conjur account (organization). Usually 'conjur' for Conjur Cloud."
+  type        = string
+  default     = "conjur"
+}
+
+variable "conjur_authn_type" {
+  description = <<-EOT
+    How the conjur provider authenticates to read the SCA secrets, e.g. 'iam'
+    (keyless, via the control host's role), 'jwt', 'oidc', or the default
+    api-key. Must be a method your tenant has enabled for this identity.
+  EOT
+  type        = string
+  default     = "iam"
+}
+
+variable "conjur_authn_service_id" {
+  description = "Authenticator service id for the conjur provider's authn_type (e.g. the authn-iam/authn-jwt service)."
+  type        = string
+  default     = ""
+}
+
+variable "conjur_host_id" {
+  description = "Conjur host id the conjur provider logs in as (e.g. host/data/<app>/<host>)."
+  type        = string
+  default     = ""
+}
+
+variable "conjur_sca_username_path" {
+  description = "Conjur path whose value is the Identity OAuth client_id (the SCA 'username' secret)."
+  type        = string
+  default     = ""
+}
+
+variable "conjur_sca_password_path" {
+  description = "Conjur path whose value is the Identity OAuth client_secret (the SCA 'password' secret)."
+  type        = string
+  default     = ""
+}
+
+# --- CyberArk Identity OIDC exchange (mints the SWA access token) ---
+
+variable "identity_tenant_id" {
+  description = "CyberArk Identity tenant subdomain for the platform-token endpoint (<id>.id.cyberark.cloud)."
+  type        = string
+  default     = ""
+}
+
+variable "conjur_oidc_service_id" {
+  description = "Conjur authn-oidc service id used to mint the SWA token (.../authn-oidc/<service>/<account>/authenticate). Usually 'cyberark'."
+  type        = string
+  default     = "cyberark"
 }
 
 variable "trust_domain" {

@@ -7,28 +7,44 @@ provider (shipped in the SWA release bundle), creating:
 
 This replaces the hand-rolled `tenant/*.sh` REST scripts (kept as a fallback).
 
-## Auth: runs on the CONTROL host, uses a Conjur API key
+## Auth: runs on the CONTROL host, uses a Conjur OIDC access token
 
-This module is applied **on the control host** (where you run `make`). The
-`cyberark/swa` provider (via conjur-api-go) authenticates to Conjur Cloud with a
-Conjur identity + API key (`authn_type: authn`) — **no `conjur login`** needed.
-`scripts/control-setup.sh` (`make control-setup`) provisions this on the control
-host:
+This module is applied **on the control host** (where you run `make`). Auth is a
+chain, all in-graph — **no static OAuth secret in `.env`, no `conjur login`**:
+
+1. The `cyberark/conjur` provider authenticates to Conjur with a bootstrap
+   method you choose (`conjur_authn_type`, e.g. keyless `iam` with the control
+   host's role) and reads the CyberArk Identity OAuth client out of Conjur
+   (`conjur_secret` data sources: `sca_username` = client_id, `sca_password` =
+   client_secret — see `conjur-auth.tf`).
+2. `data.external.conjur_token` runs `scripts/conjur-token.sh`, which exchanges
+   those creds via the Identity OIDC client-credentials flow (platform token →
+   Conjur `authn-oidc` authenticate) for a short-lived Conjur access token.
+3. The `cyberark/swa` provider uses that token as its `access_token`.
+
+`scripts/control-setup.sh` (`make control-setup`) prepares the control host:
 
 - pulls the bundle from S3 + installs the `cyberark/swa` provider,
-- writes `~/.conjurrc` (`authn_type: authn`, `service_id`),
-- writes `~/.swa-conjur.env` (`CONJUR_APPLIANCE_URL`, `CONJUR_ACCOUNT`,
-  `CONJUR_AUTHN_TYPE`, `CONJUR_AUTHN_LOGIN`, `CONJUR_AUTHN_API_KEY`).
+- writes `~/.conjurrc` (`appliance_url`, `account`).
 
-Prerequisites (your tenant side): a Conjur identity (host or workload) and its
-API key, set in `.env` as `CONJUR_AUTHN_LOGIN` + `CONJUR_AUTHN_API_KEY`.
+`make tenant-tf` then runs `terraform init` (which fetches the `conjur` +
+`external` providers from the registry) and `terraform apply`.
+
+Prerequisites (your tenant side): (a) a bootstrap identity the `conjur` provider
+can log in as (`conjur_host_id` + the matching authenticator); (b) the CyberArk
+Identity OAuth client stored in Conjur at `conjur_sca_username_path` /
+`conjur_sca_password_path` and trusted by Conjur's `authn-oidc/<service>`
+authenticator; (c) `identity_tenant_id`. All set in `.env` as `TF_VAR_*`.
+
+> **State note:** secrets read by the `conjur` provider are persisted to
+> Terraform state. Use an encrypted/remote backend for anything beyond a demo.
 
 ## Apply (via make)
 
 ```bash
 make control-setup # control: install provider + write ~/.conjurrc
 make fetch-jwks    # control: kubectl over SSH to the target -> cluster-jwks.auto.tfvars.json
-make tenant-tf     # control: sources ~/.swa-conjur.env, terraform init + apply
+make tenant-tf     # control: mint Conjur token (Identity OIDC) + terraform init + apply
 ```
 
 `make swa` then bridges the `authn_id` / `trust_domain` outputs to the target
@@ -37,8 +53,18 @@ make tenant-tf     # control: sources ~/.swa-conjur.env, terraform init + apply
 To run by hand on the control host:
 
 ```bash
-set -a; . ~/.swa-conjur.env; set +a
+set -a; . ./.env; set +a
+export TF_VAR_conjur_appliance_url="$CONJUR_APPLIANCE_URL"
 cd terraform-swa && terraform init && terraform apply
+```
+
+To debug just the OIDC token exchange in isolation (reads `CONJUR_OIDC_CLIENT_ID`
+/ `CONJUR_OIDC_CLIENT_SECRET` / `IDENTITY_TENANT_ID` from the environment rather
+than from Conjur):
+
+```bash
+CONJUR_OIDC_CLIENT_ID=... CONJUR_OIDC_CLIENT_SECRET=... IDENTITY_TENANT_ID=... \
+  bash scripts/conjur-token.sh   # prints the raw Conjur access token
 ```
 
 ## Why `public_keys` instead of `jwks_uri`

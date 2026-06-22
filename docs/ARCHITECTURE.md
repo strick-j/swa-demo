@@ -44,8 +44,11 @@ SPIFFE establishes identity through **node attestation** then **workload attesta
 Tenant-side resources (trust domain, server group, server, node group) are
 managed by the official **`cyberark/swa` Terraform provider** in `terraform-swa/`,
 applied **on the control host** so the provider authenticates to Conjur Cloud with
-a **Conjur identity + API key** (`authn_type: authn` — no `conjur login`). The
-server registration emits an **`authn_id`**, bridged to the target
+a **short-lived Conjur access token**. The `cyberark/conjur` provider first reads
+the CyberArk Identity OAuth client out of Conjur, then `data.external.conjur_token`
+exchanges it via the Identity OIDC flow (`scripts/conjur-token.sh`) for the swa
+provider's token — no static secret in `.env`, no `conjur login`. The server
+registration emits an **`authn_id`**, bridged to the target
 (`outputs.env`) and consumed by the swa-server Helm chart. (`tenant/*.sh` REST
 scripts remain as a fallback.)
 

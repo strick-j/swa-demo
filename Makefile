@@ -100,7 +100,7 @@ configure: ## Run Ansible on the TARGET: minikube + load images (S3) + vendor ch
 
 # ---------------------------------------------------------------------------
 # Phase 3 — Tenant wiring on the CONTROL host (this machine): terraform-swa
-# authenticates to Conjur with a Conjur identity + API key (authn_type=authn). Its
+# authenticates to Conjur with a short-lived access token (Identity OIDC). Its
 # authn_id / trust-domain outputs are bridged to the TARGET host (outputs.env)
 # so deploy-swa.sh can Helm-install the SWA server + agent there.
 # ---------------------------------------------------------------------------
@@ -108,7 +108,7 @@ SWA_RELEASE_DIR ?= $(HOME)/Downloads/Secure Workload Access/Secure Workload Acce
 TFSWA_DIR := terraform-swa
 
 .PHONY: control-setup vendor-charts fetch-jwks tenant-tf tenant swa
-control-setup: ## (Control host) install the SWA provider + write Conjur authn (API-key) config
+control-setup: ## (Control host) install the SWA provider + write ~/.conjurrc
 	bash scripts/control-setup.sh
 
 vendor-charts: ## (Local only) copy bundled SWA helm charts into helm/charts/ for `helm template`
@@ -118,11 +118,14 @@ vendor-charts: ## (Local only) copy bundled SWA helm charts into helm/charts/ fo
 fetch-jwks: ## Fetch the target cluster's issuer + JWKS (kubectl over SSH) into terraform-swa
 	bash scripts/fetch-cluster-jwks.sh
 
-# Runs on the CONTROL host: conjur-api-go authenticates to Conjur with the
-# identity + API key from ~/.swa-conjur.env (authn_type=authn, CONJUR_AUTHN_LOGIN
-# + CONJUR_AUTHN_API_KEY). No `conjur login` needed.
-tenant-tf: fetch-jwks ## Apply tenant resources via cyberark/swa (Conjur API-key auth)
-	set -a; . $$HOME/.swa-conjur.env; set +a; \
+# Runs on the CONTROL host. The conjur provider reads the SCA OIDC client creds
+# from Conjur, then data.external.conjur_token (scripts/conjur-token.sh) mints a
+# short-lived Conjur access token for the swa provider — all in-graph. We only
+# pass the appliance URL through as a TF_VAR; the rest come from .env (TF_VAR_*).
+# `terraform init` fetches the conjur + external providers from the registry.
+tenant-tf: fetch-jwks ## Apply tenant resources via cyberark/swa (Conjur OIDC token auth)
+	$(ENVSH); \
+	  export TF_VAR_conjur_appliance_url="$$CONJUR_APPLIANCE_URL"; \
 	  cd $(TFSWA_DIR) && terraform init -input=false && terraform apply -auto-approve
 	@cd $(TFSWA_DIR) && { \
 	  echo "SWA_AUTHN_ID=$$(terraform output -raw authn_id)"; \
@@ -159,7 +162,7 @@ webapp-deploy: ## Deploy webapp manifests into the demo namespace
 up: preflight webapp-test tf-apply configure control-setup tenant-tf swa webapp-build webapp-deploy verify ## Full bring-up
 	@echo "swa-demo is up. Run 'make demo' to open the UI."
 	@echo "Assumes the SWA bundle is uploaded to SWA_IMAGES_S3_URI and a Conjur"
-	@echo "identity + API key are set (CONJUR_AUTHN_LOGIN/CONJUR_AUTHN_API_KEY in .env)."
+	@echo "Identity OIDC client is set (IDENTITY_TENANT_ID/CONJUR_OIDC_CLIENT_ID/SECRET in .env)."
 
 down: tf-destroy ## Tear everything down
 	@echo "Destroyed."
