@@ -40,7 +40,11 @@ nodeAttestor:
 workloadAttestors:
   - type: k8s
     config:
-      skipKubeletVerification: false
+      # minikube's kubelet (https://<node>:10250) serves a self-signed cert, so
+      # the k8s workload attestor's TLS verification fails with "certificate
+      # signed by unknown authority". Skip kubelet cert verification for this
+      # demo. For production, set kubeletCAPath to the cluster CA instead.
+      skipKubeletVerification: true
       nodeNameEnv: MY_NODE_NAME
 
 serviceAccount:
