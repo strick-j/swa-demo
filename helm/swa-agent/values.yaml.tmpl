@@ -11,6 +11,15 @@ image:
 trustDomain:
   name: "${SWA_TRUST_DOMAIN}"
 
+# Insecure bootstrap: the agent sources the server's trust bundle over the
+# initial connection instead of a pre-shared bundle. Appropriate for this
+# in-cluster demo (agent + server co-located). Without this (and with no
+# bootstrap.bundleSourceUrl) the agent crashes: "could not correctly source the
+# agent bootstrap bundle". For production, publish a bundle and set
+# bootstrap.bundleSourceUrl instead.
+bootstrap:
+  insecure: true
+
 # Reach the in-cluster SWA Server Service.
 server:
   address: "swa-server.${NS_SWA}.svc.cluster.local:8443"
