@@ -82,10 +82,20 @@ PY
 
 AUTHN_URL="${CONJUR_APPLIANCE_URL%/}/authn-oidc/${CONJUR_OIDC_SERVICE_ID}/${CONJUR_ACCOUNT}/authenticate"
 log "Exchanging platform token for a Conjur access token at ${AUTHN_URL}"
-CONJUR_TOKEN="$(curl -fsS -X POST "${AUTHN_URL}" \
+# Capture body + HTTP status (don't use -f, which hides the body) so a non-200
+# surfaces Conjur's actual reason (e.g. identity not permitted on the authenticator).
+AUTHN_RESP="$(curl -sS -w $'\n%{http_code}' -X POST "${AUTHN_URL}" \
   -H 'Content-Type: application/x-www-form-urlencoded' \
   --data-urlencode "id_token=${PLATFORM_TOKEN}")" \
-  || { log "Conjur authn-oidc authenticate failed (check service_id '${CONJUR_OIDC_SERVICE_ID}', account, appliance url)"; exit 1; }
+  || { log "Conjur authn-oidc authenticate request failed (network/TLS)"; exit 1; }
+AUTHN_CODE="${AUTHN_RESP##*$'\n'}"
+CONJUR_TOKEN="${AUTHN_RESP%$'\n'*}"
+if [[ "${AUTHN_CODE}" != "200" ]]; then
+  log "authn-oidc authenticate returned HTTP ${AUTHN_CODE}"
+  log "Conjur response body: ${CONJUR_TOKEN:-<empty>}"
+  log "Check: is ${CONJUR_AUTHN_LOGIN:-the OAuth client identity} permitted on authn-oidc/${CONJUR_OIDC_SERVICE_ID}, and is service_id/account/appliance_url correct?"
+  exit 1
+fi
 
 [[ -n "${CONJUR_TOKEN}" ]] || { log "empty Conjur token response"; exit 1; }
 log "Conjur access token acquired."
