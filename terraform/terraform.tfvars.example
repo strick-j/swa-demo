@@ -10,6 +10,6 @@ admin_cidrs     = ["0.0.0.0/0"] # set to YOUR.IP/32 (add more for other location
 key_pair_name   = ""            # empty => Terraform generates swa-demo-key.pem
 webapp_nodeport = 30080
 
-# Optional HTTPS via ALB (import your external cert into ACM, pass the ARN):
-# domain_name     = "swa.pineappledev.app" # CNAME this at the alb_dns_name output
-# certificate_arn = "arn:aws:acm:us-east-1:<acct>:certificate/<id>"
+# Optional HTTPS via ALB (ACM-managed, DNS-validated, auto-renewing):
+# domain_name     = "swa.pineappledev.app" # add acm_validation_records at your DNS host; CNAME this at alb_dns_name
+# certificate_arn = ""                      # optional override: a pre-imported cert ARN instead of ACM-managed

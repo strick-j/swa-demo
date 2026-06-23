@@ -61,13 +61,13 @@ variable "admin_cidrs" {
 # created only when certificate_arn is set; DNS is external (CNAME domain_name
 # at the alb_dns_name output).
 variable "domain_name" {
-  description = "FQDN you'll point at the ALB (e.g. swa.pineappledev.app). Used for naming/outputs; DNS is managed externally."
+  description = "FQDN for the ALB (e.g. swa.pineappledev.app). Set it to enable HTTPS: Terraform requests a DNS-validated ACM cert for it. Empty => no ALB, plain NodePort HTTP only."
   type        = string
   default     = ""
 }
 
 variable "certificate_arn" {
-  description = "ARN of an ACM certificate (import your external cert: 'aws acm import-certificate'). Empty => no ALB, plain NodePort HTTP only."
+  description = "Optional override: ARN of a pre-existing/imported ACM cert to use instead of the ACM-managed (DNS-validated) one created for domain_name."
   type        = string
   default     = ""
 }

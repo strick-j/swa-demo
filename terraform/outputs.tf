@@ -25,8 +25,16 @@ output "webapp_url" {
 }
 
 output "alb_dns_name" {
-  description = "ALB DNS name to CNAME your domain at (empty when certificate_arn is unset)."
+  description = "ALB DNS name to CNAME your domain at (empty when no ALB)."
   value       = local.alb_enabled ? aws_lb.main[0].dns_name : ""
+}
+
+output "acm_validation_records" {
+  description = "CNAME records to add at your DNS host to validate the ACM cert (record name => value). Empty when using an imported certificate_arn."
+  value = local.use_acm_managed ? {
+    for o in aws_acm_certificate.cert[0].domain_validation_options :
+    o.resource_record_name => o.resource_record_value
+  } : {}
 }
 
 output "https_url" {

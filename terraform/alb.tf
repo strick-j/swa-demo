@@ -6,7 +6,40 @@
 # alb_dns_name output. Leave certificate_arn empty and nothing here is created.
 
 locals {
-  alb_enabled = var.certificate_arn != ""
+  # ALB is created when you provide a domain (ACM-managed cert, default) or a
+  # pre-imported certificate_arn (override). ACM-managed: Terraform requests a
+  # DNS-validated cert; you add the validation CNAME(s) at your DNS host (see the
+  # acm_validation_records output), ACM issues + auto-renews it.
+  use_acm_managed = var.certificate_arn == "" && var.domain_name != ""
+  alb_enabled     = var.certificate_arn != "" || var.domain_name != ""
+
+  # Cert the HTTPS listener uses: the imported ARN if given, else the ACM-managed
+  # cert once validation completes (null until issued).
+  acm_managed_cert_arn      = one(aws_acm_certificate_validation.cert[*].certificate_arn)
+  effective_certificate_arn = var.certificate_arn != "" ? var.certificate_arn : (local.acm_managed_cert_arn != null ? local.acm_managed_cert_arn : "")
+}
+
+# ACM-managed (DNS-validated) certificate. DNS lives at an external host (e.g.
+# Squarespace), so the validation records are added manually — see the
+# acm_validation_records output. The validation resource simply waits until ACM
+# reports the cert ISSUED (no Route53 record management here).
+resource "aws_acm_certificate" "cert" {
+  count             = local.use_acm_managed ? 1 : 0
+  domain_name       = var.domain_name
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = {
+    Name = "${var.project}-cert"
+  }
+}
+
+resource "aws_acm_certificate_validation" "cert" {
+  count           = local.use_acm_managed ? 1 : 0
+  certificate_arn = aws_acm_certificate.cert[0].arn
 }
 
 resource "aws_security_group" "alb" {
@@ -107,7 +140,7 @@ resource "aws_lb_listener" "https" {
   port              = 443
   protocol          = "HTTPS"
   ssl_policy        = var.ssl_policy
-  certificate_arn   = var.certificate_arn
+  certificate_arn   = local.effective_certificate_arn
 
   default_action {
     type             = "forward"
