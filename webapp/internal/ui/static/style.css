@@ -1,12 +1,33 @@
 :root {
-  --bg: #0f1419;
-  --panel: #1a2230;
-  --accent: #00b4a6;
-  --accent-2: #4f9cff;
-  --text: #e6edf3;
-  --muted: #8b98a9;
-  --ok: #3fb950;
-  --err: #f85149;
+  /* --- Idira Design System palette ---------------------------------------
+     Identity Blue (signature), cool neutrals, PAN Cyber Orange accent.
+     Source: infamousjoeg/idira-swa-demo tokens/colors.css. ------------------ */
+  --idira-blue-0: #adc0fc;
+  --idira-blue-250: #6186fc;
+  --idira-blue-500: #265bff; /* PRIMARY / brand */
+  --idira-blue-750: #173eb8;
+  --idira-blue-1000: #061d63;
+  --pan-orange-500: #fa582d; /* parent-brand accent */
+  --neutral-400: #8794ab;
+  --neutral-700: #2e384b;
+  --neutral-800: #1c2435;
+  --neutral-900: #121826;
+  --neutral-1000: #0a0e18;
+  --status-success: #1fb866;
+  --status-danger: #c84727;
+
+  /* --- App roles (dark surfaces from the Idira deep-blue family) --- */
+  --bg: var(--neutral-1000);
+  --panel: var(--neutral-900);
+  --sunken: #0b1020;
+  --border: var(--neutral-700);
+  --accent: var(--idira-blue-500);
+  --accent-2: var(--idira-blue-250);
+  --text: #e6ecf7;
+  --muted: var(--neutral-400);
+  --ok: var(--status-success);
+  --err: var(--status-danger);
+  --brand-gradient: linear-gradient(135deg, var(--idira-blue-500) 0%, var(--idira-blue-1000) 100%);
 }
 
 * { box-sizing: border-box; }
@@ -20,9 +41,17 @@ body {
 
 header {
   padding: 1.5rem 2rem;
-  border-bottom: 1px solid #2a3442;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(38, 91, 255, 0.10) 0%, rgba(10, 14, 24, 0) 100%);
 }
-header h1 { margin: 0; font-size: 1.4rem; }
+header h1 {
+  margin: 0;
+  font-size: 1.4rem;
+  background: linear-gradient(90deg, #fff 0%, var(--idira-blue-0) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
 .sub { color: var(--muted); margin: 0.4rem 0 0; font-size: 0.9rem; }
 
 code { color: var(--accent-2); }
@@ -31,26 +60,37 @@ main { padding: 1.5rem 2rem; max-width: 1100px; margin: 0 auto; }
 
 .panel {
   background: var(--panel);
-  border: 1px solid #2a3442;
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 1.2rem 1.4rem;
   margin-bottom: 1.2rem;
 }
-.panel h2 { margin-top: 0; font-size: 1.05rem; color: var(--accent); }
-.panel h3 { font-size: 0.8rem; text-transform: uppercase; color: var(--muted); margin: 0.9rem 0 0.3rem; }
+.panel h2 { margin-top: 0; font-size: 1.05rem; color: var(--accent-2); }
+.panel h3 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 0.9rem 0 0.3rem;
+}
 
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
 @media (max-width: 820px) { .grid { grid-template-columns: 1fr; } }
 
 button {
-  background: var(--accent);
-  color: #04221f;
+  background: var(--brand-gradient);
+  color: #fff;
   border: 0;
   border-radius: 8px;
   padding: 0.7rem 1.2rem;
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
+  transition: filter 0.15s ease, box-shadow 0.15s ease;
+}
+button:hover:not(:disabled) {
+  filter: brightness(1.12);
+  box-shadow: 0 4px 16px rgba(38, 91, 255, 0.35);
 }
 button:disabled { opacity: 0.5; cursor: default; }
 
@@ -71,16 +111,16 @@ button:disabled { opacity: 0.5; cursor: default; }
 .step.done { opacity: 1; }
 .step .dot {
   width: 12px; height: 12px; border-radius: 50%;
-  background: #34404f; margin-top: 4px; flex: 0 0 auto;
-  transition: background 0.3s ease;
+  background: var(--neutral-700); margin-top: 4px; flex: 0 0 auto;
+  transition: background 0.3s ease, box-shadow 0.3s ease;
 }
-.step.done .dot { background: var(--accent); box-shadow: 0 0 0 4px rgba(0,180,166,0.15); }
+.step.done .dot { background: var(--accent); box-shadow: 0 0 0 4px rgba(38, 91, 255, 0.18); }
 .step .detail { color: var(--muted); font-size: 0.85rem; }
 
 .mono {
   font-family: "SF Mono", Menlo, Consolas, monospace;
-  background: #0b0f14;
-  border: 1px solid #2a3442;
+  background: var(--sunken);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0.7rem;
   font-size: 0.82rem;
@@ -90,4 +130,9 @@ button:disabled { opacity: 0.5; cursor: default; }
 }
 .token { color: var(--accent-2); }
 
-footer { color: var(--muted); padding: 1rem 2rem; font-size: 0.8rem; border-top: 1px solid #2a3442; }
+footer {
+  color: var(--muted);
+  padding: 1rem 2rem;
+  font-size: 0.8rem;
+  border-top: 1px solid var(--border);
+}
