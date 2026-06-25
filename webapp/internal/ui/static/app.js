@@ -21,10 +21,12 @@
     for (const step of steps) {
       const li = document.createElement("li");
       li.className = "step";
+      const meta = step.meta ? '<div class="meta">' + step.meta + "</div>" : "";
       li.innerHTML =
         '<span class="dot"></span>' +
         '<div><strong>' + step.name + "</strong>" +
-        '<div class="detail">' + step.detail + "</div></div>";
+        '<div class="detail">' + step.detail + "</div>" +
+        meta + "</div>";
       timeline.appendChild(li);
       // Stagger the reveal so the flow reads as a sequence.
       await new Promise((r) => setTimeout(r, 220));

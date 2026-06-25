@@ -116,6 +116,14 @@ button:disabled { opacity: 0.5; cursor: default; }
 }
 .step.done .dot { background: var(--accent); box-shadow: 0 0 0 4px rgba(38, 91, 255, 0.18); }
 .step .detail { color: var(--muted); font-size: 0.85rem; }
+.step .meta {
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  color: var(--accent-2);
+  opacity: 0.75;
+  margin-top: 0.25rem;
+  word-break: break-word;
+}
 
 .mono {
   font-family: "SF Mono", Menlo, Consolas, monospace;

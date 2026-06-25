@@ -53,6 +53,10 @@ func (c *Client) FetchJWTSVID(ctx context.Context, audience string) (*svid.Resul
 	}
 
 	id := jwt.ID.String()
+	ns, sa := svid.ParseNsSa(id)
+	alg, _ := header["alg"].(string)
+	kid, _ := header["kid"].(string)
+
 	return &svid.Result{
 		SPIFFEID:  id,
 		Token:     token,
@@ -61,16 +65,16 @@ func (c *Client) FetchJWTSVID(ctx context.Context, audience string) (*svid.Resul
 		Audience:  jwt.Audience,
 		IssuedAt:  start,
 		ExpiresAt: jwt.Expiry,
-		Steps:     lifecycleSteps(start, id),
+		Steps: svid.LifecycleSteps(svid.StepInputs{
+			Source:      c.socketAddr,
+			Audience:    audience,
+			Namespace:   ns,
+			ServiceAcct: sa,
+			SPIFFEID:    id,
+			Alg:         alg,
+			Kid:         kid,
+			TTL:         jwt.Expiry.Sub(start),
+			Start:       start,
+		}),
 	}, nil
-}
-
-func lifecycleSteps(start time.Time, id string) []svid.Step {
-	t := start.UnixMilli()
-	return []svid.Step{
-		{Name: "Workload request", Detail: "App called the SWA Agent Workload API", Status: "ok", AtMillis: t},
-		{Name: "Workload attestation", Detail: "Agent attested pod runtime attributes", Status: "ok", AtMillis: time.Now().UnixMilli()},
-		{Name: "Server validation", Detail: "SWA Server validated against node-group policy", Status: "ok", AtMillis: time.Now().UnixMilli()},
-		{Name: "JWT-SVID issued", Detail: "Issued for " + id, Status: "ok", AtMillis: time.Now().UnixMilli()},
-	}
 }

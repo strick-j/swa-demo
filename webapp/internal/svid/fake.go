@@ -71,19 +71,18 @@ func (f *Fake) FetchJWTSVID(_ context.Context, audience string) (*Result, error)
 		Audience:  []string{audience},
 		IssuedAt:  issued,
 		ExpiresAt: expires,
-		Steps:     buildSteps(issued, f.Namespace, f.ServiceAcct, spiffeID),
+		Steps: LifecycleSteps(StepInputs{
+			Source:      f.Source(),
+			Audience:    audience,
+			Namespace:   f.Namespace,
+			ServiceAcct: f.ServiceAcct,
+			SPIFFEID:    spiffeID,
+			Alg:         header["alg"].(string),
+			Kid:         header["kid"].(string),
+			TTL:         f.TTL,
+			Start:       issued,
+		}),
 	}, nil
-}
-
-// buildSteps describes the four-stage lifecycle shown in the UI.
-func buildSteps(start time.Time, ns, sa, id string) []Step {
-	t := start.UnixMilli()
-	return []Step{
-		{Name: "Workload request", Detail: "App calls the SWA Agent Workload API over the Unix socket", Status: "ok", AtMillis: t},
-		{Name: "Workload attestation", Detail: fmt.Sprintf("Agent inspects runtime attrs: ns=%s, sa=%s", ns, sa), Status: "ok", AtMillis: t + 12},
-		{Name: "Server validation", Detail: "SWA Server validates attributes against node-group policy", Status: "ok", AtMillis: t + 28},
-		{Name: "JWT-SVID issued", Detail: "Short-lived JWT-SVID minted for " + id, Status: "ok", AtMillis: t + 41},
-	}
 }
 
 // encodeToken produces a base64url header.payload.signature string so the UI can

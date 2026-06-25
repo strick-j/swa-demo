@@ -14,10 +14,11 @@ var ErrUnavailable = errors.New("svid: workload api unavailable")
 
 // Step is one stage in the identity-issuance lifecycle, surfaced to the UI.
 type Step struct {
-	Name    string `json:"name"`
-	Detail  string `json:"detail"`
-	Status  string `json:"status"` // "ok" | "pending" | "error"
-	AtMillis int64 `json:"at_millis"`
+	Name     string `json:"name"`
+	Detail   string `json:"detail"`
+	Meta     string `json:"meta,omitempty"` // short technical caption (mono, dim)
+	Status   string `json:"status"`         // "ok" | "pending" | "error"
+	AtMillis int64  `json:"at_millis"`
 }
 
 // Result is a decoded JWT-SVID plus the lifecycle steps that produced it.
