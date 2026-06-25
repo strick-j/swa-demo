@@ -1,0 +1,113 @@
+---
+# Protected resource for the SWA demo: a Postgres DB with fake shipment data.
+# It listens plaintext and is only reached through the SPIFFE mTLS gateway
+# (k8s/pg-gateway.yaml), which authorizes on the caller's SPIFFE ID. Postgres
+# itself uses `trust` auth, so the workload presents NO password — its SVID
+# (verified by the gateway) is the only credential. Add a NetworkPolicy to block
+# direct :5432 access for a hard guarantee; for the demo the gateway is the path.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: swa-data
+  labels:
+    app.kubernetes.io/part-of: swa-demo
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-seed
+  namespace: swa-data
+  labels:
+    app: postgres
+data:
+  seed.sql: |
+    CREATE TABLE shipments (
+      id          serial PRIMARY KEY,
+      ref         text NOT NULL,
+      origin      text NOT NULL,
+      destination text NOT NULL,
+      status      text NOT NULL,
+      carrier     text NOT NULL,
+      eta         timestamptz
+    );
+    INSERT INTO shipments (ref, origin, destination, status, carrier, eta) VALUES
+      ('SHP-2049-883', 'Singapore',  'Long Beach', 'In transit', 'Praetor Logistics', '2026-06-09 14:00+00'),
+      ('SHP-2050-114', 'Rotterdam',  'New York',   'Loaded',     'Meridian Freight',  '2026-06-12 09:30+00'),
+      ('SHP-2050-562', 'Shanghai',   'Hamburg',    'Customs',    'Praetor Logistics', '2026-06-15 22:10+00'),
+      ('SHP-2051-007', 'Busan',      'Oakland',    'Arrived',    'Transpacific Co',   '2026-06-05 06:45+00'),
+      ('SHP-2051-340', 'Felixstowe', 'Savannah',   'In transit', 'Atlantic Lines',    '2026-06-18 17:25+00');
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: swa-data
+  labels:
+    app: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: "swa"
+            - name: POSTGRES_USER
+              value: "appuser"
+            # No password: only the SPIFFE gateway can reach Postgres, and it
+            # authorizes by SPIFFE ID. The workload never holds a DB secret.
+            - name: POSTGRES_HOST_AUTH_METHOD
+              value: "trust"
+            - name: PGDATA
+              value: "/var/lib/postgresql/data/pgdata"
+          volumeMounts:
+            - name: seed
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "appuser", "-d", "swa"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      volumes:
+        - name: seed
+          configMap:
+            name: postgres-seed
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: swa-data
+  labels:
+    app: postgres
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432

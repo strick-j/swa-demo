@@ -80,9 +80,12 @@ resource "swa_node_group" "this" {
   workload_configuration = {
     spiffe_id_template = var.node_group_spiffe_template
 
-    # Restrict issuance to the demo workload's namespace + service account.
+    # Issue to BOTH the authorized webapp and the unauthorized second workload.
+    # Both get valid SVIDs; the Postgres gateway (ghostunnel) authorizes by
+    # SPIFFE ID, so only the first can actually reach the database.
     workload_registration_policies = [
-      "k8s.ns == '${var.workload_namespace}' && k8s.sa == '${var.workload_service_account}'"
+      "k8s.ns == '${var.workload_namespace}' && k8s.sa == '${var.workload_service_account}'",
+      "k8s.ns == '${var.untrusted_namespace}' && k8s.sa == '${var.untrusted_service_account}'"
     ]
   }
 }

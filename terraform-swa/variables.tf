@@ -140,6 +140,20 @@ variable "workload_service_account" {
   default     = "swa-demo-webapp"
 }
 
+# Second (unauthorized) workload: it DOES get an SVID, demonstrating that the
+# Postgres gateway denies it on SPIFFE-ID authorization, not on failed issuance.
+variable "untrusted_namespace" {
+  description = "Namespace of the unauthorized demo workload (gets an SVID, denied at the Postgres gateway)."
+  type        = string
+  default     = "swa-demo-untrusted"
+}
+
+variable "untrusted_service_account" {
+  description = "Service account of the unauthorized demo workload."
+  type        = string
+  default     = "untrusted-app"
+}
+
 variable "node_group_spiffe_template" {
   description = "SPIFFE ID template for issued workload identities."
   type        = string
