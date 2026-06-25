@@ -34,8 +34,23 @@ resource "swa_server_group" "this" {
   }
 }
 
+# The swa provider cannot update a server in place — any change (e.g. a rebuilt
+# cluster's new public_keys/issuer) must be a replace. Capture the auth inputs so
+# Terraform REPLACES swa_server when they change instead of attempting a rejected
+# in-place update ("Servers cannot be updated").
+resource "terraform_data" "server_auth" {
+  input = {
+    subject     = var.server_subject
+    audience    = var.server_audience
+    issuer      = var.server_issuer
+    jwks_uri    = var.server_jwks_uri
+    public_keys = var.server_public_keys
+  }
+}
+
 # The in-cluster SWA Server's authenticator. Exposes authn_id, consumed by the
-# swa-server Helm chart (controlPlane.auth.authnID).
+# swa-server Helm chart (controlPlane.auth.authnID). Replacing it mints a new
+# authn_id, so re-run `make swa` after a replace to re-bridge it.
 resource "swa_server" "this" {
   name            = var.server_name
   server_group_id = swa_server_group.this.id
@@ -48,6 +63,10 @@ resource "swa_server" "this" {
     # Exactly one of jwks_uri / public_keys is used; the other stays null.
     jwks_uri    = var.server_jwks_uri != "" ? var.server_jwks_uri : null
     public_keys = var.server_public_keys != "" ? var.server_public_keys : null
+  }
+
+  lifecycle {
+    replace_triggered_by = [terraform_data.server_auth.output]
   }
 }
 
