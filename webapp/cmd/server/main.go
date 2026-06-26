@@ -33,10 +33,13 @@ func main() {
 	}
 
 	srv := handlers.New(fetcher, dbq, tmpl, static, handlers.Config{
-		Audience:    cfg.audience,
-		TrustDomain: cfg.trustDomain,
-		SourceLabel: fetcher.Source(),
-		ProbeURL:    cfg.probeURL,
+		Audience:         cfg.audience,
+		TrustDomain:      cfg.trustDomain,
+		SourceLabel:      fetcher.Source(),
+		ProbeURL:         cfg.probeURL,
+		UntrustedSVIDURL: cfg.untrustedSVIDURL,
+		UnknownSVIDURL:   cfg.unknownSVIDURL,
+		Demo:             cfg.demoMode || cfg.socketAddr == "",
 	})
 
 	httpServer := &http.Server{
@@ -63,6 +66,14 @@ type config struct {
 	dbUser      string
 	dbName      string
 	probeURL    string
+	// rogueMode marks this pod as the "unknown" workload: it must surface a
+	// genuine issuance refusal, so it uses the one-shot fetcher and never falls
+	// back to the synthetic SVID.
+	rogueMode bool
+	// untrustedSVIDURL / unknownSVIDURL are the probe pods' /probe-svid URLs,
+	// relayed by the main webapp to populate the scenario switcher.
+	untrustedSVIDURL string
+	unknownSVIDURL   string
 }
 
 func loadConfig() config {
@@ -80,7 +91,10 @@ func loadConfig() config {
 		dbName:      env("DB_NAME", "swa"),
 		// Set on the main webapp to the untrusted probe's /probe URL; empty on
 		// the probe itself (and in demo mode).
-		probeURL: env("PROBE_URL", ""),
+		probeURL:         env("PROBE_URL", ""),
+		rogueMode:        strings.EqualFold(env("ROGUE_MODE", "false"), "true"),
+		untrustedSVIDURL: env("UNTRUSTED_SVID_URL", ""),
+		unknownSVIDURL:   env("UNKNOWN_SVID_URL", ""),
 	}
 	return c
 }
@@ -102,6 +116,11 @@ func socketAddr() string {
 // buildFetcher returns the live SWA Agent client, falling back to the demo Fake
 // when DEMO_MODE is set or the agent socket is unavailable.
 func buildFetcher(cfg config) svid.Fetcher {
+	// The unknown workload must report a REAL refusal — never a synthetic SVID.
+	if cfg.rogueMode {
+		log.Printf("ROGUE_MODE: using one-shot svid source (expects issuance refusal) socket=%q", cfg.socketAddr)
+		return spiffe.NewOneShot(cfg.socketAddr)
+	}
 	if cfg.demoMode || cfg.socketAddr == "" {
 		log.Printf("using DEMO svid source (demoMode=%v, socket=%q)", cfg.demoMode, cfg.socketAddr)
 		return svid.NewFake(cfg.trustDomain, cfg.nodeGroup, cfg.namespace, cfg.serviceAcct)

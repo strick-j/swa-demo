@@ -43,7 +43,23 @@ build() {
   log "Image built in minikube docker context."
 }
 
+# Apply the data plane + identity-scenario workloads: Postgres, the SPIFFE mTLS
+# gateway, and the two contrast pods (untrusted = valid SVID denied at the
+# gateway; rogue = no registration policy, refused an SVID). Idempotent.
+deploy_data() {
+  log "Applying data plane + scenario workloads (postgres, gateway, untrusted, rogue)"
+  kubectl apply -f "${ROOT}/k8s/postgres.yaml"
+  kubectl apply -f "${ROOT}/k8s/pg-gateway.yaml"
+  kubectl apply -f "${ROOT}/k8s/untrusted-app.yaml"
+  kubectl apply -f "${ROOT}/k8s/rogue-app.yaml"
+  kubectl -n swa-data rollout status deploy/postgres --timeout=120s || true
+  kubectl -n swa-data rollout status deploy/pg-gateway --timeout=120s || true
+  kubectl -n swa-demo-untrusted rollout status deploy/untrusted-app --timeout=120s || true
+  kubectl -n swa-demo-rogue rollout status deploy/rogue-app --timeout=120s || true
+}
+
 deploy() {
+  deploy_data
   log "Applying webapp manifests to namespace ${NS_DEMO}"
   kubectl apply -f "${ROOT}/k8s/webapp-serviceaccount.yaml"
   kubectl apply -f "${ROOT}/k8s/webapp-deployment.yaml"

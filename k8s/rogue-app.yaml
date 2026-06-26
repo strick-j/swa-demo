@@ -1,0 +1,103 @@
+---
+# The UNKNOWN workload: the SAME webapp image in a namespace/service-account
+# that has NO registration policy in the SWA Server (terraform-swa registers
+# only webapp, untrusted, and the gateway — NOT this one). It mounts the agent
+# socket and asks the Workload API like everyone else, but the server refuses to
+# attest it, so NO SVID is ever issued. ROGUE_MODE=true makes the pod use the
+# one-shot fetcher (no synthetic-SVID fallback) so the refusal is genuine. The
+# main webapp relays this pod's /probe-svid to show the "no identity" outcome.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: swa-demo-rogue
+  labels:
+    app.kubernetes.io/part-of: swa-demo
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rogue-app
+  namespace: swa-demo-rogue
+  labels:
+    app: rogue-app
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rogue-app
+  namespace: swa-demo-rogue
+  labels:
+    app: rogue-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rogue-app
+  template:
+    metadata:
+      labels:
+        app: rogue-app
+    spec:
+      serviceAccountName: rogue-app
+      containers:
+        - name: webapp
+          image: swa-demo-webapp:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PORT
+              value: "8080"
+            - name: SWA_TRUST_DOMAIN
+              value: "swa-demo.example.com"
+            - name: SWA_NODE_GROUP
+              value: "minikube-nodes"
+            - name: NS_DEMO
+              value: "swa-demo-rogue"
+            - name: WEBAPP_SA
+              value: "rogue-app"
+            - name: SPIFFE_ENDPOINT_SOCKET
+              value: "unix:///tmp/swa-agent/public/api.sock"
+            # Surface a GENUINE issuance refusal — never a synthetic SVID.
+            - name: ROGUE_MODE
+              value: "true"
+            - name: DEMO_MODE
+              value: "false"
+          volumeMounts:
+            - name: swa-agent-socket
+              mountPath: /tmp/swa-agent
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 25m
+              memory: 48Mi
+            limits:
+              cpu: 200m
+              memory: 96Mi
+      volumes:
+        - name: swa-agent-socket
+          hostPath:
+            path: /tmp/swa-agent
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rogue-app
+  namespace: swa-demo-rogue
+  labels:
+    app: rogue-app
+spec:
+  type: ClusterIP
+  selector:
+    app: rogue-app
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080

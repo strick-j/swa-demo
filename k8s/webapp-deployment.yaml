@@ -43,9 +43,16 @@ spec:
             - name: DEMO_MODE
               value: "false"
             # The unauthorized probe pod; the webapp calls its /probe server-side
-            # to show the denied result alongside its own authorized read.
+            # to show the denied DB result alongside its own authorized read.
             - name: PROBE_URL
               value: "http://untrusted-app.swa-demo-untrusted.svc.cluster.local:8080/probe"
+            # Probe pods' /probe-svid endpoints, relayed to populate the scenario
+            # switcher: the untrusted app (valid SVID, denied at the gateway) and
+            # the unknown app (no registration policy — refused an SVID entirely).
+            - name: UNTRUSTED_SVID_URL
+              value: "http://untrusted-app.swa-demo-untrusted.svc.cluster.local:8080/probe-svid"
+            - name: UNKNOWN_SVID_URL
+              value: "http://rogue-app.swa-demo-rogue.svc.cluster.local:8080/probe-svid"
           volumeMounts:
             - name: swa-agent-socket
               mountPath: /tmp/swa-agent

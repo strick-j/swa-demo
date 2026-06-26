@@ -99,6 +99,58 @@ button:disabled { opacity: 0.5; cursor: default; }
 .status.error { color: var(--err); }
 .status.pending { color: var(--accent-2); }
 
+/* --- Scenario switcher --- */
+.tabs {
+  display: flex;
+  gap: 0.6rem;
+  max-width: 1100px;
+  margin: 0 auto 0.4rem;
+  padding: 0 2rem;
+  flex-wrap: wrap;
+}
+.tab {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px 10px 0 0;
+  padding: 0.7rem 1rem;
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.tab:hover:not(:disabled) { filter: none; box-shadow: none; background: var(--sunken); }
+.tab.active {
+  background: var(--sunken);
+  border-color: var(--accent);
+  box-shadow: inset 0 -3px 0 var(--accent);
+}
+.tab-title { font-size: 0.95rem; }
+.tab-tag {
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+.tab-tag.ok { background: rgba(31, 184, 102, 0.16); color: var(--ok); }
+.tab-tag.warn { background: rgba(250, 88, 45, 0.16); color: var(--pan-orange-500); }
+.tab-tag.err { background: rgba(200, 71, 39, 0.18); color: var(--err); }
+
+.scenario-head { margin-top: 0; }
+.scenario-head .meta {
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  color: var(--accent-2);
+  word-break: break-word;
+}
+.scenario-head .sub { margin-bottom: 0; }
+
 .timeline { list-style: none; margin: 0; padding: 0; }
 .step {
   display: flex;
@@ -115,6 +167,8 @@ button:disabled { opacity: 0.5; cursor: default; }
   transition: background 0.3s ease, box-shadow 0.3s ease;
 }
 .step.done .dot { background: var(--accent); box-shadow: 0 0 0 4px rgba(38, 91, 255, 0.18); }
+.step.error.done .dot { background: var(--err); box-shadow: 0 0 0 4px rgba(200, 71, 39, 0.20); }
+.step.error .meta { color: var(--err); opacity: 0.9; }
 .step .detail { color: var(--muted); font-size: 0.85rem; }
 .step .meta {
   font-family: "SF Mono", Menlo, Consolas, monospace;

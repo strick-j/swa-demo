@@ -110,6 +110,77 @@ func TestHandleSVID_MethodNotAllowed(t *testing.T) {
 	}
 }
 
+func newScenarioServer(f svid.Fetcher, cfg Config) *Server {
+	tmpl := template.Must(template.New("index.html").Parse(`x`))
+	return New(f, nil, tmpl, nil, cfg)
+}
+
+// In demo mode with no probe URLs configured, the switcher must still produce
+// all three outcomes: trusted issued (from the fetcher), untrusted synthesized
+// as issued-but-DB-denied, and unknown synthesized as no-identity.
+func TestHandleScenarios_DemoSynthesis(t *testing.T) {
+	stub := &stubFetcher{result: &svid.Result{SPIFFEID: "spiffe://td.example/ns/swa-demo/sa/webapp"}}
+	srv := newScenarioServer(stub, Config{Audience: "a", TrustDomain: "td.example", Demo: true})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/scenarios", nil)
+	rec := httptest.NewRecorder()
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	var got scenariosResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got.Trusted.SVID == nil || !got.Trusted.SVID.Issued {
+		t.Errorf("trusted should be issued: %+v", got.Trusted.SVID)
+	}
+	if got.Untrusted.SVID == nil || !got.Untrusted.SVID.Issued {
+		t.Errorf("untrusted should be issued: %+v", got.Untrusted.SVID)
+	}
+	if got.Untrusted.DB == nil || got.Untrusted.DB.Allowed {
+		t.Errorf("untrusted DB should be denied: %+v", got.Untrusted.DB)
+	}
+	if got.Unknown.SVID == nil || got.Unknown.SVID.Issued {
+		t.Errorf("unknown should NOT be issued: %+v", got.Unknown.SVID)
+	}
+	if got.Unknown.SVID.Error == "" {
+		t.Error("unknown should carry a refusal error")
+	}
+}
+
+func TestHandleScenarios_MethodNotAllowed(t *testing.T) {
+	srv := newScenarioServer(&stubFetcher{result: &svid.Result{}}, Config{Demo: true})
+	req := httptest.NewRequest(http.MethodGet, "/api/scenarios", nil)
+	rec := httptest.NewRecorder()
+	srv.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want 405", rec.Code)
+	}
+}
+
+// /probe-svid reports this pod's own outcome: a refusal surfaces as Issued=false.
+func TestHandleProbeSVID_Refused(t *testing.T) {
+	srv := newScenarioServer(&stubFetcher{err: errors.New("no identity issued")}, Config{Audience: "a"})
+	req := httptest.NewRequest(http.MethodGet, "/probe-svid", nil)
+	rec := httptest.NewRecorder()
+	srv.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var got svidProbe
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got.Issued {
+		t.Error("expected Issued=false for a refusal")
+	}
+	if !strings.Contains(got.Error, "no identity issued") {
+		t.Errorf("error = %q, want it to mention the refusal", got.Error)
+	}
+}
+
 func TestHandleHealth(t *testing.T) {
 	srv := newTestServer(&stubFetcher{result: &svid.Result{}})
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)

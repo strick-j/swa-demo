@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SWA Demo · SPIFFE JWT-SVID</title>
+  <title>SWA Demo · SPIFFE Workload Identity</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
@@ -18,8 +18,32 @@
 
   <main>
     <section class="panel">
-      <button id="request-btn">Request JWT-SVID from SWA Agent</button>
+      <button id="run-btn">Run the workload-identity flow</button>
       <span id="status" class="status"></span>
+      <p class="sub">
+        Three workloads ask the SWA Agent for an identity. Switch tabs to compare
+        what each is granted — and what each can reach.
+      </p>
+    </section>
+
+    <div class="tabs" role="tablist">
+      <button class="tab" data-scenario="trusted" role="tab">
+        <span class="tab-title">Trusted App</span>
+        <span class="tab-tag ok">SVID ✓ · DB ✓</span>
+      </button>
+      <button class="tab" data-scenario="untrusted" role="tab">
+        <span class="tab-title">Untrusted App</span>
+        <span class="tab-tag warn">SVID ✓ · DB ✗</span>
+      </button>
+      <button class="tab" data-scenario="unknown" role="tab">
+        <span class="tab-title">Unknown App</span>
+        <span class="tab-tag err">No SVID</span>
+      </button>
+    </div>
+
+    <section class="panel scenario-head">
+      <div class="meta" id="scenario-id">—</div>
+      <p class="sub" id="scenario-blurb">Run the flow to see this workload's identity outcome.</p>
     </section>
 
     <section class="panel">
@@ -45,33 +69,18 @@
       </div>
     </section>
 
-    <section class="panel">
-      <h2>4 · Database access via SPIFFE mTLS</h2>
+    <section class="panel" id="resource-panel">
+      <h2>4 · Resource access · Postgres via SPIFFE mTLS</h2>
       <p class="sub">
         The app stores no DB credential. It presents its <strong>X.509-SVID</strong>
         to the gateway, which authorizes by SPIFFE ID before Postgres is reached.
-        A second app in another namespace gets a valid SVID but is denied.
       </p>
-      <button id="db-btn">Read shipments through the SPIFFE gateway</button>
-      <span id="db-status" class="status"></span>
-    </section>
-
-    <section class="grid">
-      <div class="panel db-result">
-        <h2>Authorized · ns <code>swa-demo</code></h2>
-        <div class="meta" id="db-auth-id">—</div>
-        <div id="db-auth-body"><div class="detail">Queries Postgres as this pod's identity.</div></div>
-      </div>
-      <div class="panel db-result">
-        <h2>Unauthorized · ns <code>swa-demo-untrusted</code></h2>
-        <div class="meta" id="db-unauth-id">—</div>
-        <div id="db-unauth-body"><div class="detail">A second app with a valid SVID — denied at the gateway.</div></div>
-      </div>
+      <div id="resource-body"><div class="detail">—</div></div>
     </section>
   </main>
 
   <footer>
-    <p>swa-demo · POST <code>/api/svid</code> · <code>/healthz</code></p>
+    <p>swa-demo · POST <code>/api/scenarios</code> · <code>/probe-svid</code> · <code>/healthz</code></p>
   </footer>
 
   <script src="/static/app.js"></script>

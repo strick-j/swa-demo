@@ -1,11 +1,26 @@
-// Drives the visual JWT-SVID demo: triggers a request, animates the lifecycle
-// steps, then renders the SPIFFE ID, validity window, and decoded JWT.
+// Drives the three-scenario workload-identity switcher. One run fetches all
+// three outcomes (trusted / untrusted / unknown); the tabs swap which one is
+// shown: its lifecycle, SPIFFE ID, decoded JWT-SVID, and resource-access result.
 (function () {
   "use strict";
 
-  const btn = document.getElementById("request-btn");
+  const runBtn = document.getElementById("run-btn");
   const statusEl = document.getElementById("status");
   const timeline = document.getElementById("timeline");
+  const tabs = Array.from(document.querySelectorAll(".tab"));
+
+  // Per-scenario copy for the header blurb.
+  const BLURB = {
+    trusted:
+      "Registered in the SWA Server. Gets a JWT/X.509-SVID, and its SPIFFE ID is allow-listed at the database gateway — so the read succeeds.",
+    untrusted:
+      "A different namespace/service-account. It IS issued a valid SVID, but its SPIFFE ID is not allow-listed at the gateway — so the mTLS handshake is rejected before Postgres.",
+    unknown:
+      "No registration policy. It asks the Workload API like the others, but the SWA Server refuses to attest it — no SVID is ever issued, so nothing reaches the wire.",
+  };
+
+  let model = null; // { trusted, untrusted, unknown }
+  let current = "trusted";
 
   function setStatus(text, kind) {
     statusEl.textContent = text;
@@ -13,68 +28,8 @@
   }
 
   function fmtTime(s) {
+    if (!s) return "—";
     try { return new Date(s).toLocaleString(); } catch (_) { return s; }
-  }
-
-  async function renderSteps(steps) {
-    timeline.innerHTML = "";
-    for (const step of steps) {
-      const li = document.createElement("li");
-      li.className = "step";
-      const meta = step.meta ? '<div class="meta">' + step.meta + "</div>" : "";
-      li.innerHTML =
-        '<span class="dot"></span>' +
-        '<div><strong>' + step.name + "</strong>" +
-        '<div class="detail">' + step.detail + "</div>" +
-        meta + "</div>";
-      timeline.appendChild(li);
-      // Stagger the reveal so the flow reads as a sequence.
-      await new Promise((r) => setTimeout(r, 220));
-      li.classList.add("done");
-    }
-  }
-
-  function show(id, value) {
-    document.getElementById(id).textContent = value;
-  }
-
-  async function requestSVID() {
-    btn.disabled = true;
-    setStatus("Requesting identity…", "pending");
-    timeline.innerHTML = "";
-    try {
-      const resp = await fetch("/api/svid", { method: "POST" });
-      const body = await resp.json();
-      if (!resp.ok) {
-        setStatus("Error: " + (body.detail || body.error || resp.status), "error");
-        return;
-      }
-      await renderSteps(body.steps || []);
-      show("spiffe-id", body.spiffe_id || "—");
-      show("validity",
-        "issued:  " + fmtTime(body.issued_at) + "\n" +
-        "expires: " + fmtTime(body.expires_at));
-      show("jwt-header", JSON.stringify(body.header, null, 2));
-      show("jwt-claims", JSON.stringify(body.claims, null, 2));
-      show("jwt-token", body.token || "—");
-      setStatus("JWT-SVID issued ✓", "ok");
-    } catch (err) {
-      setStatus("Request failed: " + err.message, "error");
-    } finally {
-      btn.disabled = false;
-    }
-  }
-
-  btn.addEventListener("click", requestSVID);
-
-  // --- Database access via SPIFFE mTLS -------------------------------------
-  const dbBtn = document.getElementById("db-btn");
-  const dbStatusEl = document.getElementById("db-status");
-
-  function setDbStatus(text, kind) {
-    if (!dbStatusEl) return;
-    dbStatusEl.textContent = text;
-    dbStatusEl.className = "status " + (kind || "");
   }
 
   function esc(s) {
@@ -82,47 +37,155 @@
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   }
 
-  function renderDbResult(prefix, r) {
-    const idEl = document.getElementById(prefix + "-id");
-    const bodyEl = document.getElementById(prefix + "-body");
-    if (!idEl || !bodyEl) return;
-    if (!r) {
-      idEl.textContent = "(probe not deployed)";
-      bodyEl.innerHTML = '<div class="detail">Deploy the unauthorized app to see the denied result.</div>';
+  function show(id, value) {
+    document.getElementById(id).textContent = value;
+  }
+
+  // --- lifecycle rendering -------------------------------------------------
+  async function renderSteps(steps, animate) {
+    timeline.innerHTML = "";
+    for (const step of steps) {
+      const li = document.createElement("li");
+      li.className = "step" + (step.status === "error" ? " error" : "");
+      const meta = step.meta ? '<div class="meta">' + esc(step.meta) + "</div>" : "";
+      li.innerHTML =
+        '<span class="dot"></span>' +
+        "<div><strong>" + esc(step.name) + "</strong>" +
+        '<div class="detail">' + esc(step.detail) + "</div>" +
+        meta + "</div>";
+      timeline.appendChild(li);
+      if (animate) await new Promise((r) => setTimeout(r, 200));
+      li.classList.add("done");
+    }
+  }
+
+  // The refusal lifecycle for a workload that is never issued an SVID. Derived
+  // client-side from the probe error so the story still reads as a sequence.
+  function refusalSteps(errText) {
+    return [
+      {
+        name: "Workload request",
+        detail:
+          "The app holds no stored credential. It opens the SWA Agent Workload API and asks for a JWT-SVID for its audience.",
+        meta: "unix:///tmp/swa-agent/public/api.sock",
+        status: "ok",
+      },
+      {
+        name: "Workload attestation",
+        detail:
+          "The agent identifies the calling pod from its Kubernetes attributes — namespace and service account.",
+        meta: "k8s attestor · ns=swa-demo-rogue · sa=rogue-app",
+        status: "ok",
+      },
+      {
+        name: "Issuance refused",
+        detail:
+          "No node-group registration policy matches this workload, so the SWA Server will not attest it. No SVID is minted — the workload has no identity.",
+        meta: errText || "PermissionDenied · no identity issued",
+        status: "error",
+      },
+    ];
+  }
+
+  // --- resource (DB) rendering ---------------------------------------------
+  function renderResource(scenario) {
+    const el = document.getElementById("resource-body");
+    const svid = scenario.svid || {};
+    if (!svid.issued) {
+      el.innerHTML =
+        '<div class="db-deny">✗ no identity — the workload never reached the gateway</div>' +
+        '<p class="detail">No SVID was issued, so no mTLS handshake was attempted. ' +
+        "No token, no secret, no data on the wire. This is the trust boundary working: " +
+        "an unregistered workload cannot present an identity the gateway would even evaluate.</p>";
       return;
     }
-    idEl.textContent = r.spiffe_id || "";
-    if (r.allowed) {
-      const rows = r.rows || [];
-      let html = '<div class="db-ok">✓ ' + rows.length + " rows read</div>";
-      html += '<table class="rows"><thead><tr><th>Ref</th><th>Origin</th><th>Destination</th><th>Status</th><th>Carrier</th></tr></thead><tbody>';
+    const db = scenario.db;
+    if (!db) {
+      el.innerHTML = '<div class="detail">No database attempt for this scenario.</div>';
+      return;
+    }
+    el.innerHTML = '<div class="meta">' + esc(db.spiffe_id || svid.result.spiffe_id || "") + "</div>" +
+      resourceBody(db);
+  }
+
+  function resourceBody(db) {
+    if (db.allowed) {
+      const rows = db.rows || [];
+      let html = '<div class="db-ok">✓ ' + rows.length + " rows read through the SPIFFE gateway</div>";
+      html += '<table class="rows"><thead><tr><th>Ref</th><th>Origin</th><th>Destination</th>' +
+        "<th>Status</th><th>Carrier</th></tr></thead><tbody>";
       for (const row of rows) {
         html += "<tr><td>" + esc(row.ref) + "</td><td>" + esc(row.origin) + "</td><td>" +
           esc(row.destination) + "</td><td>" + esc(row.status) + "</td><td>" + esc(row.carrier) + "</td></tr>";
       }
-      html += "</tbody></table>";
-      bodyEl.innerHTML = html;
+      return html + "</tbody></table>";
+    }
+    return '<div class="db-deny">✗ denied at the gateway — SPIFFE ID not allow-listed</div>' +
+      '<p class="detail">The workload holds a valid SVID, but the gateway rejects it during the ' +
+      "mTLS handshake because its URI SAN is not in the allow-list. Same CA, valid identity — " +
+      "authorization is on the SPIFFE ID.</p>" +
+      '<pre class="mono">' + esc(db.error || "connection rejected") + "</pre>";
+  }
+
+  // --- scenario switch -----------------------------------------------------
+  async function renderScenario(key, animate) {
+    current = key;
+    tabs.forEach((t) => t.classList.toggle("active", t.dataset.scenario === key));
+
+    const scenario = model && model[key];
+    document.getElementById("scenario-blurb").textContent = BLURB[key] || "";
+
+    if (!scenario) {
+      show("scenario-id", "—");
+      return;
+    }
+    const svid = scenario.svid || {};
+    if (svid.issued && svid.result) {
+      const r = svid.result;
+      show("scenario-id", r.spiffe_id || "—");
+      await renderSteps(r.steps || [], animate);
+      show("spiffe-id", r.spiffe_id || "—");
+      show("validity", "issued:  " + fmtTime(r.issued_at) + "\nexpires: " + fmtTime(r.expires_at));
+      show("jwt-header", JSON.stringify(r.header, null, 2));
+      show("jwt-claims", JSON.stringify(r.claims, null, 2));
+      show("jwt-token", r.token || "—");
     } else {
-      bodyEl.innerHTML = '<div class="db-deny">✗ denied — SPIFFE ID not authorized</div>' +
-        '<pre class="mono">' + esc(r.error || "connection rejected") + "</pre>";
+      show("scenario-id", "✗ no identity issued");
+      await renderSteps(refusalSteps(svid.error), animate);
+      show("spiffe-id", "— (no SVID issued)");
+      show("validity", "—");
+      show("jwt-header", "—");
+      show("jwt-claims", "—");
+      show("jwt-token", svid.error || "— (no token)");
     }
+    renderResource(scenario);
   }
 
-  async function requestDB() {
-    dbBtn.disabled = true;
-    setDbStatus("Connecting with X.509-SVID…", "pending");
+  async function run() {
+    runBtn.disabled = true;
+    setStatus("Requesting identities…", "pending");
     try {
-      const resp = await fetch("/api/db", { method: "POST" });
+      const resp = await fetch("/api/scenarios", { method: "POST" });
       const body = await resp.json();
-      renderDbResult("db-auth", body.authorized);
-      renderDbResult("db-unauth", body.unauthorized);
-      setDbStatus("Done ✓", "ok");
+      if (!resp.ok) {
+        setStatus("Error: " + (body.detail || body.error || resp.status), "error");
+        return;
+      }
+      model = body;
+      setStatus("Done ✓", "ok");
+      await renderScenario(current, true);
     } catch (err) {
-      setDbStatus("Request failed: " + err.message, "error");
+      setStatus("Request failed: " + err.message, "error");
     } finally {
-      dbBtn.disabled = false;
+      runBtn.disabled = false;
     }
   }
 
-  if (dbBtn) dbBtn.addEventListener("click", requestDB);
+  runBtn.addEventListener("click", run);
+  tabs.forEach((t) =>
+    t.addEventListener("click", () => renderScenario(t.dataset.scenario, false)));
+
+  // Mark the default tab and auto-run once for immediacy.
+  renderScenario("trusted", false);
+  run();
 })();
