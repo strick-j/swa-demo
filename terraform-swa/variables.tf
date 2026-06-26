@@ -154,6 +154,19 @@ variable "untrusted_service_account" {
   default     = "untrusted-app"
 }
 
+# The SPIFFE mTLS gateway in front of Postgres needs its own server SVID.
+variable "gateway_namespace" {
+  description = "Namespace of the Postgres SPIFFE mTLS gateway (ghostunnel)."
+  type        = string
+  default     = "swa-data"
+}
+
+variable "gateway_service_account" {
+  description = "Service account of the Postgres SPIFFE mTLS gateway."
+  type        = string
+  default     = "pg-gateway"
+}
+
 variable "node_group_spiffe_template" {
   description = "SPIFFE ID template for issued workload identities."
   type        = string

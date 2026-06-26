@@ -1,0 +1,88 @@
+---
+# SPIFFE mTLS gateway in front of Postgres (ghostunnel). It fetches its OWN
+# server X.509-SVID and the trust bundle from the SWA Agent Workload API, then:
+#   - requires client mTLS and verifies the client cert against the trust bundle
+#     (so only trust-domain SVIDs are accepted at all), AND
+#   - authorizes on the client's SPIFFE ID (--allow-uri) so ONLY the swa-demo
+#     webapp identity may connect. The swa-demo-untrusted workload presents a
+#     valid (CA-signed) SVID but a different SPIFFE ID -> rejected here.
+# Forwards accepted connections as plaintext to postgres.swa-data:5432.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pg-gateway
+  namespace: swa-data
+  labels:
+    app: pg-gateway
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pg-gateway
+  namespace: swa-data
+  labels:
+    app: pg-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pg-gateway
+  template:
+    metadata:
+      labels:
+        app: pg-gateway
+    spec:
+      serviceAccountName: pg-gateway
+      containers:
+        - name: ghostunnel
+          image: ghostunnel/ghostunnel:v1.10.0
+          imagePullPolicy: IfNotPresent
+          args:
+            # Identity + trust bundle come from the SWA Agent Workload API.
+            - "--use-workload-api-addr=unix:///tmp/swa-agent/public/api.sock"
+            - "server"
+            - "--listen=0.0.0.0:6432"
+            - "--target=postgres.swa-data.svc.cluster.local:5432"
+            # Target isn't localhost, so this is required.
+            - "--unsafe-target"
+            # The ONLY client SPIFFE ID allowed through to Postgres.
+            - "--allow-uri=spiffe://swa-demo.example.com/minikube-nodes/ns/swa-demo/sa/swa-demo-webapp"
+          ports:
+            - containerPort: 6432
+          volumeMounts:
+            - name: swa-agent-socket
+              mountPath: /tmp/swa-agent
+              readOnly: true
+          readinessProbe:
+            tcpSocket:
+              port: 6432
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 64Mi
+      volumes:
+        - name: swa-agent-socket
+          hostPath:
+            path: /tmp/swa-agent
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pg-gateway
+  namespace: swa-data
+  labels:
+    app: pg-gateway
+spec:
+  type: ClusterIP
+  selector:
+    app: pg-gateway
+  ports:
+    - name: mtls-postgres
+      port: 6432
+      targetPort: 6432
