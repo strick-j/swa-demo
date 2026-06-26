@@ -42,6 +42,10 @@ spec:
             # Set to "true" to force the visual demo without a live agent.
             - name: DEMO_MODE
               value: "false"
+            # The unauthorized probe pod; the webapp calls its /probe server-side
+            # to show the denied result alongside its own authorized read.
+            - name: PROBE_URL
+              value: "http://untrusted-app.swa-demo-untrusted.svc.cluster.local:8080/probe"
           volumeMounts:
             - name: swa-agent-socket
               mountPath: /tmp/swa-agent

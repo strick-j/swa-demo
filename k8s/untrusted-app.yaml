@@ -1,0 +1,98 @@
+---
+# The unauthorized workload: the SAME webapp image, running in a different
+# namespace/service-account. It gets a valid SVID (its registration policy is in
+# terraform-swa), but its SPIFFE ID is NOT in the gateway's --allow-uri, so its
+# DB attempt is rejected. The main webapp calls this pod's /probe endpoint
+# server-side and shows the denied result on the single UI.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: swa-demo-untrusted
+  labels:
+    app.kubernetes.io/part-of: swa-demo
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: untrusted-app
+  namespace: swa-demo-untrusted
+  labels:
+    app: untrusted-app
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: untrusted-app
+  namespace: swa-demo-untrusted
+  labels:
+    app: untrusted-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: untrusted-app
+  template:
+    metadata:
+      labels:
+        app: untrusted-app
+    spec:
+      serviceAccountName: untrusted-app
+      containers:
+        - name: webapp
+          image: swa-demo-webapp:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PORT
+              value: "8080"
+            - name: SWA_TRUST_DOMAIN
+              value: "swa-demo.example.com"
+            - name: SWA_NODE_GROUP
+              value: "minikube-nodes"
+            - name: NS_DEMO
+              value: "swa-demo-untrusted"
+            - name: WEBAPP_SA
+              value: "untrusted-app"
+            - name: SPIFFE_ENDPOINT_SOCKET
+              value: "unix:///tmp/swa-agent/public/api.sock"
+            - name: DEMO_MODE
+              value: "false"
+          volumeMounts:
+            - name: swa-agent-socket
+              mountPath: /tmp/swa-agent
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 25m
+              memory: 48Mi
+            limits:
+              cpu: 200m
+              memory: 96Mi
+      volumes:
+        - name: swa-agent-socket
+          hostPath:
+            path: /tmp/swa-agent
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: untrusted-app
+  namespace: swa-demo-untrusted
+  labels:
+    app: untrusted-app
+spec:
+  type: ClusterIP
+  selector:
+    app: untrusted-app
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
