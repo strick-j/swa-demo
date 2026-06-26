@@ -12,6 +12,7 @@ import (
 
 	"github.com/strick-j/swa-demo/webapp/internal/db"
 	"github.com/strick-j/swa-demo/webapp/internal/foreign"
+	"github.com/strick-j/swa-demo/webapp/internal/retrieve"
 	"github.com/strick-j/swa-demo/webapp/internal/svid"
 )
 
@@ -45,28 +46,63 @@ type Config struct {
 	// synthesizes illustrative untrusted/unknown outcomes so the switcher is
 	// fully demo-able without a cluster.
 	Demo bool
+	// Conjur* drive the Secrets Manager page display.
+	ConjurServiceID  string
+	ConjurSecretPath string
+	ConjurSimulated  bool
+}
+
+// Pages holds the parsed HTML templates for each page.
+type Pages struct {
+	Landing        *template.Template
+	SWA            *template.Template
+	SecretsManager *template.Template
+}
+
+// Deps are the constructor dependencies for a Server. DB, Foreign, and Registry
+// may be nil (demo mode / not configured).
+type Deps struct {
+	Fetcher  svid.Fetcher
+	DB       DBQuerier
+	Foreign  ForeignProber
+	Registry *retrieve.Registry
+	Pages    Pages
+	Static   fs.FS
+	Cfg      Config
 }
 
 // Server is the HTTP handler set.
 type Server struct {
-	fetcher svid.Fetcher
-	db      DBQuerier
-	foreign ForeignProber
-	tmpl    *template.Template
-	static  fs.FS
-	cfg     Config
+	fetcher  svid.Fetcher
+	db       DBQuerier
+	foreign  ForeignProber
+	registry *retrieve.Registry
+	pages    Pages
+	static   fs.FS
+	cfg      Config
 }
 
-// New constructs a Server. dbq and fp may be nil (demo mode). tmpl and static
-// come from the embedded ui package.
-func New(fetcher svid.Fetcher, dbq DBQuerier, fp ForeignProber, tmpl *template.Template, static fs.FS, cfg Config) *Server {
-	return &Server{fetcher: fetcher, db: dbq, foreign: fp, tmpl: tmpl, static: static, cfg: cfg}
+// New constructs a Server from its dependencies.
+func New(d Deps) *Server {
+	return &Server{
+		fetcher:  d.Fetcher,
+		db:       d.DB,
+		foreign:  d.Foreign,
+		registry: d.Registry,
+		pages:    d.Pages,
+		static:   d.Static,
+		cfg:      d.Cfg,
+	}
 }
 
 // Routes returns the configured mux.
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", s.handleIndex)
+	mux.HandleFunc("/", s.handleLanding)
+	mux.HandleFunc("/swa", s.handleSWA)
+	mux.HandleFunc("/secrets-manager", s.handleSecretsManager)
+	mux.HandleFunc("/api/catalog", s.handleCatalog)
+	mux.HandleFunc("/api/retrieve", s.handleRetrieve)
 	mux.HandleFunc("/api/svid", s.handleSVID)
 	mux.HandleFunc("/api/scenarios", s.handleScenarios)
 	mux.HandleFunc("/api/db", s.handleDB)
@@ -85,16 +121,74 @@ type indexData struct {
 	Source      string
 }
 
-func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
+func (s *Server) renderPage(w http.ResponseWriter, tmpl *template.Template, data interface{}) {
+	if tmpl == nil {
+		http.Error(w, "page unavailable", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := tmpl.Execute(w, data); err != nil {
+		http.Error(w, "template error", http.StatusInternalServerError)
+	}
+}
+
+// handleLanding renders the family chooser (the CTA walk-through).
+func (s *Server) handleLanding(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
 		return
 	}
-	data := indexData{Audience: s.cfg.Audience, TrustDomain: s.cfg.TrustDomain, Source: s.fetcher.Source()}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.tmpl.Execute(w, data); err != nil {
-		http.Error(w, "template error", http.StatusInternalServerError)
+	var families []retrieve.FamilyInfo
+	if s.registry != nil {
+		families = s.registry.Catalog()
 	}
+	s.renderPage(w, s.pages.Landing, struct{ Families []retrieve.FamilyInfo }{families})
+}
+
+// handleSWA renders the Secure Workload Access switcher page.
+func (s *Server) handleSWA(w http.ResponseWriter, r *http.Request) {
+	data := indexData{Audience: s.cfg.Audience, TrustDomain: s.cfg.TrustDomain, Source: s.fetcher.Source()}
+	s.renderPage(w, s.pages.SWA, data)
+}
+
+// handleSecretsManager renders the Conjur (Secrets Manager SaaS) page.
+func (s *Server) handleSecretsManager(w http.ResponseWriter, r *http.Request) {
+	data := struct {
+		ServiceID  string
+		SecretPath string
+		Simulated  bool
+	}{s.cfg.ConjurServiceID, s.cfg.ConjurSecretPath, s.cfg.ConjurSimulated}
+	s.renderPage(w, s.pages.SecretsManager, data)
+}
+
+// handleCatalog returns the family/mode taxonomy as JSON.
+func (s *Server) handleCatalog(w http.ResponseWriter, _ *http.Request) {
+	if s.registry == nil {
+		writeJSON(w, http.StatusOK, []retrieve.FamilyInfo{})
+		return
+	}
+	writeJSON(w, http.StatusOK, s.registry.Catalog())
+}
+
+// handleRetrieve runs a secrets-retrieval mode by id and returns its Result.
+func (s *Server) handleRetrieve(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "use POST"})
+		return
+	}
+	mode := r.URL.Query().Get("mode")
+	if mode == "" || s.registry == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing or unsupported mode"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	result, ok := s.registry.Retrieve(ctx, mode)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "unknown mode: " + mode})
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 // handleSVID triggers a JWT-SVID request and returns the decoded result + steps.

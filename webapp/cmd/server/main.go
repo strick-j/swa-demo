@@ -13,6 +13,8 @@ import (
 	"github.com/strick-j/swa-demo/webapp/internal/db"
 	"github.com/strick-j/swa-demo/webapp/internal/foreign"
 	"github.com/strick-j/swa-demo/webapp/internal/handlers"
+	"github.com/strick-j/swa-demo/webapp/internal/retrieve"
+	"github.com/strick-j/swa-demo/webapp/internal/retrieve/conjurjwt"
 	"github.com/strick-j/swa-demo/webapp/internal/spiffe"
 	"github.com/strick-j/swa-demo/webapp/internal/svid"
 	"github.com/strick-j/swa-demo/webapp/internal/ui"
@@ -35,23 +37,36 @@ func main() {
 	dbq := buildDB(cfg)     // nil in demo mode / when the agent socket is unavailable
 	fp := buildForeign(cfg) // nil unless a live agent + FOREIGN_CARRIER_ADDR are set
 
-	tmpl, err := ui.IndexTemplate()
+	pages, err := loadPages()
 	if err != nil {
-		log.Fatalf("parse template: %v", err)
+		log.Fatalf("parse templates: %v", err)
 	}
 	static, err := ui.StaticFS()
 	if err != nil {
 		log.Fatalf("static fs: %v", err)
 	}
 
-	srv := handlers.New(fetcher, dbq, fp, tmpl, static, handlers.Config{
-		Audience:         cfg.audience,
-		TrustDomain:      cfg.trustDomain,
-		SourceLabel:      fetcher.Source(),
-		ProbeURL:         cfg.probeURL,
-		UntrustedSVIDURL: cfg.untrustedSVIDURL,
-		UnknownSVIDURL:   cfg.unknownSVIDURL,
-		Demo:             cfg.demoMode || cfg.socketAddr == "",
+	registry, conjurSimulated := buildRegistry(cfg, fetcher)
+
+	srv := handlers.New(handlers.Deps{
+		Fetcher:  fetcher,
+		DB:       dbq,
+		Foreign:  fp,
+		Registry: registry,
+		Pages:    pages,
+		Static:   static,
+		Cfg: handlers.Config{
+			Audience:         cfg.audience,
+			TrustDomain:      cfg.trustDomain,
+			SourceLabel:      fetcher.Source(),
+			ProbeURL:         cfg.probeURL,
+			UntrustedSVIDURL: cfg.untrustedSVIDURL,
+			UnknownSVIDURL:   cfg.unknownSVIDURL,
+			Demo:             cfg.demoMode || cfg.socketAddr == "",
+			ConjurServiceID:  cfg.conjurJWTServiceID,
+			ConjurSecretPath: cfg.conjurJWTSecretPath,
+			ConjurSimulated:  conjurSimulated,
+		},
 	})
 
 	httpServer := &http.Server{
@@ -92,6 +107,13 @@ type config struct {
 	foreignCarrierMode bool
 	foreignCarrierAddr string
 	foreignDNSName     string
+	// Conjur authn-jwt (Secrets Manager SaaS) config. When the appliance URL /
+	// secret path are empty (or there's no agent), the retriever simulates.
+	conjurApplianceURL  string
+	conjurAccount       string
+	conjurJWTServiceID  string
+	conjurJWTSecretPath string
+	conjurJWTAudience   string
 }
 
 func loadConfig() config {
@@ -117,8 +139,60 @@ func loadConfig() config {
 		foreignCarrierMode: strings.EqualFold(env("FOREIGN_CARRIER_MODE", "false"), "true"),
 		foreignCarrierAddr: env("FOREIGN_CARRIER_ADDR", ""),
 		foreignDNSName:     env("FOREIGN_DNS_NAME", "foreign-carrier.acme-external.svc.cluster.local"),
+
+		conjurApplianceURL:  env("CONJUR_APPLIANCE_URL", ""),
+		conjurAccount:       env("CONJUR_ACCOUNT", "conjur"),
+		conjurJWTServiceID:  env("CONJUR_AUTHN_JWT_SERVICE_ID", "authn-jwt/swa"),
+		conjurJWTSecretPath: env("CONJUR_JWT_SECRET_PATH", "data/secrets/demo-db-password"),
+		conjurJWTAudience:   env("CONJUR_JWT_AUDIENCE", "conjur"),
 	}
 	return c
+}
+
+// loadPages parses every page template from the embedded ui package.
+func loadPages() (handlers.Pages, error) {
+	landing, err := ui.Page("landing.html")
+	if err != nil {
+		return handlers.Pages{}, err
+	}
+	swa, err := ui.Page("swa.html")
+	if err != nil {
+		return handlers.Pages{}, err
+	}
+	sm, err := ui.Page("secrets-manager.html")
+	if err != nil {
+		return handlers.Pages{}, err
+	}
+	return handlers.Pages{Landing: landing, SWA: swa, SecretsManager: sm}, nil
+}
+
+// buildRegistry wires the retrievers and returns the registry plus whether the
+// Conjur JWT mode will run simulated (no live agent / Conjur config).
+func buildRegistry(cfg config, fetcher svid.Fetcher) (*retrieve.Registry, bool) {
+	reg := retrieve.NewRegistry()
+
+	live := !cfg.demoMode && cfg.socketAddr != "" &&
+		cfg.conjurApplianceURL != "" && cfg.conjurJWTSecretPath != ""
+
+	var jwt conjurjwt.JWTProvider
+	if live {
+		jwt = func(ctx context.Context, audience string) (string, string, error) {
+			r, err := fetcher.FetchJWTSVID(ctx, audience)
+			if err != nil {
+				return "", "", err
+			}
+			return r.Token, r.SPIFFEID, nil
+		}
+	}
+	reg.Register(conjurjwt.New(conjurjwt.Config{
+		ApplianceURL: cfg.conjurApplianceURL,
+		Account:      cfg.conjurAccount,
+		ServiceID:    cfg.conjurJWTServiceID,
+		SecretPath:   cfg.conjurJWTSecretPath,
+		Audience:     cfg.conjurJWTAudience,
+	}, jwt))
+
+	return reg, !live
 }
 
 // socketAddr resolves the Workload API endpoint from the standard env var or our

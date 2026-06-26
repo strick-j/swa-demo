@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/strick-j/swa-demo/webapp/internal/retrieve"
+	"github.com/strick-j/swa-demo/webapp/internal/retrieve/conjurjwt"
 	"github.com/strick-j/swa-demo/webapp/internal/svid"
 )
 
@@ -32,8 +34,12 @@ func (s *stubFetcher) FetchJWTSVID(_ context.Context, audience string) (*svid.Re
 }
 
 func newTestServer(f svid.Fetcher) *Server {
-	tmpl := template.Must(template.New("index.html").Parse(`aud={{.Audience}} src={{.Source}}`))
-	return New(f, nil, nil, tmpl, nil, Config{Audience: "default-aud", TrustDomain: "td.example", SourceLabel: "stub"})
+	tmpl := template.Must(template.New("swa.html").Parse(`aud={{.Audience}} src={{.Source}}`))
+	return New(Deps{
+		Fetcher: f,
+		Pages:   Pages{SWA: tmpl},
+		Cfg:     Config{Audience: "default-aud", TrustDomain: "td.example", SourceLabel: "stub"},
+	})
 }
 
 func TestHandleSVID_Success(t *testing.T) {
@@ -111,8 +117,8 @@ func TestHandleSVID_MethodNotAllowed(t *testing.T) {
 }
 
 func newScenarioServer(f svid.Fetcher, cfg Config) *Server {
-	tmpl := template.Must(template.New("index.html").Parse(`x`))
-	return New(f, nil, nil, tmpl, nil, cfg)
+	tmpl := template.Must(template.New("swa.html").Parse(`x`))
+	return New(Deps{Fetcher: f, Pages: Pages{SWA: tmpl}, Cfg: cfg})
 }
 
 // In demo mode with no probe URLs configured, the switcher must still produce
@@ -200,15 +206,49 @@ func TestHandleHealth(t *testing.T) {
 	}
 }
 
-func TestHandleIndex(t *testing.T) {
+func TestHandleSWAPage(t *testing.T) {
 	srv := newTestServer(&stubFetcher{result: &svid.Result{}})
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/swa", nil)
 	rec := httptest.NewRecorder()
 	srv.Routes().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
 	if !strings.Contains(rec.Body.String(), "aud=default-aud") {
-		t.Errorf("index body = %s", rec.Body.String())
+		t.Errorf("swa page body = %s", rec.Body.String())
+	}
+}
+
+func TestHandleRetrieve_ConjurJWTSimulated(t *testing.T) {
+	reg := retrieve.NewRegistry()
+	reg.Register(conjurjwt.New(conjurjwt.Config{}, nil)) // nil provider -> simulated
+	tmpl := template.Must(template.New("swa.html").Parse(`x`))
+	srv := New(Deps{Fetcher: &stubFetcher{result: &svid.Result{}}, Registry: reg, Pages: Pages{SWA: tmpl}, Cfg: Config{}})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/retrieve?mode=conjur-jwt", nil)
+	rec := httptest.NewRecorder()
+	srv.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"retrieved":true`) ||
+		!strings.Contains(rec.Body.String(), `"simulated":true`) {
+		t.Errorf("retrieve body = %s", rec.Body.String())
+	}
+	// The masked summary must never echo a raw value.
+	if strings.Contains(rec.Body.String(), "s1mul4ted-demo-secret-value") {
+		t.Error("masked output leaked the raw secret")
+	}
+}
+
+func TestHandleRetrieve_UnknownMode(t *testing.T) {
+	reg := retrieve.NewRegistry()
+	tmpl := template.Must(template.New("swa.html").Parse(`x`))
+	srv := New(Deps{Fetcher: &stubFetcher{result: &svid.Result{}}, Registry: reg, Pages: Pages{SWA: tmpl}, Cfg: Config{}})
+	req := httptest.NewRequest(http.MethodPost, "/api/retrieve?mode=nope", nil)
+	rec := httptest.NewRecorder()
+	srv.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rec.Code)
 	}
 }

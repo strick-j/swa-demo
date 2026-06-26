@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CyberArk · Secrets Retrieval Demo</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header>
+    <h1>CyberArk · Secrets Retrieval</h1>
+    <p class="sub">
+      One app, three ways a workload can obtain a secret — pick a path to walk
+      the identity → authentication → retrieval flow end to end.
+    </p>
+  </header>
+
+  <main>
+    {{range .Families}}
+    <section class="panel family">
+      <h2>{{.Title}}</h2>
+      <p class="sub">{{.Tagline}}</p>
+      <div class="mode-list">
+        {{range .Modes}}
+        {{if .Available}}
+        <a class="mode-card" href="{{.Href}}">
+          <div class="mode-top">
+            <span class="mode-label">{{.Label}}</span>
+            <span class="tab-tag ok">live</span>
+          </div>
+          <div class="mode-auth mono">{{.Auth}}</div>
+          <p class="detail">{{.Summary}}</p>
+        </a>
+        {{else}}
+        <div class="mode-card disabled">
+          <div class="mode-top">
+            <span class="mode-label">{{.Label}}</span>
+            <span class="tab-tag">soon</span>
+          </div>
+          <div class="mode-auth mono">{{.Auth}}</div>
+          <p class="detail">{{.Summary}}</p>
+        </div>
+        {{end}}
+        {{end}}
+      </div>
+    </section>
+    {{end}}
+  </main>
+
+  <footer>
+    <p>swa-demo · <code>/api/catalog</code> · <code>/healthz</code></p>
+  </footer>
+</body>
+</html>

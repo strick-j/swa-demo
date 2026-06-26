@@ -3,12 +3,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SWA Demo · SPIFFE Workload Identity</title>
+  <title>Secure Workload Access · SPIFFE Identity</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
   <header>
-    <h1>CyberArk SWA · Workload Identity Demo</h1>
+    <p class="crumb"><a href="/">← CyberArk secrets retrieval</a></p>
+    <h1>Secure Workload Access · Workload Identity</h1>
     <p class="sub">
       Trust domain <code>{{.TrustDomain}}</code> ·
       audience <code>{{.Audience}}</code> ·
@@ -21,8 +22,8 @@
       <button id="run-btn">Run the workload-identity flow</button>
       <span id="status" class="status"></span>
       <p class="sub">
-        Three workloads ask the SWA Agent for an identity. Switch tabs to compare
-        what each is granted — and what each can reach.
+        Three workloads ask the SWA Agent for an identity; a fourth meets a
+        foreign trust domain. Switch tabs to compare what each is granted.
       </p>
     </section>
 

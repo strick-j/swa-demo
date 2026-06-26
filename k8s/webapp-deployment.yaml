@@ -57,6 +57,21 @@ spec:
             # over mTLS with the SWA trust bundle and is rejected at the boundary.
             - name: FOREIGN_CARRIER_ADDR
               value: "foreign-carrier.acme-external.svc.cluster.local:8443"
+            # --- Secrets Manager page (Conjur authn-jwt) ---
+            # The Conjur page runs in SIMULATED mode until these are set (tenant
+            # URL is environment-specific, so it's not committed here). To go
+            # live, set CONJUR_APPLIANCE_URL + CONJUR_JWT_SECRET_PATH (ideally
+            # from a ConfigMap/Secret) and configure the authn-jwt authenticator.
+            # - name: CONJUR_APPLIANCE_URL
+            #   value: "https://<tenant>.secretsmgr.cyberark.cloud/api"
+            # - name: CONJUR_ACCOUNT
+            #   value: "conjur"
+            - name: CONJUR_AUTHN_JWT_SERVICE_ID
+              value: "authn-jwt/swa"
+            - name: CONJUR_JWT_SECRET_PATH
+              value: "data/secrets/demo-db-password"
+            - name: CONJUR_JWT_AUDIENCE
+              value: "conjur"
           volumeMounts:
             - name: swa-agent-socket
               mountPath: /tmp/swa-agent

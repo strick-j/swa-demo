@@ -53,6 +53,30 @@ header h1 {
   color: transparent;
 }
 .sub { color: var(--muted); margin: 0.4rem 0 0; font-size: 0.9rem; }
+.crumb { margin: 0 0 0.6rem; font-size: 0.8rem; }
+.crumb a { color: var(--accent-2); text-decoration: none; }
+.crumb a:hover { text-decoration: underline; }
+
+/* --- Landing family chooser --- */
+.family h2 { color: var(--text); }
+.mode-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; margin-top: 0.9rem; }
+@media (max-width: 820px) { .mode-list { grid-template-columns: 1fr; } }
+.mode-card {
+  display: block;
+  background: var(--sunken);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.9rem 1rem;
+  text-decoration: none;
+  color: var(--text);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+}
+a.mode-card:hover { border-color: var(--accent); box-shadow: 0 4px 16px rgba(38, 91, 255, 0.18); transform: translateY(-1px); }
+.mode-card.disabled { opacity: 0.55; }
+.mode-top { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.mode-label { font-weight: 600; font-size: 0.95rem; }
+.mode-auth { display: inline-block; margin: 0.4rem 0; padding: 0.15rem 0.4rem; font-size: 0.72rem; }
+.mode-card .detail { color: var(--muted); font-size: 0.83rem; margin: 0.3rem 0 0; }
 
 code { color: var(--accent-2); }
 
