@@ -52,6 +52,11 @@ deploy_data() {
   kubectl apply -f "${ROOT}/k8s/pg-gateway.yaml"
   kubectl apply -f "${ROOT}/k8s/untrusted-app.yaml"
   kubectl apply -f "${ROOT}/k8s/rogue-app.yaml"
+  # The :dev image tag is mutable and these manifests rarely change, so `apply`
+  # alone won't restart the pods onto a freshly built binary. Force a roll so
+  # the contrast pods always serve the current /probe-svid route.
+  kubectl -n swa-demo-untrusted rollout restart deploy/untrusted-app
+  kubectl -n swa-demo-rogue rollout restart deploy/rogue-app
   kubectl -n swa-data rollout status deploy/postgres --timeout=120s || true
   kubectl -n swa-data rollout status deploy/pg-gateway --timeout=120s || true
   kubectl -n swa-demo-untrusted rollout status deploy/untrusted-app --timeout=120s || true
@@ -64,6 +69,9 @@ deploy() {
   kubectl apply -f "${ROOT}/k8s/webapp-serviceaccount.yaml"
   kubectl apply -f "${ROOT}/k8s/webapp-deployment.yaml"
   kubectl apply -f "${ROOT}/k8s/webapp-service.yaml"
+  # Force a roll so a rebuilt :dev image is picked up even when the manifest is
+  # unchanged (mutable tag).
+  kubectl -n "${NS_DEMO}" rollout restart deploy/swa-demo-webapp
   kubectl -n "${NS_DEMO}" rollout status deploy/swa-demo-webapp --timeout=120s
   expose
   log "Webapp deployed. URL: http://<host>:${WEBAPP_NODEPORT}"
