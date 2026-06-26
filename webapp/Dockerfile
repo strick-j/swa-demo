@@ -1,5 +1,5 @@
 # Build a static, self-contained webapp image (templates/static are embedded).
-FROM golang:1.22 AS build
+FROM golang:1.24 AS build
 WORKDIR /src
 COPY go.mod go.sum* ./
 RUN go mod download || true

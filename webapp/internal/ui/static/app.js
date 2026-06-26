@@ -66,4 +66,63 @@
   }
 
   btn.addEventListener("click", requestSVID);
+
+  // --- Database access via SPIFFE mTLS -------------------------------------
+  const dbBtn = document.getElementById("db-btn");
+  const dbStatusEl = document.getElementById("db-status");
+
+  function setDbStatus(text, kind) {
+    if (!dbStatusEl) return;
+    dbStatusEl.textContent = text;
+    dbStatusEl.className = "status " + (kind || "");
+  }
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"]/g, (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  }
+
+  function renderDbResult(prefix, r) {
+    const idEl = document.getElementById(prefix + "-id");
+    const bodyEl = document.getElementById(prefix + "-body");
+    if (!idEl || !bodyEl) return;
+    if (!r) {
+      idEl.textContent = "(probe not deployed)";
+      bodyEl.innerHTML = '<div class="detail">Deploy the unauthorized app to see the denied result.</div>';
+      return;
+    }
+    idEl.textContent = r.spiffe_id || "";
+    if (r.allowed) {
+      const rows = r.rows || [];
+      let html = '<div class="db-ok">✓ ' + rows.length + " rows read</div>";
+      html += '<table class="rows"><thead><tr><th>Ref</th><th>Origin</th><th>Destination</th><th>Status</th><th>Carrier</th></tr></thead><tbody>';
+      for (const row of rows) {
+        html += "<tr><td>" + esc(row.ref) + "</td><td>" + esc(row.origin) + "</td><td>" +
+          esc(row.destination) + "</td><td>" + esc(row.status) + "</td><td>" + esc(row.carrier) + "</td></tr>";
+      }
+      html += "</tbody></table>";
+      bodyEl.innerHTML = html;
+    } else {
+      bodyEl.innerHTML = '<div class="db-deny">✗ denied — SPIFFE ID not authorized</div>' +
+        '<pre class="mono">' + esc(r.error || "connection rejected") + "</pre>";
+    }
+  }
+
+  async function requestDB() {
+    dbBtn.disabled = true;
+    setDbStatus("Connecting with X.509-SVID…", "pending");
+    try {
+      const resp = await fetch("/api/db", { method: "POST" });
+      const body = await resp.json();
+      renderDbResult("db-auth", body.authorized);
+      renderDbResult("db-unauth", body.unauthorized);
+      setDbStatus("Done ✓", "ok");
+    } catch (err) {
+      setDbStatus("Request failed: " + err.message, "error");
+    } finally {
+      dbBtn.disabled = false;
+    }
+  }
+
+  if (dbBtn) dbBtn.addEventListener("click", requestDB);
 })();

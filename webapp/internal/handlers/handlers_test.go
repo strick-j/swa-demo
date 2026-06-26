@@ -33,7 +33,7 @@ func (s *stubFetcher) FetchJWTSVID(_ context.Context, audience string) (*svid.Re
 
 func newTestServer(f svid.Fetcher) *Server {
 	tmpl := template.Must(template.New("index.html").Parse(`aud={{.Audience}} src={{.Source}}`))
-	return New(f, tmpl, nil, Config{Audience: "default-aud", TrustDomain: "td.example", SourceLabel: "stub"})
+	return New(f, nil, tmpl, nil, Config{Audience: "default-aud", TrustDomain: "td.example", SourceLabel: "stub"})
 }
 
 func TestHandleSVID_Success(t *testing.T) {

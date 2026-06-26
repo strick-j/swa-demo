@@ -138,6 +138,31 @@ button:disabled { opacity: 0.5; cursor: default; }
 }
 .token { color: var(--accent-2); }
 
+/* --- Database access panel --- */
+.db-result h2 { font-size: 0.95rem; }
+.db-ok { color: var(--ok); font-weight: 600; font-size: 0.9rem; margin-bottom: 0.3rem; }
+.db-deny { color: var(--err); font-weight: 600; font-size: 0.9rem; margin-bottom: 0.5rem; }
+.rows {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.4rem;
+  font-size: 0.8rem;
+}
+.rows th,
+.rows td {
+  text-align: left;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.rows th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.rows tbody tr:last-child td { border-bottom: 0; }
+
 footer {
   color: var(--muted);
   padding: 1rem 2rem;

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/strick-j/swa-demo/webapp/internal/db"
 	"github.com/strick-j/swa-demo/webapp/internal/handlers"
 	"github.com/strick-j/swa-demo/webapp/internal/spiffe"
 	"github.com/strick-j/swa-demo/webapp/internal/svid"
@@ -20,6 +21,7 @@ func main() {
 	cfg := loadConfig()
 
 	fetcher := buildFetcher(cfg)
+	dbq := buildDB(cfg) // nil in demo mode / when the agent socket is unavailable
 
 	tmpl, err := ui.IndexTemplate()
 	if err != nil {
@@ -30,10 +32,11 @@ func main() {
 		log.Fatalf("static fs: %v", err)
 	}
 
-	srv := handlers.New(fetcher, tmpl, static, handlers.Config{
+	srv := handlers.New(fetcher, dbq, tmpl, static, handlers.Config{
 		Audience:    cfg.audience,
 		TrustDomain: cfg.trustDomain,
 		SourceLabel: fetcher.Source(),
+		ProbeURL:    cfg.probeURL,
 	})
 
 	httpServer := &http.Server{
@@ -56,6 +59,10 @@ type config struct {
 	serviceAcct string
 	socketAddr  string
 	demoMode    bool
+	gatewayAddr string
+	dbUser      string
+	dbName      string
+	probeURL    string
 }
 
 func loadConfig() config {
@@ -68,6 +75,12 @@ func loadConfig() config {
 		serviceAcct: env("WEBAPP_SA", "swa-demo-webapp"),
 		socketAddr:  socketAddr(),
 		demoMode:    strings.EqualFold(env("DEMO_MODE", "false"), "true"),
+		gatewayAddr: env("PG_GATEWAY_ADDR", "pg-gateway.swa-data.svc.cluster.local:6432"),
+		dbUser:      env("DB_USER", "appuser"),
+		dbName:      env("DB_NAME", "swa"),
+		// Set on the main webapp to the untrusted probe's /probe URL; empty on
+		// the probe itself (and in demo mode).
+		probeURL: env("PROBE_URL", ""),
 	}
 	return c
 }
@@ -101,6 +114,23 @@ func buildFetcher(cfg config) svid.Fetcher {
 	if err != nil {
 		log.Printf("WARNING: could not connect to Workload API at %s (%v); falling back to DEMO mode", cfg.socketAddr, err)
 		return svid.NewFake(cfg.trustDomain, cfg.nodeGroup, cfg.namespace, cfg.serviceAcct)
+	}
+	return client
+}
+
+// buildDB returns a DB client that reaches Postgres through the SPIFFE gateway
+// using this pod's X.509-SVID. Returns nil in demo mode / when the agent is
+// unavailable, in which case /api/db reports DB access as unavailable.
+func buildDB(cfg config) handlers.DBQuerier {
+	if cfg.demoMode || cfg.socketAddr == "" {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	client, err := db.New(ctx, cfg.socketAddr, cfg.gatewayAddr, cfg.trustDomain, cfg.dbUser, cfg.dbName)
+	if err != nil {
+		log.Printf("WARNING: DB client unavailable (%v); DB access disabled", err)
+		return nil
 	}
 	return client
 }

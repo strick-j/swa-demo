@@ -44,6 +44,30 @@
         <pre id="jwt-token" class="mono token">—</pre>
       </div>
     </section>
+
+    <section class="panel">
+      <h2>4 · Database access via SPIFFE mTLS</h2>
+      <p class="sub">
+        The app stores no DB credential. It presents its <strong>X.509-SVID</strong>
+        to the gateway, which authorizes by SPIFFE ID before Postgres is reached.
+        A second app in another namespace gets a valid SVID but is denied.
+      </p>
+      <button id="db-btn">Read shipments through the SPIFFE gateway</button>
+      <span id="db-status" class="status"></span>
+    </section>
+
+    <section class="grid">
+      <div class="panel db-result">
+        <h2>Authorized · ns <code>swa-demo</code></h2>
+        <div class="meta" id="db-auth-id">—</div>
+        <div id="db-auth-body"><div class="detail">Queries Postgres as this pod's identity.</div></div>
+      </div>
+      <div class="panel db-result">
+        <h2>Unauthorized · ns <code>swa-demo-untrusted</code></h2>
+        <div class="meta" id="db-unauth-id">—</div>
+        <div id="db-unauth-body"><div class="detail">A second app with a valid SVID — denied at the gateway.</div></div>
+      </div>
+    </section>
   </main>
 
   <footer>
