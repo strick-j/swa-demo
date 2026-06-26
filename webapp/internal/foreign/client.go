@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
@@ -26,40 +27,64 @@ type Result struct {
 // Go's STANDARD verifier with the SWA trust bundle as RootCAs — exactly as a
 // trusted workload would. A foreign CA therefore fails to anchor and the
 // handshake is rejected, which is the demonstration.
+//
+// The X509Source is created LAZILY on the first Probe (within the request's
+// context budget) rather than at construction, so a slow agent at startup never
+// blocks boot or forces the synthesized fallback.
 type Prober struct {
-	source      *workloadapi.X509Source
+	socketAddr  string
 	carrierAddr string
 	trustDomain spiffeid.TrustDomain
+
+	mu     sync.Mutex
+	source *workloadapi.X509Source
 }
 
-// NewProber builds a Prober backed by an X509Source from the agent Workload API.
-func NewProber(ctx context.Context, socketAddr, carrierAddr, trustDomain string) (*Prober, error) {
+// NewProber validates config and returns a Prober. It does NOT contact the
+// Workload API yet — that happens on the first Probe.
+func NewProber(socketAddr, carrierAddr, trustDomain string) (*Prober, error) {
+	td, err := spiffeid.TrustDomainFromString(trustDomain)
+	if err != nil {
+		return nil, fmt.Errorf("trust domain: %w", err)
+	}
+	return &Prober{socketAddr: socketAddr, carrierAddr: carrierAddr, trustDomain: td}, nil
+}
+
+// ensureSource builds (and caches) the X509Source using the caller's context.
+func (p *Prober) ensureSource(ctx context.Context) (*workloadapi.X509Source, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.source != nil {
+		return p.source, nil
+	}
 	src, err := workloadapi.NewX509Source(ctx,
-		workloadapi.WithClientOptions(workloadapi.WithAddr(socketAddr)),
+		workloadapi.WithClientOptions(workloadapi.WithAddr(p.socketAddr)),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("x509 source: %w", err)
 	}
-	td, err := spiffeid.TrustDomainFromString(trustDomain)
-	if err != nil {
-		src.Close()
-		return nil, fmt.Errorf("trust domain: %w", err)
-	}
-	return &Prober{source: src, carrierAddr: carrierAddr, trustDomain: td}, nil
+	p.source = src
+	return src, nil
 }
 
 // Probe attempts the mTLS handshake and reports the (expected) rejection.
 func (p *Prober) Probe(ctx context.Context) Result {
 	res := Result{}
 
-	svid, err := p.source.GetX509SVID()
+	source, err := p.ensureSource(ctx)
+	if err != nil {
+		res.Error = err.Error()
+		return res
+	}
+
+	svid, err := source.GetX509SVID()
 	if err != nil {
 		res.Error = "own svid: " + err.Error()
 		return res
 	}
 	res.OwnID = svid.ID.String()
 
-	bundle, err := p.source.GetX509BundleForTrustDomain(p.trustDomain)
+	bundle, err := source.GetX509BundleForTrustDomain(p.trustDomain)
 	if err != nil {
 		res.Error = "trust bundle: " + err.Error()
 		return res
@@ -101,8 +126,10 @@ func (p *Prober) Probe(ctx context.Context) Result {
 	return res
 }
 
-// Close releases the X509Source.
+// Close releases the X509Source, if one was created.
 func (p *Prober) Close() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	if p.source != nil {
 		p.source.Close()
 	}

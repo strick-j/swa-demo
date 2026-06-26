@@ -184,9 +184,10 @@ func buildForeign(cfg config) handlers.ForeignProber {
 	if cfg.demoMode || cfg.socketAddr == "" || cfg.foreignCarrierAddr == "" {
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	p, err := foreign.NewProber(ctx, cfg.socketAddr, cfg.foreignCarrierAddr, cfg.trustDomain)
+	// NewProber does not contact the Workload API — the X509Source is created
+	// lazily on the first /api/scenarios request, so a slow agent at startup
+	// never forces the synthesized fallback.
+	p, err := foreign.NewProber(cfg.socketAddr, cfg.foreignCarrierAddr, cfg.trustDomain)
 	if err != nil {
 		log.Printf("WARNING: foreign prober unavailable (%v); foreign scenario synthesized", err)
 		return nil

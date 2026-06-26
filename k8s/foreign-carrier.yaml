@@ -59,6 +59,10 @@ spec:
           securityContext:
             allowPrivilegeEscalation: false
             runAsNonRoot: true
+            # The distroless :nonroot image sets USER by name (nonroot), which
+            # the kubelet can't verify against runAsNonRoot — pin the numeric UID
+            # (distroless nonroot = 65532) or the container fails to create.
+            runAsUser: 65532
             readOnlyRootFilesystem: true
             capabilities:
               drop: [ALL]
