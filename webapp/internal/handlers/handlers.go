@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/strick-j/swa-demo/webapp/internal/db"
+	"github.com/strick-j/swa-demo/webapp/internal/foreign"
 	"github.com/strick-j/swa-demo/webapp/internal/svid"
 )
 
@@ -18,6 +19,12 @@ import (
 // X.509-SVID. nil when there is no live agent (demo mode).
 type DBQuerier interface {
 	Query(ctx context.Context) db.Result
+}
+
+// ForeignProber dials a workload in a foreign trust domain and reports the
+// (expected) mTLS rejection. nil when there is no live agent / not configured.
+type ForeignProber interface {
+	Probe(ctx context.Context) foreign.Result
 }
 
 // Config holds the runtime configuration for the HTTP server.
@@ -44,15 +51,16 @@ type Config struct {
 type Server struct {
 	fetcher svid.Fetcher
 	db      DBQuerier
+	foreign ForeignProber
 	tmpl    *template.Template
 	static  fs.FS
 	cfg     Config
 }
 
-// New constructs a Server. db may be nil (demo mode). tmpl and static come from
-// the embedded ui package.
-func New(fetcher svid.Fetcher, dbq DBQuerier, tmpl *template.Template, static fs.FS, cfg Config) *Server {
-	return &Server{fetcher: fetcher, db: dbq, tmpl: tmpl, static: static, cfg: cfg}
+// New constructs a Server. dbq and fp may be nil (demo mode). tmpl and static
+// come from the embedded ui package.
+func New(fetcher svid.Fetcher, dbq DBQuerier, fp ForeignProber, tmpl *template.Template, static fs.FS, cfg Config) *Server {
+	return &Server{fetcher: fetcher, db: dbq, foreign: fp, tmpl: tmpl, static: static, cfg: cfg}
 }
 
 // Routes returns the configured mux.
@@ -189,11 +197,22 @@ type scenario struct {
 	DB   *db.Result `json:"db,omitempty"`
 }
 
-// scenariosResponse drives the three-way switcher in the UI.
+// foreignView is the fourth scenario: our trusted app meets a workload from a
+// foreign trust domain (acme.courier) and rejects it at the mTLS trust boundary.
+type foreignView struct {
+	PeerURI  string `json:"peer_uri"`
+	Issuer   string `json:"issuer"`
+	OwnID    string `json:"own_id,omitempty"`
+	Rejected bool   `json:"rejected"`
+	Error    string `json:"error"`
+}
+
+// scenariosResponse drives the switcher in the UI.
 type scenariosResponse struct {
-	Trusted   scenario `json:"trusted"`
-	Untrusted scenario `json:"untrusted"`
-	Unknown   scenario `json:"unknown"`
+	Trusted   scenario     `json:"trusted"`
+	Untrusted scenario     `json:"untrusted"`
+	Unknown   scenario     `json:"unknown"`
+	Foreign   *foreignView `json:"foreign"`
 }
 
 // handleScenarios aggregates the three identity outcomes for the switcher: the
@@ -224,6 +243,7 @@ func (s *Server) handleScenarios(w http.ResponseWriter, r *http.Request) {
 		Trusted:   trusted,
 		Untrusted: s.untrustedScenario(ctx, audience),
 		Unknown:   s.unknownScenario(ctx, audience),
+		Foreign:   s.foreignScenario(ctx),
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -263,6 +283,42 @@ func (s *Server) unknownScenario(ctx context.Context, audience string) scenario 
 		}}
 	}
 	return scenario{SVID: &svidProbe{Issued: false, Error: "unknown probe not configured"}}
+}
+
+// foreignScenario has our trusted app dial the foreign-trust-domain carrier and
+// reports the (expected) rejection at the mTLS trust boundary.
+func (s *Server) foreignScenario(ctx context.Context) *foreignView {
+	if s.foreign != nil {
+		r := s.foreign.Probe(ctx)
+		return &foreignView{
+			PeerURI:  fallback(r.PeerURI, foreign.ACMESPIFFEURI),
+			Issuer:   fallback(r.Issuer, "acme.courier root"),
+			OwnID:    r.OwnID,
+			Rejected: r.Rejected,
+			Error:    r.Error,
+		}
+	}
+	// Demo mode (or unconfigured): synthesize the trust-boundary rejection.
+	v := &foreignView{
+		PeerURI: foreign.ACMESPIFFEURI,
+		Issuer:  "acme.courier root",
+		Error:   "x509: certificate signed by unknown authority",
+	}
+	if s.cfg.Demo {
+		v.Rejected = true
+		v.OwnID = s.demoID("swa-demo", "swa-demo-webapp")
+	} else {
+		v.Error = "foreign carrier not configured"
+	}
+	return v
+}
+
+// fallback returns v, or def when v is empty.
+func fallback(v, def string) string {
+	if v == "" {
+		return def
+	}
+	return v
 }
 
 // handleProbeSVID runs THIS pod's own JWT-SVID request and returns the outcome.

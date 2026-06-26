@@ -52,15 +52,18 @@ deploy_data() {
   kubectl apply -f "${ROOT}/k8s/pg-gateway.yaml"
   kubectl apply -f "${ROOT}/k8s/untrusted-app.yaml"
   kubectl apply -f "${ROOT}/k8s/rogue-app.yaml"
+  kubectl apply -f "${ROOT}/k8s/foreign-carrier.yaml"
   # The :dev image tag is mutable and these manifests rarely change, so `apply`
   # alone won't restart the pods onto a freshly built binary. Force a roll so
-  # the contrast pods always serve the current /probe-svid route.
+  # the contrast pods always serve the current binary.
   kubectl -n swa-demo-untrusted rollout restart deploy/untrusted-app
   kubectl -n swa-demo-rogue rollout restart deploy/rogue-app
+  kubectl -n acme-external rollout restart deploy/foreign-carrier
   kubectl -n swa-data rollout status deploy/postgres --timeout=120s || true
   kubectl -n swa-data rollout status deploy/pg-gateway --timeout=120s || true
   kubectl -n swa-demo-untrusted rollout status deploy/untrusted-app --timeout=120s || true
   kubectl -n swa-demo-rogue rollout status deploy/rogue-app --timeout=120s || true
+  kubectl -n acme-external rollout status deploy/foreign-carrier --timeout=120s || true
 }
 
 deploy() {

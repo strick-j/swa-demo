@@ -17,6 +17,8 @@
       "A different namespace/service-account. It IS issued a valid SVID, but its SPIFFE ID is not allow-listed at the gateway — so the mTLS handshake is rejected before Postgres.",
     unknown:
       "No registration policy. It asks the Workload API like the others, but the SWA Server refuses to attest it — no SVID is ever issued, so nothing reaches the wire.",
+    foreign:
+      "Our trusted app reaches out to a workload in a DIFFERENT trust domain (acme.courier). That peer holds a perfectly valid SVID — but from a CA our SWA trust bundle never anchors, so mTLS is rejected at the boundary.",
   };
 
   let model = null; // { trusted, untrusted, unknown }
@@ -139,6 +141,10 @@
       show("scenario-id", "—");
       return;
     }
+    if (key === "foreign") {
+      await renderForeign(scenario, animate);
+      return;
+    }
     const svid = scenario.svid || {};
     if (svid.issued && svid.result) {
       const r = svid.result;
@@ -159,6 +165,47 @@
       show("jwt-token", svid.error || "— (no token)");
     }
     renderResource(scenario);
+  }
+
+  // The foreign-trust-domain scenario: our app dials an external peer and is
+  // rejected at the mTLS boundary. There's no JWT-SVID here — it's an X.509
+  // trust-anchoring failure, so the panels narrate that instead.
+  async function renderForeign(fv, animate) {
+    show("scenario-id", fv.peer_uri || "—");
+    await renderSteps([
+      {
+        name: "mTLS handshake",
+        detail: "Our trusted app opens a mutual-TLS connection to the external carrier.",
+        meta: fv.own_id ? "client=" + fv.own_id : "client=swa-demo app",
+        status: "ok",
+      },
+      {
+        name: "Peer presents an X.509-SVID",
+        detail: "The external carrier presents a valid certificate — but issued by its own trust domain, not ours.",
+        meta: "san=" + (fv.peer_uri || "") + " · issuer=" + (fv.issuer || ""),
+        status: "ok",
+      },
+      {
+        name: "Trust-boundary rejection",
+        detail: "Our app verifies the peer against the SWA trust bundle. The foreign CA isn't anchored, so the chain fails to validate and the handshake is aborted before any data moves.",
+        meta: fv.error || "x509: certificate signed by unknown authority",
+        status: "error",
+      },
+    ], animate);
+    show("spiffe-id", fv.peer_uri || "—");
+    show("validity",
+      "issuer: " + (fv.issuer || "?") + "\n(foreign CA — not in the swa-demo.example.com trust bundle)");
+    show("jwt-header", "—");
+    show("jwt-claims",
+      "X.509-SVID only — no JWT-SVID is involved.\nThe handshake is rejected before any token or secret is exchanged.");
+    show("jwt-token", fv.error || "—");
+    document.getElementById("resource-body").innerHTML =
+      '<div class="db-deny">✗ rejected at the trust boundary — certificate signed by unknown authority</div>' +
+      '<p class="detail">The external workload holds a valid SVID, but from trust domain ' +
+      "<strong>acme.courier</strong>, which shares no roots with <strong>swa-demo.example.com</strong>. " +
+      "No federation is configured, so the trust roots don't anchor it. Rejected before any data moved — " +
+      "no JWT-SVID was issued, no secret was fetched, no data on the wire. SWA trust-domain federation would " +
+      "resolve this; not yet available.</p>";
   }
 
   async function run() {

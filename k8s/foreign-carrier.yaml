@@ -1,0 +1,87 @@
+---
+# The FOREIGN workload: a different trust domain (acme.courier). This pod is NOT
+# a SWA workload — its namespace runs no agent and the pod has no swa_nodegroup
+# label, so the SWA agent never attests it. It runs the SAME webapp image with
+# FOREIGN_CARRIER_MODE=true, which makes it self-mint an acme.courier CA + leaf
+# in-process and serve mTLS with it (a port of idira-swa-demo's acme-carrier).
+# Our trusted webapp dials it and is rejected at the mTLS trust boundary because
+# the acme.courier CA is not in the SWA trust bundle (no federation). There is no
+# second SWA server and no registered second trust domain.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: acme-external
+  labels:
+    app.kubernetes.io/part-of: swa-demo
+    purpose: demo-foreign-trust-domain
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: foreign-carrier
+  namespace: acme-external
+  labels:
+    app: foreign-carrier
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: foreign-carrier
+  template:
+    metadata:
+      # NOTE: deliberately no swa_nodegroup label — the agent must not attest it.
+      labels:
+        app: foreign-carrier
+    spec:
+      containers:
+        - name: foreign-carrier
+          image: swa-demo-webapp:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: mtls
+              containerPort: 8443
+            - name: health
+              containerPort: 8444
+          env:
+            - name: FOREIGN_CARRIER_MODE
+              value: "true"
+            # Must match the in-cluster service DNS the webapp dials, so the
+            # leaf's DNS SAN passes Go's hostname check and the failure is the
+            # intended "unknown authority" (not a hostname mismatch).
+            - name: FOREIGN_DNS_NAME
+              value: "foreign-carrier.acme-external.svc.cluster.local"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 1
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: foreign-carrier
+  namespace: acme-external
+  labels:
+    app: foreign-carrier
+spec:
+  type: ClusterIP
+  selector:
+    app: foreign-carrier
+  ports:
+    - name: mtls
+      port: 8443
+      targetPort: 8443

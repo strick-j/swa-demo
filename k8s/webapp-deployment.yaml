@@ -53,6 +53,10 @@ spec:
               value: "http://untrusted-app.swa-demo-untrusted.svc.cluster.local:8080/probe-svid"
             - name: UNKNOWN_SVID_URL
               value: "http://rogue-app.swa-demo-rogue.svc.cluster.local:8080/probe-svid"
+            # The foreign-trust-domain carrier (acme.courier). The webapp dials it
+            # over mTLS with the SWA trust bundle and is rejected at the boundary.
+            - name: FOREIGN_CARRIER_ADDR
+              value: "foreign-carrier.acme-external.svc.cluster.local:8443"
           volumeMounts:
             - name: swa-agent-socket
               mountPath: /tmp/swa-agent

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/strick-j/swa-demo/webapp/internal/db"
+	"github.com/strick-j/swa-demo/webapp/internal/foreign"
 	"github.com/strick-j/swa-demo/webapp/internal/handlers"
 	"github.com/strick-j/swa-demo/webapp/internal/spiffe"
 	"github.com/strick-j/swa-demo/webapp/internal/svid"
@@ -20,8 +21,19 @@ import (
 func main() {
 	cfg := loadConfig()
 
+	// Foreign-carrier mode: this pod is NOT a SWA workload. It serves a
+	// self-minted acme.courier mTLS identity that our trusted app rejects.
+	if cfg.foreignCarrierMode {
+		log.Printf("FOREIGN_CARRIER_MODE: serving self-signed acme.courier mTLS carrier")
+		if err := foreign.RunCarrier(":8443", ":8444", cfg.foreignDNSName); err != nil {
+			log.Fatalf("foreign carrier: %v", err)
+		}
+		return
+	}
+
 	fetcher := buildFetcher(cfg)
-	dbq := buildDB(cfg) // nil in demo mode / when the agent socket is unavailable
+	dbq := buildDB(cfg)     // nil in demo mode / when the agent socket is unavailable
+	fp := buildForeign(cfg) // nil unless a live agent + FOREIGN_CARRIER_ADDR are set
 
 	tmpl, err := ui.IndexTemplate()
 	if err != nil {
@@ -32,7 +44,7 @@ func main() {
 		log.Fatalf("static fs: %v", err)
 	}
 
-	srv := handlers.New(fetcher, dbq, tmpl, static, handlers.Config{
+	srv := handlers.New(fetcher, dbq, fp, tmpl, static, handlers.Config{
 		Audience:         cfg.audience,
 		TrustDomain:      cfg.trustDomain,
 		SourceLabel:      fetcher.Source(),
@@ -74,6 +86,12 @@ type config struct {
 	// relayed by the main webapp to populate the scenario switcher.
 	untrustedSVIDURL string
 	unknownSVIDURL   string
+	// foreignCarrierMode makes this pod serve the self-signed acme.courier mTLS
+	// carrier (a foreign trust domain) instead of the webapp. foreignCarrierAddr
+	// is where the main webapp dials it; foreignDNSName is the carrier's DNS SAN.
+	foreignCarrierMode bool
+	foreignCarrierAddr string
+	foreignDNSName     string
 }
 
 func loadConfig() config {
@@ -95,6 +113,10 @@ func loadConfig() config {
 		rogueMode:        strings.EqualFold(env("ROGUE_MODE", "false"), "true"),
 		untrustedSVIDURL: env("UNTRUSTED_SVID_URL", ""),
 		unknownSVIDURL:   env("UNKNOWN_SVID_URL", ""),
+
+		foreignCarrierMode: strings.EqualFold(env("FOREIGN_CARRIER_MODE", "false"), "true"),
+		foreignCarrierAddr: env("FOREIGN_CARRIER_ADDR", ""),
+		foreignDNSName:     env("FOREIGN_DNS_NAME", "foreign-carrier.acme-external.svc.cluster.local"),
 	}
 	return c
 }
@@ -152,6 +174,24 @@ func buildDB(cfg config) handlers.DBQuerier {
 		return nil
 	}
 	return client
+}
+
+// buildForeign returns a prober that dials the foreign-trust-domain carrier with
+// this pod's X.509-SVID and the SWA trust bundle. Returns nil in demo mode / when
+// the agent is unavailable / when no carrier address is configured, in which case
+// the scenarios endpoint synthesizes the rejection.
+func buildForeign(cfg config) handlers.ForeignProber {
+	if cfg.demoMode || cfg.socketAddr == "" || cfg.foreignCarrierAddr == "" {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	p, err := foreign.NewProber(ctx, cfg.socketAddr, cfg.foreignCarrierAddr, cfg.trustDomain)
+	if err != nil {
+		log.Printf("WARNING: foreign prober unavailable (%v); foreign scenario synthesized", err)
+		return nil
+	}
+	return p
 }
 
 func env(key, def string) string {

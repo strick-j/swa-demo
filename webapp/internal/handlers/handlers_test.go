@@ -33,7 +33,7 @@ func (s *stubFetcher) FetchJWTSVID(_ context.Context, audience string) (*svid.Re
 
 func newTestServer(f svid.Fetcher) *Server {
 	tmpl := template.Must(template.New("index.html").Parse(`aud={{.Audience}} src={{.Source}}`))
-	return New(f, nil, tmpl, nil, Config{Audience: "default-aud", TrustDomain: "td.example", SourceLabel: "stub"})
+	return New(f, nil, nil, tmpl, nil, Config{Audience: "default-aud", TrustDomain: "td.example", SourceLabel: "stub"})
 }
 
 func TestHandleSVID_Success(t *testing.T) {
@@ -112,7 +112,7 @@ func TestHandleSVID_MethodNotAllowed(t *testing.T) {
 
 func newScenarioServer(f svid.Fetcher, cfg Config) *Server {
 	tmpl := template.Must(template.New("index.html").Parse(`x`))
-	return New(f, nil, tmpl, nil, cfg)
+	return New(f, nil, nil, tmpl, nil, cfg)
 }
 
 // In demo mode with no probe URLs configured, the switcher must still produce
@@ -147,6 +147,12 @@ func TestHandleScenarios_DemoSynthesis(t *testing.T) {
 	}
 	if got.Unknown.SVID.Error == "" {
 		t.Error("unknown should carry a refusal error")
+	}
+	if got.Foreign == nil || !got.Foreign.Rejected {
+		t.Errorf("foreign should be rejected: %+v", got.Foreign)
+	}
+	if got.Foreign.PeerURI != "spiffe://acme.courier/carrier/parcel" {
+		t.Errorf("foreign peer uri = %q", got.Foreign.PeerURI)
 	}
 }
 

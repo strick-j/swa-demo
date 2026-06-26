@@ -141,6 +141,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 .tab-tag.ok { background: rgba(31, 184, 102, 0.16); color: var(--ok); }
 .tab-tag.warn { background: rgba(250, 88, 45, 0.16); color: var(--pan-orange-500); }
 .tab-tag.err { background: rgba(200, 71, 39, 0.18); color: var(--err); }
+.tab-tag.foreign { background: rgba(139, 92, 246, 0.18); color: #b794f6; }
 
 .scenario-head { margin-top: 0; }
 .scenario-head .meta {
