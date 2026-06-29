@@ -4,9 +4,13 @@
 resource "swa_trust_domain" "this" {
   name = var.trust_domain
 
+  # JWT-SVID signing. The Secrets Manager (Conjur) authn-jwt authenticator
+  # accepts RSA-signed JWTs ONLY (RS* with RSA_*) — EC signing yields a silent
+  # 401 there. Defaults are RSA so the Conjur integration works; EC remains
+  # selectable for external-platform (AWS/Azure OIDC) federation, which accepts it.
   jwt = {
-    signature_algorithm = "ES256"
-    signing_key_type    = "EC_P256"
+    signature_algorithm = var.jwt_signature_algorithm
+    signing_key_type    = var.jwt_signing_key_type
     signing_key_ttl     = var.jwt_signing_key_ttl
     token_ttl           = var.jwt_token_ttl
   }

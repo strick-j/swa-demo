@@ -98,6 +98,18 @@ variable "jwt_signing_key_ttl" {
   default     = 86400
 }
 
+variable "jwt_signature_algorithm" {
+  description = "Trust domain JWT-SVID signature algorithm. Conjur authn-jwt requires RS* (paired with an RSA signing_key_type). Allowed: RS256/RS384/RS512, ES256/ES384/ES512."
+  type        = string
+  default     = "RS512"
+}
+
+variable "jwt_signing_key_type" {
+  description = "Trust domain JWT signing key type. Pair RSA_* with RS* and EC_P* with ES*. Allowed: RSA_2048/RSA_4096, EC_P256/EC_P384/EC_P521."
+  type        = string
+  default     = "RSA_4096"
+}
+
 variable "server_group" {
   description = "SWA server group name."
   type        = string
