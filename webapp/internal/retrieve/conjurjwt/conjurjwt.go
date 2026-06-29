@@ -7,6 +7,8 @@ package conjurjwt
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -81,6 +83,10 @@ func (r *Retriever) Retrieve(ctx context.Context) retrieve.Result {
 		return res
 	}
 	res.Identity = spiffeID
+	// Surface the exact token/claims Conjur will see (set before auth so it is
+	// visible even if authn fails). It's the workload's own short-lived SVID.
+	header, claims := decodeJWT(token)
+	res.JWT = &retrieve.JWTInfo{Token: token, Header: header, Claims: claims}
 
 	// 2) Exchange it for a Conjur access token via authn-jwt.
 	accessToken, err := r.authenticate(ctx, token)
@@ -169,8 +175,52 @@ func (r *Retriever) simulate() retrieve.Result {
 	res.Masked = retrieve.Mask([]byte("s1mul4ted-demo-secret-value"))
 	res.Retrieved = true
 	res.Simulated = true
+	res.JWT = simulatedJWT(res.Identity, r.cfg.Audience)
 	res.Steps = okSteps(time.Now(), r.cfg)
 	return res
+}
+
+// decodeJWT splits a compact JWT and base64url-decodes the header and claims.
+// Returns nil maps on malformed input (display is best-effort).
+func decodeJWT(token string) (header, claims map[string]interface{}) {
+	parts := strings.Split(token, ".")
+	if len(parts) < 2 {
+		return nil, nil
+	}
+	return decodeSegment(parts[0]), decodeSegment(parts[1])
+}
+
+func decodeSegment(seg string) map[string]interface{} {
+	b, err := base64.RawURLEncoding.DecodeString(seg)
+	if err != nil {
+		if b, err = base64.URLEncoding.DecodeString(seg); err != nil {
+			return nil
+		}
+	}
+	var m map[string]interface{}
+	if json.Unmarshal(b, &m) != nil {
+		return nil
+	}
+	return m
+}
+
+// simulatedJWT builds a realistic-looking JWT-SVID for the demo (no agent).
+func simulatedJWT(spiffeID, audience string) *retrieve.JWTInfo {
+	now := time.Now()
+	header := map[string]interface{}{"alg": "RS256", "typ": "JWT", "kid": "demo-signing-key"}
+	claims := map[string]interface{}{
+		"sub": spiffeID,
+		"aud": []string{audience},
+		"iss": "https://swa-demo.example.com",
+		"iat": now.Unix(),
+		"exp": now.Add(5 * time.Minute).Unix(),
+	}
+	enc := func(v interface{}) string {
+		b, _ := json.Marshal(v)
+		return base64.RawURLEncoding.EncodeToString(b)
+	}
+	token := enc(header) + "." + enc(claims) + "." + base64.RawURLEncoding.EncodeToString([]byte("simulated-signature"))
+	return &retrieve.JWTInfo{Token: token, Header: header, Claims: claims}
 }
 
 func okSteps(t0 time.Time, cfg Config) []svid.Step {

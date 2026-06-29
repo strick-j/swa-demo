@@ -24,6 +24,14 @@ const (
 	FamilyWorkloadAccess      Family = "workload-access"      // SPIFFE / SWA
 )
 
+// JWTInfo is a decoded JWT presented to the backend (e.g. the JWT-SVID sent to
+// Conjur authn-jwt). Surfaced so the exact claims Conjur keys on are visible.
+type JWTInfo struct {
+	Token  string                 `json:"token"`  // compact JWT
+	Header map[string]interface{} `json:"header"` // decoded header
+	Claims map[string]interface{} `json:"claims"` // decoded claims (sub/aud/iss/…)
+}
+
 // Result is the outcome of a retrieval attempt. It deliberately carries NO raw
 // secret — only Masked, a non-reversible summary built by Mask().
 type Result struct {
@@ -34,6 +42,7 @@ type Result struct {
 	Identity   string      `json:"identity"`    // who we authenticated as
 	SecretName string      `json:"secret_name"` // the variable/account path (NOT the value)
 	Masked     string      `json:"masked"`      // safe proof-of-retrieval summary
+	JWT        *JWTInfo    `json:"jwt,omitempty"`
 	Retrieved  bool        `json:"retrieved"`
 	Simulated  bool        `json:"simulated"` // true when no live backend was configured
 	Steps      []svid.Step `json:"steps"`

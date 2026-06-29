@@ -48,6 +48,10 @@
         return;
       }
       await renderSteps(body.steps);
+      const jwt = body.jwt || {};
+      show("jwt-header", jwt.header ? JSON.stringify(jwt.header, null, 2) : "—");
+      show("jwt-claims", jwt.claims ? JSON.stringify(jwt.claims, null, 2) : "—");
+      show("jwt-token", jwt.token || "—");
       show("identity", body.identity || "—");
       show("authn", body.auth_method || "—");
       show("secret-name", body.secret_name || "—");
