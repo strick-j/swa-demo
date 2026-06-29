@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -133,7 +134,9 @@ func (r *Retriever) authenticate(ctx context.Context, jwt string) (string, error
 	defer resp.Body.Close()
 	payload, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("authn-jwt rejected (status %d)", resp.StatusCode)
+		body := snippet(payload)
+		log.Printf("conjur authn-jwt rejected: status=%d endpoint=%s body=%q", resp.StatusCode, endpoint, body)
+		return "", fmt.Errorf("authn-jwt rejected (status %d): %s", resp.StatusCode, body)
 	}
 	tok := strings.TrimSpace(string(payload))
 	if tok == "" {
@@ -160,9 +163,25 @@ func (r *Retriever) readSecret(ctx context.Context, accessToken string) ([]byte,
 	defer resp.Body.Close()
 	val, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("read secret denied (status %d)", resp.StatusCode)
+		body := snippet(val)
+		log.Printf("conjur read secret denied: status=%d path=%s body=%q", resp.StatusCode, r.cfg.SecretPath, body)
+		return nil, fmt.Errorf("read secret denied (status %d): %s", resp.StatusCode, body)
 	}
 	return val, nil
+}
+
+// snippet trims a response body to a single-line, bounded message for display.
+// Auth-failure bodies are error messages, not secrets, so they're safe to show.
+func snippet(b []byte) string {
+	s := strings.TrimSpace(string(b))
+	s = strings.Join(strings.Fields(s), " ")
+	if s == "" {
+		return "(empty body — check the Conjur server audit log for the reason)"
+	}
+	if len(s) > 300 {
+		return s[:300] + "…"
+	}
+	return s
 }
 
 // simulate returns an illustrative success when no live Conjur is configured.
