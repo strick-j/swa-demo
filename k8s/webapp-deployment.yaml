@@ -88,9 +88,23 @@ spec:
             #   value: "data/secrets/demo-db-password"
             # - name: AWS_REGION
             #   value: "us-east-1"
+            # --- Credential Providers page (CCP / AIMWebService) ---
+            # Client cert for mTLS to the CCP. The files come from the OPTIONAL
+            # ccp-client-tls Secret mounted below (create it with
+            # scripts/gen-ccp-cert.sh); if the Secret is absent the CCP tabs run
+            # simulated. The rest of the CCP config (CCP_BASE_URL, CCP_APP_ID,
+            # safes/objects, CCP_DUAL_QUERY, CCP_INSECURE_SKIP_VERIFY) is injected
+            # from .env by deploy-webapp.sh.
+            - name: CCP_CLIENT_CERT
+              value: "/etc/ccp/tls.crt"
+            - name: CCP_CLIENT_KEY
+              value: "/etc/ccp/tls.key"
           volumeMounts:
             - name: swa-agent-socket
               mountPath: /tmp/swa-agent
+              readOnly: true
+            - name: ccp-client-tls
+              mountPath: /etc/ccp
               readOnly: true
           readinessProbe:
             httpGet:
@@ -117,3 +131,10 @@ spec:
           hostPath:
             path: /tmp/swa-agent
             type: Directory
+        # Client cert for mTLS to the CCP. optional:true so the pod still starts
+        # when the Secret is absent (CCP tabs run simulated until you create it
+        # with scripts/gen-ccp-cert.sh).
+        - name: ccp-client-tls
+          secret:
+            secretName: ccp-client-tls
+            optional: true

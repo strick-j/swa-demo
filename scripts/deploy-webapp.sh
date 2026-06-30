@@ -78,15 +78,17 @@ inject_conjur_env() {
   for v in CONJUR_APPLIANCE_URL CONJUR_ACCOUNT \
            CONJUR_AUTHN_JWT_SERVICE_ID CONJUR_JWT_SECRET_PATH CONJUR_JWT_AUDIENCE \
            CONJUR_AUTHN_IAM_SERVICE_ID CONJUR_IAM_HOST_ID CONJUR_IAM_SECRET_PATH \
-           AWS_REGION; do
+           AWS_REGION \
+           CCP_BASE_URL CCP_APP_ID CCP_SAFE CCP_OBJECT CCP_DENIED_SAFE \
+           CCP_DENIED_OBJECT CCP_DUAL_QUERY CCP_INSECURE_SKIP_VERIFY; do
     val="${!v:-}"
     [[ -n "${val}" ]] && { args+=("${v}=${val}"); names+=("${v}"); }
   done
   if [[ ${#args[@]} -eq 0 ]]; then
-    log "No CONJUR_*/AWS_REGION supplied; Conjur tabs stay simulated."
+    log "No CONJUR_*/CCP_*/AWS_REGION supplied; Conjur + CCP tabs stay simulated."
     return
   fi
-  log "Setting live Conjur config from .env: ${names[*]}"
+  log "Setting live Conjur/CCP config from .env: ${names[*]}"
   kubectl -n "${NS_DEMO}" set env deploy/swa-demo-webapp "${args[@]}"
 }
 

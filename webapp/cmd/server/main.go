@@ -14,6 +14,7 @@ import (
 	"github.com/strick-j/swa-demo/webapp/internal/foreign"
 	"github.com/strick-j/swa-demo/webapp/internal/handlers"
 	"github.com/strick-j/swa-demo/webapp/internal/retrieve"
+	"github.com/strick-j/swa-demo/webapp/internal/retrieve/ccp"
 	"github.com/strick-j/swa-demo/webapp/internal/retrieve/conjuriam"
 	"github.com/strick-j/swa-demo/webapp/internal/retrieve/conjurjwt"
 	"github.com/strick-j/swa-demo/webapp/internal/spiffe"
@@ -48,12 +49,15 @@ func main() {
 	}
 
 	registry, jwtSimulated, iamSimulated := buildRegistry(cfg, fetcher)
+	ccpClient := buildCCP(cfg)
+	registry.Register(ccpClient) // flips the CCP catalog card to available
 
 	srv := handlers.New(handlers.Deps{
 		Fetcher:  fetcher,
 		DB:       dbq,
 		Foreign:  fp,
 		Registry: registry,
+		CCP:      ccpClient,
 		Pages:    pages,
 		Static:   static,
 		Cfg: handlers.Config{
@@ -126,6 +130,18 @@ type config struct {
 	conjurIAMHostID     string
 	conjurIAMSecretPath string
 	awsRegion           string
+	// CCP (Central Credential Provider / AIMWebService) config. Simulated until
+	// the host, app id, and client cert/key are set.
+	ccpBaseURL      string
+	ccpAppID        string
+	ccpSafe         string
+	ccpObject       string
+	ccpDeniedSafe   string
+	ccpDeniedObject string
+	ccpDualQuery    string
+	ccpCertFile     string
+	ccpKeyFile      string
+	ccpInsecure     bool
 }
 
 func loadConfig() config {
@@ -162,6 +178,17 @@ func loadConfig() config {
 		conjurIAMHostID:     env("CONJUR_IAM_HOST_ID", ""),
 		conjurIAMSecretPath: env("CONJUR_IAM_SECRET_PATH", "data/secrets/demo-db-password"),
 		awsRegion:           env("AWS_REGION", "us-east-1"),
+
+		ccpBaseURL:      env("CCP_BASE_URL", ""),
+		ccpAppID:        env("CCP_APP_ID", ""),
+		ccpSafe:         env("CCP_SAFE", ""),
+		ccpObject:       env("CCP_OBJECT", ""),
+		ccpDeniedSafe:   env("CCP_DENIED_SAFE", ""),
+		ccpDeniedObject: env("CCP_DENIED_OBJECT", ""),
+		ccpDualQuery:    env("CCP_DUAL_QUERY", ""),
+		ccpCertFile:     env("CCP_CLIENT_CERT", ""),
+		ccpKeyFile:      env("CCP_CLIENT_KEY", ""),
+		ccpInsecure:     strings.EqualFold(env("CCP_INSECURE_SKIP_VERIFY", "false"), "true"),
 	}
 	return c
 }
@@ -180,7 +207,39 @@ func loadPages() (handlers.Pages, error) {
 	if err != nil {
 		return handlers.Pages{}, err
 	}
-	return handlers.Pages{Landing: landing, SWA: swa, SecretsManager: sm}, nil
+	cp, err := ui.Page("credential-providers.html")
+	if err != nil {
+		return handlers.Pages{}, err
+	}
+	return handlers.Pages{Landing: landing, SWA: swa, SecretsManager: sm, CredentialProviders: cp}, nil
+}
+
+// buildCCP wires the Central Credential Provider client. It runs live when not in
+// demo mode and the host, app id, and client cert/key are all set; otherwise (or
+// if the cert fails to load) it runs simulated.
+func buildCCP(cfg config) *ccp.Client {
+	live := !cfg.demoMode && cfg.ccpBaseURL != "" && cfg.ccpAppID != "" &&
+		cfg.ccpCertFile != "" && cfg.ccpKeyFile != ""
+	ccfg := ccp.Config{
+		BaseURL:            cfg.ccpBaseURL,
+		AppID:              cfg.ccpAppID,
+		Safe:               cfg.ccpSafe,
+		Object:             cfg.ccpObject,
+		DeniedSafe:         cfg.ccpDeniedSafe,
+		DeniedObject:       cfg.ccpDeniedObject,
+		DualQuery:          cfg.ccpDualQuery,
+		CertFile:           cfg.ccpCertFile,
+		KeyFile:            cfg.ccpKeyFile,
+		InsecureSkipVerify: cfg.ccpInsecure,
+		Live:               live,
+	}
+	client, err := ccp.New(ccfg)
+	if err != nil {
+		log.Printf("CCP: %v — running simulated", err)
+		ccfg.Live = false
+		client, _ = ccp.New(ccfg)
+	}
+	return client
 }
 
 // buildRegistry wires the retrievers and returns the registry plus whether the

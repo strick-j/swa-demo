@@ -44,6 +44,20 @@ type AWSInfo struct {
 	HostID    string `json:"host_id,omitempty"` // Conjur host the ARN maps to
 }
 
+// CCPInfo is the request/identity context for a Central Credential Provider
+// (AIMWebService) retrieval. It carries only non-secret metadata — the client
+// identity the CCP authorizes on and the account fields it returns alongside the
+// (masked) secret — so the UI can show who asked and what came back.
+type CCPInfo struct {
+	AppID      string `json:"app_id"`                // the CCP Application id
+	CertCN     string `json:"cert_cn,omitempty"`     // client-cert subject CN presented (mTLS)
+	Safe       string `json:"safe,omitempty"`        // safe queried
+	Query      string `json:"query,omitempty"`       // object name or custom-property query
+	Account    string `json:"account,omitempty"`     // returned account UserName (NOT the secret)
+	Address    string `json:"address,omitempty"`     // returned account Address/target
+	DualActive string `json:"dual_active,omitempty"` // which account the dual pair resolved to
+}
+
 // Result is the outcome of a retrieval attempt. It deliberately carries NO raw
 // secret — only Masked, a non-reversible summary built by Mask().
 type Result struct {
@@ -56,6 +70,7 @@ type Result struct {
 	Masked     string      `json:"masked"`      // safe proof-of-retrieval summary
 	JWT        *JWTInfo    `json:"jwt,omitempty"`
 	AWS        *AWSInfo    `json:"aws,omitempty"`
+	CCP        *CCPInfo    `json:"ccp,omitempty"`
 	Retrieved  bool        `json:"retrieved"`
 	Simulated  bool        `json:"simulated"` // true when no live backend was configured
 	Steps      []svid.Step `json:"steps"`
