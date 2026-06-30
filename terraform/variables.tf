@@ -5,9 +5,13 @@ variable "project" {
 }
 
 variable "aws_region" {
-  description = "AWS region to deploy into."
+  description = "AWS region to deploy into. NO default on purpose: an unset region would silently fall back and make Terraform rebuild the entire stack in the wrong region (orphaning the real one). Must be provided explicitly via TF_VAR_aws_region — .env sets it and the make targets source .env. A bare `terraform` run without it will prompt (or error under -input=false) instead of guessing."
   type        = string
-  default     = "us-east-1"
+
+  validation {
+    condition     = can(regex("^[a-z]{2}-[a-z]+-[0-9]$", var.aws_region))
+    error_message = "Set aws_region explicitly (e.g. us-east-2). Run via `make` or `source .env` first so TF_VAR_aws_region is exported — never a bare `terraform` command."
+  }
 }
 
 variable "rhel_version" {
