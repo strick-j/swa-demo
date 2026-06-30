@@ -147,14 +147,22 @@ swa: ## Bridge authn_id to the target + Helm-install SWA server + agent there
 # ---------------------------------------------------------------------------
 # Phase 4 — Demo webapp
 # ---------------------------------------------------------------------------
-.PHONY: webapp-build webapp-test webapp-deploy
-webapp-build: ## Build webapp container inside the host's minikube docker
+.PHONY: stage webapp-build webapp-test webapp-deploy
+stage: ## (Target host) rsync the project source to ~/swa-demo (no image/chart sync)
+	$(ENVSH); $(PICK_ANSIBLE); "$$AP" -i $(INVENTORY) $(ANSIBLE_DIR)/site.yml --tags swa \
+	  -e images_s3_uri="$$SWA_IMAGES_S3_URI" \
+	  -e aws_region="$$AWS_REGION"
+
+# build/deploy run ON the target but from its staged ~/swa-demo copy, so both
+# depend on `stage` to push current source first (otherwise the target rebuilds
+# stale code). `stage` is a fast, delete-free rsync, so the extra run is cheap.
+webapp-build: stage ## Build webapp container inside the host's minikube docker
 	bash scripts/host-exec.sh "bash scripts/deploy-webapp.sh build"
 
 webapp-test: ## Run Go unit tests with coverage (local)
 	cd $(WEBAPP_DIR) && go test ./... -cover
 
-webapp-deploy: ## Deploy webapp manifests into the demo namespace
+webapp-deploy: stage ## Deploy webapp manifests into the demo namespace
 	bash scripts/host-exec.sh "bash scripts/deploy-webapp.sh deploy"
 
 # ---------------------------------------------------------------------------
