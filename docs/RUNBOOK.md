@@ -141,9 +141,9 @@ export CONJUR_IAM_SECRET_PATH="${CONJUR_JWT_SECRET_PATH}"       # reuse the JWT 
 is finicky about it.)
 
 **Step 3 — update the host IAM permissions** (the role needs `sts:GetCallerIdentity`
-+ `sts:AssumeRole`, and the pod needs the IMDS metadata hop limit ≥ 2). Both are
-**in-place** updates — no instance replacement. Always `source .env` first so the
-region is correct:
+— it authenticates as itself, so no `AssumeRole` — and the pod needs the IMDS
+metadata hop limit ≥ 2). Both are **in-place** updates — no instance replacement.
+Always `source .env` first so the region is correct:
 
 ```bash
 cd ~/swa-demo && source .env
