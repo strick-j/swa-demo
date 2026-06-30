@@ -55,3 +55,23 @@ func TestCatalog_SWAAlwaysAvailable(t *testing.T) {
 		t.Error("catalog missing swa mode")
 	}
 }
+
+// The K8s sidecar mode was retired in favor of SWA JWT auth; the IAM (AWS STS)
+// mode replaces it as the second Conjur example.
+func TestCatalog_ConjurModes(t *testing.T) {
+	modes := map[string]bool{}
+	for _, f := range NewRegistry().Catalog() {
+		for _, m := range f.Modes {
+			modes[m.Mode] = true
+		}
+	}
+	if modes["conjur-k8s"] {
+		t.Error("conjur-k8s (K8s sidecar) should have been removed from the catalog")
+	}
+	if !modes["conjur-iam"] {
+		t.Error("catalog missing conjur-iam (AWS STS) mode")
+	}
+	if !modes["conjur-jwt"] {
+		t.Error("catalog missing conjur-jwt mode")
+	}
+}

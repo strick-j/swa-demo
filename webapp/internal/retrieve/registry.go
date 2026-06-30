@@ -75,8 +75,7 @@ func (r *Registry) Catalog() []FamilyInfo {
 			Tagline: "Conjur Cloud — authenticate with a workload-native identity, then fetch a secret over the API.",
 			Modes: []ModeInfo{
 				{Mode: "conjur-jwt", Label: "Conjur · JWT auth", Auth: "authn-jwt", Href: "/secrets-manager", Summary: "Present a workload JWT-SVID to Conjur authn-jwt, then read a variable.", Available: false},
-				{Mode: "conjur-iam", Label: "Conjur · AWS STS", Auth: "authn-iam", Summary: "Authenticate with the workload's AWS IAM role via authn-iam.", Available: false},
-				{Mode: "conjur-k8s", Label: "Conjur · K8s sidecar", Auth: "authn-k8s", Summary: "Secrets Provider sidecar pulls the secret into a shared volume.", Available: false},
+				{Mode: "conjur-iam", Label: "Conjur · AWS STS", Auth: "authn-iam", Href: "/secrets-manager#conjur-iam", Summary: "Sign sts:GetCallerIdentity with the workload's AWS IAM role; Conjur authn-iam verifies the ARN, then read a variable.", Available: false},
 			},
 		},
 		{

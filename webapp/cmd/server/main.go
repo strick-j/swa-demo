@@ -14,6 +14,7 @@ import (
 	"github.com/strick-j/swa-demo/webapp/internal/foreign"
 	"github.com/strick-j/swa-demo/webapp/internal/handlers"
 	"github.com/strick-j/swa-demo/webapp/internal/retrieve"
+	"github.com/strick-j/swa-demo/webapp/internal/retrieve/conjuriam"
 	"github.com/strick-j/swa-demo/webapp/internal/retrieve/conjurjwt"
 	"github.com/strick-j/swa-demo/webapp/internal/spiffe"
 	"github.com/strick-j/swa-demo/webapp/internal/svid"
@@ -46,7 +47,7 @@ func main() {
 		log.Fatalf("static fs: %v", err)
 	}
 
-	registry, conjurSimulated := buildRegistry(cfg, fetcher)
+	registry, jwtSimulated, iamSimulated := buildRegistry(cfg, fetcher)
 
 	srv := handlers.New(handlers.Deps{
 		Fetcher:  fetcher,
@@ -56,16 +57,20 @@ func main() {
 		Pages:    pages,
 		Static:   static,
 		Cfg: handlers.Config{
-			Audience:         cfg.audience,
-			TrustDomain:      cfg.trustDomain,
-			SourceLabel:      fetcher.Source(),
-			ProbeURL:         cfg.probeURL,
-			UntrustedSVIDURL: cfg.untrustedSVIDURL,
-			UnknownSVIDURL:   cfg.unknownSVIDURL,
-			Demo:             cfg.demoMode || cfg.socketAddr == "",
-			ConjurServiceID:  cfg.conjurJWTServiceID,
-			ConjurSecretPath: cfg.conjurJWTSecretPath,
-			ConjurSimulated:  conjurSimulated,
+			Audience:           cfg.audience,
+			TrustDomain:        cfg.trustDomain,
+			SourceLabel:        fetcher.Source(),
+			ProbeURL:           cfg.probeURL,
+			UntrustedSVIDURL:   cfg.untrustedSVIDURL,
+			UnknownSVIDURL:     cfg.unknownSVIDURL,
+			Demo:               cfg.demoMode || cfg.socketAddr == "",
+			ConjurServiceID:    cfg.conjurJWTServiceID,
+			ConjurSecretPath:   cfg.conjurJWTSecretPath,
+			ConjurSimulated:    jwtSimulated,
+			ConjurIAMService:   cfg.conjurIAMServiceID,
+			ConjurIAMHostID:    cfg.conjurIAMHostID,
+			ConjurIAMSecret:    cfg.conjurIAMSecretPath,
+			ConjurIAMSimulated: iamSimulated,
 		},
 	})
 
@@ -114,6 +119,13 @@ type config struct {
 	conjurJWTServiceID  string
 	conjurJWTSecretPath string
 	conjurJWTAudience   string
+	// Conjur authn-iam (Secrets Manager SaaS) config. When the appliance URL /
+	// host id / secret path are empty (or DEMO_MODE), the retriever simulates.
+	// AWS credentials come from the default chain (instance profile via IMDS).
+	conjurIAMServiceID  string
+	conjurIAMHostID     string
+	conjurIAMSecretPath string
+	awsRegion           string
 }
 
 func loadConfig() config {
@@ -145,6 +157,11 @@ func loadConfig() config {
 		conjurJWTServiceID:  env("CONJUR_AUTHN_JWT_SERVICE_ID", "authn-jwt/swa"),
 		conjurJWTSecretPath: env("CONJUR_JWT_SECRET_PATH", "data/secrets/demo-db-password"),
 		conjurJWTAudience:   env("CONJUR_JWT_AUDIENCE", "conjur"),
+
+		conjurIAMServiceID:  env("CONJUR_AUTHN_IAM_SERVICE_ID", ""),
+		conjurIAMHostID:     env("CONJUR_IAM_HOST_ID", ""),
+		conjurIAMSecretPath: env("CONJUR_IAM_SECRET_PATH", "data/secrets/demo-db-password"),
+		awsRegion:           env("AWS_REGION", "us-east-1"),
 	}
 	return c
 }
@@ -167,15 +184,16 @@ func loadPages() (handlers.Pages, error) {
 }
 
 // buildRegistry wires the retrievers and returns the registry plus whether the
-// Conjur JWT mode will run simulated (no live agent / Conjur config).
-func buildRegistry(cfg config, fetcher svid.Fetcher) (*retrieve.Registry, bool) {
-	reg := retrieve.NewRegistry()
+// Conjur JWT and IAM modes will run simulated (no live agent / Conjur / AWS).
+func buildRegistry(cfg config, fetcher svid.Fetcher) (reg *retrieve.Registry, jwtSimulated, iamSimulated bool) {
+	reg = retrieve.NewRegistry()
 
-	live := !cfg.demoMode && cfg.socketAddr != "" &&
+	// authn-jwt: live needs the agent socket (for the JWT-SVID) + Conjur config.
+	jwtLive := !cfg.demoMode && cfg.socketAddr != "" &&
 		cfg.conjurApplianceURL != "" && cfg.conjurJWTSecretPath != ""
 
 	var jwt conjurjwt.JWTProvider
-	if live {
+	if jwtLive {
 		jwt = func(ctx context.Context, audience string) (string, string, error) {
 			r, err := fetcher.FetchJWTSVID(ctx, audience)
 			if err != nil {
@@ -192,7 +210,22 @@ func buildRegistry(cfg config, fetcher svid.Fetcher) (*retrieve.Registry, bool) 
 		Audience:     cfg.conjurJWTAudience,
 	}, jwt))
 
-	return reg, !live
+	// authn-iam: live needs Conjur config + an IAM host id; AWS credentials come
+	// from the default chain (instance profile via IMDS) at call time.
+	iamLive := !cfg.demoMode && cfg.conjurApplianceURL != "" &&
+		cfg.conjurIAMServiceID != "" && cfg.conjurIAMHostID != "" &&
+		cfg.conjurIAMSecretPath != ""
+	reg.Register(conjuriam.New(conjuriam.Config{
+		ApplianceURL: cfg.conjurApplianceURL,
+		Account:      cfg.conjurAccount,
+		ServiceID:    cfg.conjurIAMServiceID,
+		HostID:       cfg.conjurIAMHostID,
+		SecretPath:   cfg.conjurIAMSecretPath,
+		Region:       cfg.awsRegion,
+		Live:         iamLive,
+	}))
+
+	return reg, !jwtLive, !iamLive
 }
 
 // socketAddr resolves the Workload API endpoint from the standard env var or our

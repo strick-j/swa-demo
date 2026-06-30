@@ -1,5 +1,6 @@
 # Build a static, self-contained webapp image (templates/static are embedded).
-FROM golang:1.24 AS build
+# go >= 1.25 required by github.com/cyberark/conjur-api-go (authn-iam client).
+FROM golang:1.25 AS build
 WORKDIR /src
 COPY go.mod go.sum* ./
 RUN go mod download || true

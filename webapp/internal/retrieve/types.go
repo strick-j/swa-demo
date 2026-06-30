@@ -32,6 +32,18 @@ type JWTInfo struct {
 	Claims map[string]interface{} `json:"claims"` // decoded claims (sub/aud/iss/…)
 }
 
+// AWSInfo is the AWS caller identity presented to Conjur authn-iam. Conjur
+// verifies it by replaying the workload's signed sts:GetCallerIdentity request
+// and maps the ARN to a Conjur host. Surfaced so the exact identity Conjur keys
+// on is visible — the authn-iam analogue of JWTInfo.
+type AWSInfo struct {
+	CallerARN string `json:"caller_arn"`        // arn from sts:GetCallerIdentity
+	Account   string `json:"account,omitempty"` // AWS account id
+	UserID    string `json:"user_id,omitempty"` // STS UserId
+	Region    string `json:"region,omitempty"`  // signing region
+	HostID    string `json:"host_id,omitempty"` // Conjur host the ARN maps to
+}
+
 // Result is the outcome of a retrieval attempt. It deliberately carries NO raw
 // secret — only Masked, a non-reversible summary built by Mask().
 type Result struct {
@@ -43,6 +55,7 @@ type Result struct {
 	SecretName string      `json:"secret_name"` // the variable/account path (NOT the value)
 	Masked     string      `json:"masked"`      // safe proof-of-retrieval summary
 	JWT        *JWTInfo    `json:"jwt,omitempty"`
+	AWS        *AWSInfo    `json:"aws,omitempty"`
 	Retrieved  bool        `json:"retrieved"`
 	Simulated  bool        `json:"simulated"` // true when no live backend was configured
 	Steps      []svid.Step `json:"steps"`

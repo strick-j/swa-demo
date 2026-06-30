@@ -46,10 +46,15 @@ type Config struct {
 	// synthesizes illustrative untrusted/unknown outcomes so the switcher is
 	// fully demo-able without a cluster.
 	Demo bool
-	// Conjur* drive the Secrets Manager page display.
+	// Conjur* drive the Secrets Manager page display (authn-jwt tab).
 	ConjurServiceID  string
 	ConjurSecretPath string
 	ConjurSimulated  bool
+	// ConjurIAM* drive the authn-iam (AWS STS) tab display.
+	ConjurIAMService   string
+	ConjurIAMHostID    string
+	ConjurIAMSecret    string
+	ConjurIAMSimulated bool
 }
 
 // Pages holds the parsed HTML templates for each page.
@@ -151,13 +156,21 @@ func (s *Server) handleSWA(w http.ResponseWriter, r *http.Request) {
 	s.renderPage(w, s.pages.SWA, data)
 }
 
-// handleSecretsManager renders the Conjur (Secrets Manager SaaS) page.
+// handleSecretsManager renders the Conjur (Secrets Manager SaaS) page, which
+// tabs between the authn-jwt and authn-iam (AWS STS) modes.
 func (s *Server) handleSecretsManager(w http.ResponseWriter, r *http.Request) {
 	data := struct {
-		ServiceID  string
-		SecretPath string
-		Simulated  bool
-	}{s.cfg.ConjurServiceID, s.cfg.ConjurSecretPath, s.cfg.ConjurSimulated}
+		ServiceID    string
+		SecretPath   string
+		Simulated    bool
+		IAMService   string
+		IAMHostID    string
+		IAMSecret    string
+		IAMSimulated bool
+	}{
+		s.cfg.ConjurServiceID, s.cfg.ConjurSecretPath, s.cfg.ConjurSimulated,
+		s.cfg.ConjurIAMService, s.cfg.ConjurIAMHostID, s.cfg.ConjurIAMSecret, s.cfg.ConjurIAMSimulated,
+	}
 	s.renderPage(w, s.pages.SecretsManager, data)
 }
 
