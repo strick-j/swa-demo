@@ -53,15 +53,16 @@ resource "aws_iam_role_policy" "s3_read" {
   policy = data.aws_iam_policy_document.s3_read[0].json
 }
 
-# STS permissions for Conjur authn-iam. The webapp pod authenticates to Conjur
-# Cloud with this host's instance-profile identity: it signs (and the conjur
-# client exercises) sts:GetCallerIdentity, and assumes a role as part of the
-# flow. GetCallerIdentity needs no IAM permission of its own, but is listed
-# explicitly to mirror CyberArk's documented host policy for Conjur workloads.
+# STS permission for Conjur authn-iam. The webapp pod authenticates to Conjur
+# Cloud AS this host's instance-profile role (IMDS creds -> sign GetCallerIdentity);
+# it does not assume a second role, so sts:AssumeRole is intentionally omitted.
+# sts:GetCallerIdentity cannot be resource-scoped (AWS allows only "*"), and in
+# fact needs no IAM permission at all, but is listed explicitly to mirror
+# CyberArk's documented host policy for Conjur workloads.
 data "aws_iam_policy_document" "conjur_sts" {
   statement {
     sid       = "ConjurAuthnIam"
-    actions   = ["sts:AssumeRole", "sts:GetCallerIdentity"]
+    actions   = ["sts:GetCallerIdentity"]
     resources = ["*"]
   }
 }
