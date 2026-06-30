@@ -66,12 +66,38 @@ deploy_data() {
   kubectl -n acme-external rollout status deploy/foreign-carrier --timeout=120s || true
 }
 
+# Inject environment-specific Conjur / AWS live config onto the running
+# deployment. These values are passed in by `make webapp-deploy` from the CONTROL
+# host's .env (the committed manifest deliberately omits the tenant URL etc.), so
+# they must be re-applied on every deploy — otherwise the stage rsync + plain
+# `kubectl apply` wipe them and the Conjur tabs fall back to simulated. Any var
+# left empty is skipped, so that mode simply stays simulated.
+# CONJUR_APPLIANCE_URL + CONJUR_ACCOUNT are shared by both authn modes.
+inject_conjur_env() {
+  local args=() names=() v val
+  for v in CONJUR_APPLIANCE_URL CONJUR_ACCOUNT \
+           CONJUR_AUTHN_JWT_SERVICE_ID CONJUR_JWT_SECRET_PATH CONJUR_JWT_AUDIENCE \
+           CONJUR_AUTHN_IAM_SERVICE_ID CONJUR_IAM_HOST_ID CONJUR_IAM_SECRET_PATH \
+           AWS_REGION; do
+    val="${!v:-}"
+    [[ -n "${val}" ]] && { args+=("${v}=${val}"); names+=("${v}"); }
+  done
+  if [[ ${#args[@]} -eq 0 ]]; then
+    log "No CONJUR_*/AWS_REGION supplied; Conjur tabs stay simulated."
+    return
+  fi
+  log "Setting live Conjur config from .env: ${names[*]}"
+  kubectl -n "${NS_DEMO}" set env deploy/swa-demo-webapp "${args[@]}"
+}
+
 deploy() {
   deploy_data
   log "Applying webapp manifests to namespace ${NS_DEMO}"
   kubectl apply -f "${ROOT}/k8s/webapp-serviceaccount.yaml"
   kubectl apply -f "${ROOT}/k8s/webapp-deployment.yaml"
   kubectl apply -f "${ROOT}/k8s/webapp-service.yaml"
+  # Re-apply the env-specific Conjur/AWS config wiped by apply (see above).
+  inject_conjur_env
   # Force a roll so a rebuilt :dev image is picked up even when the manifest is
   # unchanged (mutable tag).
   kubectl -n "${NS_DEMO}" rollout restart deploy/swa-demo-webapp

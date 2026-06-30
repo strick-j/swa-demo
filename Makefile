@@ -162,8 +162,8 @@ webapp-build: stage ## Build webapp container inside the host's minikube docker
 webapp-test: ## Run Go unit tests with coverage (local)
 	cd $(WEBAPP_DIR) && go test ./... -cover
 
-webapp-deploy: stage ## Deploy webapp manifests into the demo namespace
-	bash scripts/host-exec.sh "bash scripts/deploy-webapp.sh deploy"
+webapp-deploy: stage ## Deploy webapp manifests + inject Conjur live config from .env
+	$(ENVSH); bash scripts/host-exec.sh "CONJUR_APPLIANCE_URL='$$CONJUR_APPLIANCE_URL' CONJUR_ACCOUNT='$$CONJUR_ACCOUNT' CONJUR_AUTHN_JWT_SERVICE_ID='$$CONJUR_AUTHN_JWT_SERVICE_ID' CONJUR_JWT_SECRET_PATH='$$CONJUR_JWT_SECRET_PATH' CONJUR_JWT_AUDIENCE='$$CONJUR_JWT_AUDIENCE' CONJUR_AUTHN_IAM_SERVICE_ID='$$CONJUR_AUTHN_IAM_SERVICE_ID' CONJUR_IAM_HOST_ID='$$CONJUR_IAM_HOST_ID' CONJUR_IAM_SECRET_PATH='$$CONJUR_IAM_SECRET_PATH' AWS_REGION='$$AWS_REGION' bash scripts/deploy-webapp.sh deploy"
 
 # ---------------------------------------------------------------------------
 # Phase 5 — End to end
