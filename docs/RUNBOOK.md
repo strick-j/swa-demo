@@ -89,6 +89,82 @@ Open `http://<host-ip>:30080`, click **Request JWT-SVID from SWA Agent**. The UI
 animates the four lifecycle steps then shows the SPIFFE ID, validity window, and
 decoded JWT header/claims.
 
+## 3a. Enable the Conjur **AWS STS (authn-iam)** demo
+
+The Secrets Manager page has two Conjur tabs: **JWT auth** (authn-jwt, lit up by
+the SWA agent + `CONJUR_APPLIANCE_URL` in `.env`) and **AWS STS** (authn-iam).
+Each runs **simulated** until configured. Below brings the AWS STS tab live; it
+reuses the JWT secret. Prereqs: the JWT demo working, and an existing **AWS IAM
+authenticator** in the tenant (note its `<service-id>`).
+
+The webapp pod authenticates to Conjur with the **target host's instance-profile
+role** (`swa-demo-host-role`) via IMDS — a *different* identity than the control
+host the `conjur` provider uses. So the Conjur workload must map that role's ARN.
+
+**Step 1 — Conjur: create the workload + grant the secret + link the authenticator.**
+The authn-iam workload id is `<aws-account-id>/<iam-role-name>`. Load to your
+branch (`POST {tenant}/api/policies/conjur/policy/data%2Fswa`):
+
+```yaml
+- !policy
+  id: aws
+  body:
+    - !host
+      id: <aws-account-id>/swa-demo-host-role        # e.g. 475601244925/swa-demo-host-role
+
+# Reuse the JWT secret — just add the IAM host as a second reader
+- !permit
+  role: !host /data/swa/aws/<aws-account-id>/swa-demo-host-role
+  privilege: [ read, execute ]
+  resource: !variable /data/swa/secrets/myapp/api-key
+```
+
+Link the host to the existing authenticator — REST (no policy):
+
+```
+POST {tenant}/api/groups/conjur%2Fauthn-iam%2F<service-id>%2Fapps/members
+Accept: application/x.secretsmgr.v2+json   ·   Content-Type: application/json
+{ "id": "data/swa/aws/<aws-account-id>/swa-demo-host-role", "kind": "host" }
+```
+…or in policy: `!grant role: !group conjur/authn-iam/<service-id>/apps  member: !host <aws-account-id>/swa-demo-host-role`
+(confirm the group name — it is authenticator-specific).
+
+**Step 2 — `.env`: point the webapp at it** (shares `CONJUR_APPLIANCE_URL` /
+`CONJUR_ACCOUNT` with JWT):
+
+```sh
+export CONJUR_AUTHN_IAM_SERVICE_ID="<service-id>"               # bare id -> authn-iam/<service-id>
+export CONJUR_IAM_HOST_ID="host/data/swa/aws/<aws-account-id>/swa-demo-host-role"
+export CONJUR_IAM_SECRET_PATH="${CONJUR_JWT_SECRET_PATH}"       # reuse the JWT secret
+```
+(Test `CONJUR_IAM_HOST_ID` with and without the leading `host/` — `conjur-api-go`
+is finicky about it.)
+
+**Step 3 — update the host IAM permissions** (the role needs `sts:GetCallerIdentity`
++ `sts:AssumeRole`, and the pod needs the IMDS metadata hop limit ≥ 2). Both are
+**in-place** updates — no instance replacement. Always `source .env` first so the
+region is correct:
+
+```bash
+cd ~/swa-demo && source .env
+echo "region=$TF_VAR_aws_region"                # MUST be your real region (e.g. us-east-2)
+terraform -chdir=terraform plan                 # expect: ~ conjur_sts policy + hop_limit; 0 destroyed
+terraform -chdir=terraform apply
+```
+> If the plan shows resources **destroyed** or a region you don't expect, STOP —
+> `.env` wasn't sourced and `aws_region` is wrong (see Troubleshooting).
+
+**Step 4 — redeploy** (injects the new `CONJUR_IAM_*` onto the pod from `.env`):
+
+```bash
+make webapp-deploy
+```
+
+**Verify.** Open the Secrets Manager page → **AWS STS** tab → it should read
+**Retrieved ✓** (no "simulated"), showing the caller ARN → host mapping → masked
+secret. Because both tabs read the same variable, the masked `sha256` summary
+matches the JWT tab — proof two auth paths reached the same secret.
+
 ## 4. Tear down
 
 ```bash
