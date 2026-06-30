@@ -62,10 +62,12 @@ resource "aws_instance" "host" {
   metadata_options {
     http_tokens   = "required" # IMDSv2 only
     http_endpoint = "enabled"
-    # Pods reach IMDS over an extra network hop (the minikube/container bridge),
-    # so the default hop limit of 1 drops their requests. 2 lets the webapp pod
-    # use the node instance-profile role for Conjur authn-iam (AWS STS).
-    http_put_response_hop_limit = 2
+    # The webapp pod reads its instance-profile creds from IMDS for Conjur
+    # authn-iam, but under the docker driver it sits TWO hops from the host
+    # (pod -> minikube node-container -> host), so the IMDSv2 response TTL must
+    # survive both. Default 1 = host only; 2 = a plain container; 3 = a minikube
+    # pod (verified: 2 still timed out for the pod, 3 works).
+    http_put_response_hop_limit = 3
   }
 
   tags = {

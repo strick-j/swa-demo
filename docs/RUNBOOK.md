@@ -142,8 +142,10 @@ is finicky about it.)
 
 **Step 3 — update the host IAM permissions** (the role needs `sts:GetCallerIdentity`
 — it authenticates as itself, so no `AssumeRole` — and the pod needs the IMDS
-metadata hop limit ≥ 2). Both are **in-place** updates — no instance replacement.
-Always `source .env` first so the region is correct:
+metadata hop limit **= 3**: under the docker driver the pod is two hops from the
+host — `pod → minikube node-container → host` — so 2 still times out). Both are
+**in-place** updates — no instance replacement. Always `source .env` first so the
+region is correct:
 
 ```bash
 cd ~/swa-demo && source .env

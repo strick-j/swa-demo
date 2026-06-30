@@ -76,8 +76,9 @@ spec:
             # The AWS STS tab runs SIMULATED until the IAM service id + host id
             # are set (and CONJUR_APPLIANCE_URL above is uncommented). AWS creds
             # come from the default chain — on EC2 that's the node instance
-            # profile via IMDS, which requires the metadata hop limit >= 2 so the
-            # pod can reach 169.254.169.254 (see terraform ec2.tf). The Conjur
+            # profile via IMDS, which requires the metadata hop limit = 3 (pod is
+            # two hops from the host under minikube) so the pod can reach
+            # 169.254.169.254 (set in terraform ec2.tf). The Conjur
             # host id is whatever your authn-iam policy maps the caller ARN to.
             # - name: CONJUR_AUTHN_IAM_SERVICE_ID
             #   value: "swa"            # bare service id -> authn-iam/swa
