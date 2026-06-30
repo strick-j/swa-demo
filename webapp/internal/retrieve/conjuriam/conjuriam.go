@@ -15,6 +15,7 @@ package conjuriam
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -80,22 +81,25 @@ func (r *Retriever) Retrieve(ctx context.Context) retrieve.Result {
 	res := r.base()
 	t0 := time.Now()
 
-	// 1) Resolve the workload's AWS identity from the default credential chain
-	//    (instance profile via IMDS on EC2) and surface the caller ARN — the
-	//    exact identity Conjur authn-iam verifies. Set before auth so it's
-	//    visible even if the Conjur exchange later fails.
-	aws, err := r.callerIdentity(ctx)
-	if err != nil {
-		res.Steps = stepsThrough(t0, 0, "resolve aws identity: "+err.Error())
-		res.Error = "resolve aws identity: " + err.Error()
-		return res
+	// 1) Resolve the caller ARN for DISPLAY only — best-effort. The real auth
+	//    below does its own credential/identity handling via conjur-api-go; this
+	//    separate sts:GetCallerIdentity is just to surface the ARN in the UI, so
+	//    if it fails we still attempt auth and let that step report the true
+	//    error, rather than aborting here on a cosmetic call.
+	awsInfo := retrieve.AWSInfo{Region: r.cfg.Region, HostID: r.cfg.HostID}
+	if got, idErr := r.callerIdentity(ctx); idErr == nil {
+		awsInfo = got
+	} else {
+		awsInfo.CallerARN = "(caller ARN unavailable for display)"
+		log.Printf("conjuriam: display GetCallerIdentity failed (non-fatal): %v", idErr)
 	}
-	res.AWS = &aws
-	res.Identity = aws.CallerARN
+	res.AWS = &awsInfo
+	res.Identity = awsInfo.CallerARN
 
 	// 2+3) Authenticate to Conjur authn-iam and read the variable. The client
 	//      signs sts:GetCallerIdentity, posts the signed headers to Conjur, and
-	//      exchanges the verified identity for a short-lived access token.
+	//      exchanges the verified identity for a short-lived access token. This is
+	//      the step that actually matters — it needs creds + Conjur reachability.
 	secret, err := r.authenticateAndRead(r.cfg.SecretPath)
 	if err != nil {
 		res.Steps = stepsThrough(t0, 1, err.Error())
