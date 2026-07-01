@@ -167,6 +167,66 @@ make webapp-deploy
 secret. Because both tabs read the same variable, the masked `sha256` summary
 matches the JWT tab — proof two auth paths reached the same secret.
 
+## 3b. Enable the **Central Credential Provider (CCP)** demo
+
+The `/credential-providers` page runs four AIMWebService scenarios over mTLS:
+**1** authorized retrieval, **2** no-cert (authn deny), **3** denied safe (authz
+deny), **4** dual-account (active-account resolution). Simulated until configured.
+
+**Step 1 — client cert.** Generate a self-signed client cert + store the Secret,
+and grab its identity to register in CyberArk:
+```bash
+make ccp-cert        # prints CN + Serial (hex) + SHA1 + the full public PEM (ccp-client.crt)
+```
+
+**Step 2 — CyberArk side.**
+- **IIS**: on the AIMWebService site, enable **Require SSL** + client certificates
+  (this is what makes IIS request the cert; without it you get `APPEX003E`).
+- Import the **public cert** (`ccp-client.crt`) into the CCP host's **Trusted Root**
+  store (self-signed ⇒ it's its own CA).
+- On the **Application** (`AppID`): add **certificate** authentication mapped by
+  **Serial Number** (and/or CN); grant it the authorized Safe. For scenario 3,
+  have a Safe it is NOT permitted for; for scenario 4, a dual-account pair.
+
+**Step 3 — firewall.** Allow inbound `443/tcp` from the demo host's egress IP —
+both the host and the webapp pod egress as it:
+```bash
+scripts/host-exec.sh "curl -s https://checkip.amazonaws.com"   # e.g. 3.143.218.152/32
+```
+
+**Step 4 — `.env`** (injected on deploy):
+```sh
+export CCP_BASE_URL="https://<ccp-host-or-ip>"
+export CCP_APP_ID="<app id>"
+export CCP_SAFE="<authorized safe>"        CCP_OBJECT="<object>"
+export CCP_DENIED_SAFE="<no-access safe>"  CCP_DENIED_OBJECT="<object>"   # scenario 3
+export CCP_DUAL_QUERY="Safe=<safe>;VirtualUsername=<name>"                # scenario 4
+export CCP_INSECURE_SKIP_VERIFY="true"     # CCP server uses an internal/self-signed CA
+```
+
+**Step 5 — deploy:** `make webapp-deploy`, then open `/credential-providers`.
+
+### CCP gotchas (Go client vs IIS/AIMWebService)
+
+These were all needed to make the Go webapp behave like a working `curl --cert` /
+PowerShell `-Certificate`. Each shows up as a *different* error as you go deeper:
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `APPEX003E` (generic CP error) | IIS not requesting/forwarding the client cert | enable **Require SSL** + client certs on the AIMWebService site |
+| `connection reset by peer` mid-TLS (curl works) | Go offers HTTP/2 (ALPN `h2`); the IIS/LB/WAF tier resets on it | client forces HTTP/1.1 (`ForceAttemptHTTP2=false` + empty `TLSNextProto`) — in `ccp` package |
+| `local error: tls: no renegotiation` | IIS requests the cert via TLS **renegotiation**; Go refuses by default | `Renegotiation=RenegotiateFreelyAsClient` — in `ccp` package |
+| `x509: certificate signed by unknown authority` / expired | CCP server cert is internal-CA/self-signed (or was expired) | `CCP_INSECURE_SKIP_VERIFY=true` (demo); renew the server cert if expired |
+| cert-auth denied while curl works | Go's `Certificates` only sends a cert matching the server's acceptable-CA list; self-signed doesn't match | client uses `GetClientCertificate` to present unconditionally — in `ccp` package |
+
+Handy diagnostics (run on the target host; the cert/key land in `/tmp`):
+```bash
+# does presenting the cert to the real endpoint work? (mimics the webapp)
+scripts/host-exec.sh 'CCP=<ip>; APP=<app>; SAFE=<safe>; OBJ=<obj>; kubectl -n swa-demo get secret ccp-client-tls -o jsonpath="{.data.tls\.crt}" | base64 -d > /tmp/c.crt; kubectl -n swa-demo get secret ccp-client-tls -o jsonpath="{.data.tls\.key}" | base64 -d > /tmp/c.key; curl -sk --cert /tmp/c.crt --key /tmp/c.key "https://$CCP/AIMWebService/api/Accounts?AppID=$APP&Safe=$SAFE&Object=$OBJ" -w "\nHTTP %{http_code}\n"'
+# read the cert's Serial / CN for the CyberArk mapping
+scripts/host-exec.sh "kubectl -n swa-demo get secret ccp-client-tls -o jsonpath='{.data.tls\.crt}' | base64 -d | openssl x509 -noout -serial -subject -fingerprint -sha1"
+```
+
 ## 4. Tear down
 
 ```bash
