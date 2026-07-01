@@ -96,10 +96,18 @@ func New(cfg Config) (*Client, error) {
 			return nil, fmt.Errorf("load CCP client cert: %w", err)
 		}
 		c.certCN = leafCN(cert)
+		clientCert := cert
 		c.withCert = &http.Client{
 			Timeout: 12 * time.Second,
 			Transport: &http.Transport{TLSClientConfig: &tls.Config{
-				Certificates:       []tls.Certificate{cert},
+				// Present the cert UNCONDITIONALLY. With Certificates alone, Go only
+				// sends the cert when it matches the server's advertised acceptable
+				// CAs — a self-signed client cert usually doesn't, so Go would send
+				// an empty cert and CCP cert-auth would fail. GetClientCertificate
+				// forces it (the equivalent of PowerShell Invoke-RestMethod -Certificate).
+				GetClientCertificate: func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
+					return &clientCert, nil
+				},
 				InsecureSkipVerify: cfg.InsecureSkipVerify, //nolint:gosec // demo only
 			}},
 		}
