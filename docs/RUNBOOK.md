@@ -261,6 +261,7 @@ These are centralized so you only edit them in one place:
 | `helm install` chart not found | chart ref/package missing | place `helm/charts/swa-*.tgz` or set `SWA_*_CHART` |
 | webapp shows "demo (no agent socket)" | socket not mounted / agent down | confirm DaemonSet Running and `/run/swa-agent/api.sock` exists on the node |
 | webapp 502 on `/api/svid` | agent reachable but issuance denied | check node-group workload selectors match `ns=swa-demo, sa=swa-demo-webapp` |
+| Postgres scenario fails: gateway leaf `certificate has expired` (UI mislabels it "SPIFFE ID not allow-listed") | **SWA v1.0.2 bug**: X.509 SVID rotation wedges — server logs `subscriber already exists for: id=<pid>` (subscriber keyed by the hostPID-stable PID; not released before the workload's rotation reconnect). Only the long-lived pg-gateway is hit. | Mitigated: `x509_workload_ttl`=8h (terraform-swa) + the `pg-gateway-recycler` CronJob (`k8s/pg-gateway-recycler.yaml`) rolls pg-gateway every 4h for a fresh PID. To clear a live wedge: `kubectl -n swa-system rollout restart deploy/swa-server` then bounce pg-gateway. Report the subscriber-cleanup bug to CyberArk. |
 | minikube won't start | docker group / resources | re-login for docker group; ensure instance ≥ 4 vCPU / 16 GB |
 | node not Ready | k8s version / driver | check `minikube logs`; pinned to v1.34 (SWA range 1.33–1.35) |
 

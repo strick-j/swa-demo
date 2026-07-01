@@ -50,6 +50,8 @@ deploy_data() {
   log "Applying data plane + scenario workloads (postgres, gateway, untrusted, rogue)"
   kubectl apply -f "${ROOT}/k8s/postgres.yaml"
   kubectl apply -f "${ROOT}/k8s/pg-gateway.yaml"
+  # Recycle pg-gateway on a schedule to dodge the SWA v1.0.2 SVID-rotation wedge.
+  kubectl apply -f "${ROOT}/k8s/pg-gateway-recycler.yaml"
   kubectl apply -f "${ROOT}/k8s/untrusted-app.yaml"
   kubectl apply -f "${ROOT}/k8s/rogue-app.yaml"
   kubectl apply -f "${ROOT}/k8s/foreign-carrier.yaml"

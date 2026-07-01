@@ -1,0 +1,84 @@
+---
+# Workaround for a SWA v1.0.2 X.509-SVID rotation bug (see docs/RUNBOOK.md).
+# The SWA server keys workload SVID stream subscribers by the (hostPID-stable)
+# workload PID and does not release the old subscriber before the workload's
+# rotation reconnect, so a long-lived pod's SVID wedges with
+# "subscriber already exists for: id=<pid>" and then EXPIRES. pg-gateway is the
+# only long-lived workload affected (nothing else gives it a new PID).
+#
+# This CronJob rolls pg-gateway every 4h — well inside the 8h x509_workload_ttl —
+# so the pod always has a fresh PID + cert and never reaches the rotation/wedge
+# point. Remove this file once the SWA server subscriber-cleanup bug is fixed.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pg-gateway-recycler
+  namespace: swa-data
+  labels:
+    app: pg-gateway-recycler
+---
+# Least privilege: get + patch the ONE pg-gateway Deployment (rollout restart
+# does a GET then a strategic-merge PATCH of the restartedAt annotation).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pg-gateway-recycler
+  namespace: swa-data
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["pg-gateway"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pg-gateway-recycler
+  namespace: swa-data
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: pg-gateway-recycler
+subjects:
+  - kind: ServiceAccount
+    name: pg-gateway-recycler
+    namespace: swa-data
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: pg-gateway-recycler
+  namespace: swa-data
+  labels:
+    app: pg-gateway-recycler
+spec:
+  schedule: "0 */4 * * *" # every 4h; 8h TTL -> pod cert always has >=4h left
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 120
+      template:
+        metadata:
+          labels:
+            app: pg-gateway-recycler
+        spec:
+          serviceAccountName: pg-gateway-recycler
+          restartPolicy: Never
+          containers:
+            - name: kubectl
+              # Any small kubectl image works; swap if this one can't be pulled
+              # (e.g. rancher/kubectl:<ver>, alpine/k8s:<ver>).
+              image: bitnami/kubectl:latest
+              imagePullPolicy: IfNotPresent
+              command: ["kubectl", "-n", "swa-data", "rollout", "restart", "deployment/pg-gateway"]
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  cpu: 100m
+                  memory: 64Mi
