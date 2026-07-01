@@ -258,7 +258,7 @@ application's hash/path.
 
 **Prereqs (host).** A JDK (`javac`/`jar` — the CP ships only a JRE, so
 `cp-bridge-install` auto-installs a `-devel` JDK if missing), the CyberArk **Credential Provider**
-installed and running (`aimprv`), and its `JavaPasswordSDK.jar` +
+installed and running (`aimprv`), and its `javapasswordsdk.jar` +
 `libjavapasswordsdk.so` (default `/opt/CARKaim/sdk/`). Install the CP manually, or
 with the CyberArk `cyberark.aam` Ansible collection
 (<https://github.com/cyberark/ansible-security-automation-collection/blob/master/docs/aimprovider.md>);
@@ -268,7 +268,7 @@ automation is optional for a one-off.
 Safe/Object values **default to the CCP demo's** — leave them empty to reuse the
 same objects, or set them to point the CP elsewhere:
 ```sh
-export CP_SDK_JAR="/opt/CARKaim/sdk/JavaPasswordSDK.jar"
+export CP_SDK_JAR="/opt/CARKaim/sdk/javapasswordsdk.jar"
 export CP_RUN_USER=""                 # OS user the bridge runs as (blank = host user)
 export CP_APP_ID="SWA-CP-Demo"        # a hash-auth Application, separate from the CCP one
 export CP_BRIDGE_URL="http://host.minikube.internal:8890"

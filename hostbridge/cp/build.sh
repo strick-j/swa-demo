@@ -8,11 +8,11 @@
 #   cp-rogue.jar    an UNregistered caller (different content + install path)
 #
 # Requires: a JDK (javac/jar) and the SDK jar shipped with the Credential Provider.
-# Usage: CP_SDK_JAR=/opt/CARKaim/sdk/JavaPasswordSDK.jar bash build.sh
+# Usage: CP_SDK_JAR=/opt/CARKaim/sdk/javapasswordsdk.jar bash build.sh
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SDK_JAR="${CP_SDK_JAR:-/opt/CARKaim/sdk/JavaPasswordSDK.jar}"
+SDK_JAR="${CP_SDK_JAR:-/opt/CARKaim/sdk/javapasswordsdk.jar}"
 OUT="${HERE}/out"
 
 if ! command -v javac >/dev/null; then
@@ -20,7 +20,7 @@ if ! command -v javac >/dev/null; then
   exit 1
 fi
 if [[ ! -f "${SDK_JAR}" ]]; then
-  echo "ERROR: JavaPasswordSDK.jar not found at ${SDK_JAR}." >&2
+  echo "ERROR: javapasswordsdk.jar not found at ${SDK_JAR}." >&2
   echo "       Set CP_SDK_JAR to the SDK jar shipped with the Credential Provider." >&2
   exit 1
 fi

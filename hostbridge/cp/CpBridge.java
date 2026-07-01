@@ -21,7 +21,7 @@
 //   CP_SAFE, CP_OBJECT, CP_FOLDER                  (authorized; folder default Root)
 //   CP_DENIED_SAFE, CP_DENIED_OBJECT               (scenario 3)
 //   CP_DUAL_QUERY, CP_DUAL_VIRTUAL                 (scenario 4)
-//   CP_SDK_JAR         JavaPasswordSDK.jar         (default /opt/CARKaim/sdk/JavaPasswordSDK.jar)
+//   CP_SDK_JAR         javapasswordsdk.jar         (default /opt/CARKaim/sdk/javapasswordsdk.jar)
 //   CP_SDK_LIBDIR      dir with libjavapasswordsdk.so (default: dir of CP_SDK_JAR)
 //   CP_CALLER_JAR      registered caller jar       (default /opt/swa-cp/cp-caller.jar)
 //   CP_ROGUE_JAR       unregistered caller jar     (default /opt/swa-cp/rogue/cp-caller.jar)
@@ -85,7 +85,7 @@ public final class CpBridge {
         if (scenario == null) {
             return null;
         }
-        String sdkJar = env("CP_SDK_JAR", "/opt/CARKaim/sdk/JavaPasswordSDK.jar");
+        String sdkJar = env("CP_SDK_JAR", "/opt/CARKaim/sdk/javapasswordsdk.jar");
         String libDir = env("CP_SDK_LIBDIR", parentDir(sdkJar));
         String callerJar = env("CP_CALLER_JAR", "/opt/swa-cp/cp-caller.jar");
         String rogueJar = env("CP_ROGUE_JAR", "/opt/swa-cp/rogue/cp-caller.jar");

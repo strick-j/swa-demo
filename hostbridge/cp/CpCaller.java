@@ -11,18 +11,19 @@
 // scenario demonstrates.
 //
 // Usage:
-//   java -cp JavaPasswordSDK.jar:cp-caller.jar CpCaller \
+//   java -cp javapasswordsdk.jar:cp-caller.jar CpCaller \
 //        --appid <AppID> --safe <Safe> --object <Object> [--folder Root]
-//   java -cp JavaPasswordSDK.jar:cp-caller.jar CpCaller \
+//   java -cp javapasswordsdk.jar:cp-caller.jar CpCaller \
 //        --appid <AppID> --query "Safe=<s>;Folder=Root;Object=<o>" [--virtual <name>]
 //
 // Build against the SDK jar shipped with the Credential Provider, typically
-//   /opt/CARKaim/sdk/JavaPasswordSDK.jar
+//   /opt/CARKaim/sdk/javapasswordsdk.jar
 
-import com.cyberark.components.cp.javasdk.PSDKPassword;
-import com.cyberark.components.cp.javasdk.PSDKPasswordRequest;
-import com.cyberark.components.cp.javasdk.PasswordSDK;
-import com.cyberark.components.cp.javasdk.PSDKException;
+import javapasswordsdk.PSDKPassword;
+import javapasswordsdk.PSDKPasswordRequest;
+import javapasswordsdk.PasswordSDK;
+import javapasswordsdk.PasswordQueryFormat;
+import javapasswordsdk.exceptions.PSDKException;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -30,6 +31,8 @@ import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public final class CpCaller {
 
@@ -52,7 +55,7 @@ public final class CpCaller {
             req.setAppID(require(a, "appid"));
             if (a.containsKey("query")) {
                 req.setQuery(a.get("query"));
-                req.setQueryFormat(PSDKPasswordRequest.QUERY_FORMAT_EXACT);
+                req.setQueryFormat(PasswordQueryFormat.EXACT);
             } else {
                 req.setSafe(require(a, "safe"));
                 req.setFolder(a.getOrDefault("folder", "Root"));
@@ -78,9 +81,15 @@ public final class CpCaller {
             }
             out.put("ok", "true");
         } catch (PSDKException e) {
+            // This SDK's PSDKException exposes no getErrorCode(); the CyberArk code
+            // (e.g. APPAP008E) is in the message text — extract it for the UI.
+            String msg = e.getMessage();
+            if (msg == null || msg.isEmpty()) {
+                msg = e.toString();
+            }
             out.put("ok", "false");
-            out.put("error_code", nullToEmpty(e.getErrorCode()));
-            out.put("error", oneLine(e.getMessage()));
+            out.put("error_code", errorCode(msg));
+            out.put("error", oneLine(msg));
         } catch (Throwable t) {
             out.put("ok", "false");
             out.put("error", oneLine(t.toString()));
@@ -161,6 +170,18 @@ public final class CpCaller {
             return "";
         }
         return secret.length() <= PREVIEW_LEN ? secret : secret.substring(0, PREVIEW_LEN);
+    }
+
+    // errorCode pulls a CyberArk error code (e.g. APPAP008E, CASVL010E) out of a
+    // PSDK exception message; the SDK surfaces it only in the message text.
+    private static final Pattern CODE = Pattern.compile("[A-Z]{3,7}[0-9]{2,4}[A-Z]");
+
+    private static String errorCode(String msg) {
+        if (msg == null) {
+            return "";
+        }
+        Matcher m = CODE.matcher(msg);
+        return m.find() ? m.group() : "";
     }
 
     private static String nullToEmpty(String s) {

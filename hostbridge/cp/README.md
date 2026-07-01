@@ -25,7 +25,7 @@ binaries on the host — not something a pod can do directly.
 ## Install
 
 From the control machine: `make cp-bridge-install` (runs `scripts/install-cp-bridge.sh`
-on the host). Requires a JDK and the Credential Provider (with `JavaPasswordSDK.jar`
+on the host). Requires a JDK and the Credential Provider (with `javapasswordsdk.jar`
 + `libjavapasswordsdk.so`). See **RUNBOOK.md § 3c** for the CyberArk-side registration.
 
 To get the **application hash** to register in PVWA, use CyberArk's own utility

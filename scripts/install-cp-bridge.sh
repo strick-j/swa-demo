@@ -9,7 +9,7 @@
 # coordinates survive re-runs.
 #
 # Env:
-#   CP_SDK_JAR    JavaPasswordSDK.jar (default /opt/CARKaim/sdk/JavaPasswordSDK.jar)
+#   CP_SDK_JAR    javapasswordsdk.jar (default /opt/CARKaim/sdk/javapasswordsdk.jar)
 #   CP_RUN_USER   OS user the service runs as, and the user registered on the CP
 #                 Application's OS-user characteristic (default: current user)
 set -euo pipefail
@@ -18,7 +18,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "${HERE}/.." && pwd)"
 BRIDGE_SRC="${ROOT}/hostbridge/cp"
 
-CP_SDK_JAR="${CP_SDK_JAR:-/opt/CARKaim/sdk/JavaPasswordSDK.jar}"
+CP_SDK_JAR="${CP_SDK_JAR:-/opt/CARKaim/sdk/javapasswordsdk.jar}"
 CP_RUN_USER="${CP_RUN_USER:-$(id -un)}"
 PREFIX="/opt/swa-cp"
 ENV_DIR="/etc/swa-cp"
