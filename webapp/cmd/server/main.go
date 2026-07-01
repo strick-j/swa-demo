@@ -17,6 +17,7 @@ import (
 	"github.com/strick-j/swa-demo/webapp/internal/retrieve/ccp"
 	"github.com/strick-j/swa-demo/webapp/internal/retrieve/conjuriam"
 	"github.com/strick-j/swa-demo/webapp/internal/retrieve/conjurjwt"
+	"github.com/strick-j/swa-demo/webapp/internal/retrieve/cp"
 	"github.com/strick-j/swa-demo/webapp/internal/spiffe"
 	"github.com/strick-j/swa-demo/webapp/internal/svid"
 	"github.com/strick-j/swa-demo/webapp/internal/ui"
@@ -51,6 +52,8 @@ func main() {
 	registry, jwtSimulated, iamSimulated := buildRegistry(cfg, fetcher)
 	ccpClient := buildCCP(cfg)
 	registry.Register(ccpClient) // flips the CCP catalog card to available
+	cpClient := buildCP(cfg)
+	registry.Register(cpClient) // flips the CP catalog card to available
 
 	srv := handlers.New(handlers.Deps{
 		Fetcher:  fetcher,
@@ -58,6 +61,7 @@ func main() {
 		Foreign:  fp,
 		Registry: registry,
 		CCP:      ccpClient,
+		CP:       cpClient,
 		Pages:    pages,
 		Static:   static,
 		Cfg: handlers.Config{
@@ -142,6 +146,11 @@ type config struct {
 	ccpCertFile     string
 	ccpKeyFile      string
 	ccpInsecure     bool
+	// CP (local Credential Provider) config. The webapp reaches the host-installed
+	// CP through the cp-bridge; the bridge holds the safe/object/dual coordinates.
+	// Simulated/error until CP_BRIDGE_URL is set. Live-only by design.
+	cpBridgeURL string
+	cpAppID     string
 }
 
 func loadConfig() config {
@@ -189,6 +198,9 @@ func loadConfig() config {
 		ccpCertFile:     env("CCP_CLIENT_CERT", ""),
 		ccpKeyFile:      env("CCP_CLIENT_KEY", ""),
 		ccpInsecure:     strings.EqualFold(env("CCP_INSECURE_SKIP_VERIFY", "false"), "true"),
+
+		cpBridgeURL: env("CP_BRIDGE_URL", ""),
+		cpAppID:     env("CP_APP_ID", ""),
 	}
 	return c
 }
@@ -207,11 +219,15 @@ func loadPages() (handlers.Pages, error) {
 	if err != nil {
 		return handlers.Pages{}, err
 	}
-	cp, err := ui.Page("credential-providers.html")
+	ccpPage, err := ui.Page("credential-providers.html")
 	if err != nil {
 		return handlers.Pages{}, err
 	}
-	return handlers.Pages{Landing: landing, SWA: swa, SecretsManager: sm, CredentialProviders: cp}, nil
+	cpPage, err := ui.Page("credential-provider.html")
+	if err != nil {
+		return handlers.Pages{}, err
+	}
+	return handlers.Pages{Landing: landing, SWA: swa, SecretsManager: sm, CredentialProviders: ccpPage, CredentialProvider: cpPage}, nil
 }
 
 // buildCCP wires the Central Credential Provider client. It runs live when not in
@@ -240,6 +256,19 @@ func buildCCP(cfg config) *ccp.Client {
 		client, _ = ccp.New(ccfg)
 	}
 	return client
+}
+
+// buildCP wires the local Credential Provider client. It runs live when not in
+// demo mode and the cp-bridge URL is set; otherwise every scenario returns the
+// explicit not-configured error (this mode has no synthesized happy path — the
+// credential really comes from the host CP).
+func buildCP(cfg config) *cp.Client {
+	live := !cfg.demoMode && cfg.cpBridgeURL != ""
+	return cp.New(cp.Config{
+		BridgeURL: cfg.cpBridgeURL,
+		AppID:     cfg.cpAppID,
+		Live:      live,
+	})
 }
 
 // buildRegistry wires the retrievers and returns the registry plus whether the

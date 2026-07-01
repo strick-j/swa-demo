@@ -4,16 +4,20 @@ import "strings"
 
 import "testing"
 
-func TestMask_NeverLeaksPlaintext(t *testing.T) {
+func TestMask_RevealsPreviewHidesRemainder(t *testing.T) {
 	raw := "super-secret-password-123"
 	masked := Mask([]byte(raw))
-	if strings.Contains(masked, raw) {
-		t.Fatalf("masked output contains the raw secret: %q", masked)
+	// The leading PreviewLen chars ARE shown (to match against the Vault/Conjur).
+	if !strings.HasPrefix(masked, raw[:PreviewLen]) {
+		t.Errorf("masked output should start with the %d-char preview %q: %q", PreviewLen, raw[:PreviewLen], masked)
 	}
-	// Must not reveal even a substring of the secret (no last-4, etc.).
-	for _, frag := range []string{"super", "secret", "123", "word"} {
+	// The full secret and everything past the preview must NOT appear.
+	if strings.Contains(masked, raw) {
+		t.Fatalf("masked output contains the full secret: %q", masked)
+	}
+	for _, frag := range []string{"secret", "password", "123"} {
 		if strings.Contains(masked, frag) {
-			t.Errorf("masked output leaked fragment %q: %q", frag, masked)
+			t.Errorf("masked output leaked hidden fragment %q: %q", frag, masked)
 		}
 	}
 	if !strings.Contains(masked, "sha256") || !strings.Contains(masked, "chars") {

@@ -147,7 +147,7 @@ swa: ## Bridge authn_id to the target + Helm-install SWA server + agent there
 # ---------------------------------------------------------------------------
 # Phase 4 — Demo webapp
 # ---------------------------------------------------------------------------
-.PHONY: stage ccp-cert webapp-build webapp-test webapp-deploy
+.PHONY: stage ccp-cert cp-bridge-install cp-app-hash webapp-build webapp-test webapp-deploy
 stage: ## (Target host) rsync the project source to ~/swa-demo (no image/chart sync)
 	$(ENVSH); $(PICK_ANSIBLE); "$$AP" -i $(INVENTORY) $(ANSIBLE_DIR)/site.yml --tags swa \
 	  -e images_s3_uri="$$SWA_IMAGES_S3_URI" \
@@ -155,6 +155,12 @@ stage: ## (Target host) rsync the project source to ~/swa-demo (no image/chart s
 
 ccp-cert: stage ## (Target) generate the CCP client cert + store Secret ccp-client-tls
 	bash scripts/host-exec.sh "bash scripts/gen-ccp-cert.sh"
+
+cp-bridge-install: stage ## (Target) build + install the CP host bridge as a systemd service
+	$(ENVSH); bash scripts/host-exec.sh "CP_SDK_JAR='$$CP_SDK_JAR' CP_RUN_USER='$$CP_RUN_USER' bash scripts/install-cp-bridge.sh"
+
+cp-app-hash: ## (Target) compute the CyberArk app hash of the caller jar (JavaAIMGetAppInfo) to register in PVWA
+	$(ENVSH); bash scripts/host-exec.sh "CP_JAVA_AIM_JAR='$$CP_JAVA_AIM_JAR' bash scripts/cp-app-hash.sh"
 
 # build/deploy run ON the target but from its staged ~/swa-demo copy, so both
 # depend on `stage` to push current source first (otherwise the target rebuilds
@@ -166,7 +172,7 @@ webapp-test: ## Run Go unit tests with coverage (local)
 	cd $(WEBAPP_DIR) && go test ./... -cover
 
 webapp-deploy: stage ## Deploy webapp manifests + inject Conjur/CCP live config from .env
-	$(ENVSH); bash scripts/host-exec.sh "CONJUR_APPLIANCE_URL='$$CONJUR_APPLIANCE_URL' CONJUR_ACCOUNT='$$CONJUR_ACCOUNT' CONJUR_AUTHN_JWT_SERVICE_ID='$$CONJUR_AUTHN_JWT_SERVICE_ID' CONJUR_JWT_SECRET_PATH='$$CONJUR_JWT_SECRET_PATH' CONJUR_JWT_AUDIENCE='$$CONJUR_JWT_AUDIENCE' CONJUR_AUTHN_IAM_SERVICE_ID='$$CONJUR_AUTHN_IAM_SERVICE_ID' CONJUR_IAM_HOST_ID='$$CONJUR_IAM_HOST_ID' CONJUR_IAM_SECRET_PATH='$$CONJUR_IAM_SECRET_PATH' AWS_REGION='$$AWS_REGION' CCP_BASE_URL='$$CCP_BASE_URL' CCP_APP_ID='$$CCP_APP_ID' CCP_SAFE='$$CCP_SAFE' CCP_OBJECT='$$CCP_OBJECT' CCP_DENIED_SAFE='$$CCP_DENIED_SAFE' CCP_DENIED_OBJECT='$$CCP_DENIED_OBJECT' CCP_DUAL_QUERY='$$CCP_DUAL_QUERY' CCP_INSECURE_SKIP_VERIFY='$$CCP_INSECURE_SKIP_VERIFY' bash scripts/deploy-webapp.sh deploy"
+	$(ENVSH); bash scripts/host-exec.sh "CONJUR_APPLIANCE_URL='$$CONJUR_APPLIANCE_URL' CONJUR_ACCOUNT='$$CONJUR_ACCOUNT' CONJUR_AUTHN_JWT_SERVICE_ID='$$CONJUR_AUTHN_JWT_SERVICE_ID' CONJUR_JWT_SECRET_PATH='$$CONJUR_JWT_SECRET_PATH' CONJUR_JWT_AUDIENCE='$$CONJUR_JWT_AUDIENCE' CONJUR_AUTHN_IAM_SERVICE_ID='$$CONJUR_AUTHN_IAM_SERVICE_ID' CONJUR_IAM_HOST_ID='$$CONJUR_IAM_HOST_ID' CONJUR_IAM_SECRET_PATH='$$CONJUR_IAM_SECRET_PATH' AWS_REGION='$$AWS_REGION' CCP_BASE_URL='$$CCP_BASE_URL' CCP_APP_ID='$$CCP_APP_ID' CCP_SAFE='$$CCP_SAFE' CCP_OBJECT='$$CCP_OBJECT' CCP_DENIED_SAFE='$$CCP_DENIED_SAFE' CCP_DENIED_OBJECT='$$CCP_DENIED_OBJECT' CCP_DUAL_QUERY='$$CCP_DUAL_QUERY' CCP_INSECURE_SKIP_VERIFY='$$CCP_INSECURE_SKIP_VERIFY' CP_BRIDGE_URL='$$CP_BRIDGE_URL' CP_APP_ID='$$CP_APP_ID' bash scripts/deploy-webapp.sh deploy"
 
 # ---------------------------------------------------------------------------
 # Phase 5 — End to end

@@ -65,7 +65,7 @@ func (r *Registry) Catalog() []FamilyInfo {
 			Title:   "Credential Providers",
 			Tagline: "Vault-backed retrieval — an agent on the host (CP) or a REST call to a Central Credential Provider (CCP).",
 			Modes: []ModeInfo{
-				{Mode: "cp", Label: "Credential Provider", Auth: "host identity", Summary: "Agent on the host (not a container) serves cached Vault credentials via the local SDK/CLI.", Available: false},
+				{Mode: "cp", Label: "Credential Provider", Auth: "application hash", Href: "/cp", Summary: "Agent on the host serves cached Vault credentials via the Java SDK. Four scenarios — authorized, invalid hash (authn deny), denied safe (authz), dual-account.", Available: false},
 				{Mode: "ccp", Label: "Central Credential Provider", Auth: "client cert / allowed machine", Href: "/credential-providers", Summary: "Client-cert REST call to AIMWebService: four scenarios — authorized, no-cert (authn denied), denied safe (authz), dual-account.", Available: false},
 			},
 		},

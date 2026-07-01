@@ -1,0 +1,21 @@
+# systemd unit for the swa-demo CP bridge. Installed by scripts/install-cp-bridge.sh,
+# which substitutes __CP_RUN_USER__ with the OS user registered on the CP Application
+# (the caller inherits this user, so the CP's OS-user characteristic must match it).
+[Unit]
+Description=swa-demo CyberArk Credential Provider bridge
+After=network-online.target aimprv.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__CP_RUN_USER__
+EnvironmentFile=/etc/swa-cp/cp-bridge.env
+ExecStart=/usr/bin/env java -jar /opt/swa-cp/cp-bridge.jar
+Restart=on-failure
+RestartSec=3
+# The bridge only spawns the caller jars and binds a localhost-reachable port.
+NoNewPrivileges=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

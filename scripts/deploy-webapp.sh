@@ -82,7 +82,8 @@ inject_conjur_env() {
            CONJUR_AUTHN_IAM_SERVICE_ID CONJUR_IAM_HOST_ID CONJUR_IAM_SECRET_PATH \
            AWS_REGION \
            CCP_BASE_URL CCP_APP_ID CCP_SAFE CCP_OBJECT CCP_DENIED_SAFE \
-           CCP_DENIED_OBJECT CCP_DUAL_QUERY CCP_INSECURE_SKIP_VERIFY; do
+           CCP_DENIED_OBJECT CCP_DUAL_QUERY CCP_INSECURE_SKIP_VERIFY \
+           CP_BRIDGE_URL CP_APP_ID; do
     val="${!v:-}"
     [[ -n "${val}" ]] && { args+=("${v}=${val}"); names+=("${v}"); }
   done

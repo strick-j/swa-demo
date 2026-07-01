@@ -59,8 +59,27 @@ type CCPInfo struct {
 	DualActive      string `json:"dual_active,omitempty"`      // active account + status/index the pair resolved to
 }
 
-// Result is the outcome of a retrieval attempt. It deliberately carries NO raw
-// secret — only Masked, a non-reversible summary built by Mask().
+// CPInfo is the request/identity context for a (local) CyberArk Credential
+// Provider retrieval via the host-side Java caller. Unlike the CCP, the CP
+// authenticates the CALLING APPLICATION by its characteristics (application
+// hash, path, OS user) rather than a client certificate. It carries only
+// non-secret metadata so the UI can show which application asked and what came
+// back alongside the (masked) secret.
+type CPInfo struct {
+	AppID           string `json:"app_id"`                     // the CP Application id
+	AppHash         string `json:"app_hash,omitempty"`         // hash the CP authenticated the caller by (short prefix)
+	CallerPath      string `json:"caller_path,omitempty"`      // path of the calling application (the jar)
+	OSUser          string `json:"os_user,omitempty"`          // OS user the caller ran as
+	Safe            string `json:"safe,omitempty"`             // safe queried
+	Query           string `json:"query,omitempty"`            // object name or dual-account query
+	Account         string `json:"account,omitempty"`          // returned account UserName (NOT the secret)
+	Address         string `json:"address,omitempty"`          // returned account Address/target
+	VirtualUsername string `json:"virtual_username,omitempty"` // dual-account fronting identity
+	DualActive      string `json:"dual_active,omitempty"`      // active account + status/index the pair resolved to
+}
+
+// Result is the outcome of a retrieval attempt. It never carries the FULL secret
+// — only Masked, a short leading preview plus length + SHA-256 built by Mask().
 type Result struct {
 	Family     Family      `json:"family"`
 	Mode       string      `json:"mode"`        // stable id, e.g. "conjur-jwt"
@@ -72,6 +91,7 @@ type Result struct {
 	JWT        *JWTInfo    `json:"jwt,omitempty"`
 	AWS        *AWSInfo    `json:"aws,omitempty"`
 	CCP        *CCPInfo    `json:"ccp,omitempty"`
+	CP         *CPInfo     `json:"cp,omitempty"`
 	Retrieved  bool        `json:"retrieved"`
 	Simulated  bool        `json:"simulated"` // true when no live backend was configured
 	Steps      []svid.Step `json:"steps"`
@@ -86,14 +106,54 @@ type Retriever interface {
 	Retrieve(ctx context.Context) Result
 }
 
-// Mask turns a raw secret into a non-reversible summary safe for display and
-// logs: its length and a short SHA-256 prefix. It never reveals any plaintext
-// (not even last-4), so it proves a real, consistent value was fetched without
-// leaking content. Callers must discard the raw value immediately after.
+// PreviewLen is how many leading characters of a secret are shown in a masked
+// summary. A short preview lets an operator eyeball the value against the Vault /
+// Conjur (and see it change across a rotation) while the remainder stays hidden.
+const PreviewLen = 6
+
+// Mask turns a raw secret into a summary safe for display and logs: a short
+// leading preview (first PreviewLen chars), its length, and a short SHA-256
+// prefix. It reveals only the preview — the rest of the value never appears — so
+// it both proves a real, consistent value was fetched AND can be matched by eye
+// against the source of truth. Callers must discard the raw value immediately
+// after.
 func Mask(raw []byte) string {
 	if len(raw) == 0 {
 		return "(empty)"
 	}
 	sum := sha256.Sum256(raw)
-	return fmt.Sprintf("•••• %d chars · sha256 %s…", len(raw), hex.EncodeToString(sum[:])[:6])
+	return MaskSummary(len(raw), hex.EncodeToString(sum[:]), Preview(raw))
+}
+
+// Preview returns the first PreviewLen characters of raw (fewer if shorter). It
+// is the only plaintext a masked summary exposes.
+func Preview(raw []byte) string {
+	if len(raw) <= PreviewLen {
+		return string(raw)
+	}
+	return string(raw[:PreviewLen])
+}
+
+// MaskSummary builds the same summary as Mask from a length, a hex SHA-256, and a
+// short plaintext preview that were computed elsewhere. This lets a retriever
+// whose backend runs off-process (e.g. the CP host bridge, which hashes the
+// secret on the host and returns only its length, digest, and PreviewLen-char
+// preview) present an identical summary WITHOUT the full secret crossing the
+// wire. n<=0 or an empty digest yields the empty marker.
+func MaskSummary(n int, sha256hex, preview string) string {
+	if n <= 0 || sha256hex == "" {
+		return "(empty)"
+	}
+	if len(sha256hex) > 6 {
+		sha256hex = sha256hex[:6]
+	}
+	// Show the preview, then "…" only when there is more value beyond it.
+	lead := "••••"
+	if preview != "" {
+		lead = preview
+		if n > len([]rune(preview)) {
+			lead += "…"
+		}
+	}
+	return fmt.Sprintf("%s %d chars · sha256 %s…", lead, n, sha256hex)
 }

@@ -227,6 +227,85 @@ scripts/host-exec.sh 'CCP=<ip>; APP=<app>; SAFE=<safe>; OBJ=<obj>; kubectl -n sw
 scripts/host-exec.sh "kubectl -n swa-demo get secret ccp-client-tls -o jsonpath='{.data.tls\.crt}' | base64 -d | openssl x509 -noout -serial -subject -fingerprint -sha1"
 ```
 
+## 3c. Enable the **Credential Provider (CP)** demo
+
+The `/cp` page runs four scenarios against a Credential Provider **installed on the
+host** (not a container): **1** authorized retrieval, **2** invalid hash (authn
+deny), **3** denied safe (authz deny), **4** dual-account. Unlike the CCP, the CP
+authenticates the **calling application** by its characteristics (application
+**hash** + path + OS user) rather than a client certificate.
+
+**Architecture.** The webapp runs in a pod and cannot load the host SDK, so it
+POSTs a scenario to a host **cp-bridge** (a systemd service) at
+`host.minikube.internal:8890`. The bridge runs the matching Java caller as a
+subprocess — so each scenario's calling application has its own hash — and relays
+the caller's JSON. The secret is hashed on the host; only its length + digest
+cross the bridge, so the raw credential never leaves the host.
+
+```
+pod (Go cp retriever)  ──HTTP──►  cp-bridge (host)  ──exec──►  cp-caller.jar ─┐
+   POST /api/cp                    host.minikube.internal:8890   (registered)  │ JavaPasswordSDK
+                                                      └──exec──►  rogue jar ────┤   │
+                                                                (unregistered)  │   ▼
+                                                                                └► Credential Provider
+```
+
+**Two callers = the hash factor.** `build.sh` produces `cp-caller.jar` (its hash
+is registered on the CP Application) and `cp-rogue.jar` (different content,
+installed at a different path, **not** registered). Scenario 2 runs the rogue jar
+with the same App/Safe as scenario 1 — the CP rejects it on the calling
+application's hash/path.
+
+**Prereqs (host).** A JDK (`javac`/`jar`), the CyberArk **Credential Provider**
+installed and running (`aimprv`), and its `JavaPasswordSDK.jar` +
+`libjavapasswordsdk.so` (default `/opt/CARKaim/sdk/`). Install the CP manually, or
+with the CyberArk `cyberark.aam` Ansible collection
+(<https://github.com/cyberark/ansible-security-automation-collection/blob/master/docs/aimprovider.md>);
+automation is optional for a one-off.
+
+**Step 1 — install the bridge (host).** Sets `.env` `CP_SDK_JAR` / `CP_RUN_USER`,
+then:
+```bash
+make cp-bridge-install     # builds jars, installs /opt/swa-cp + systemd cp-bridge, starts it
+```
+
+**Step 2 — CyberArk side.**
+- Create the CP **Application** (e.g. `SWA-CP-Demo`).
+- Get the **application hash** with CyberArk's `JavaAIMGetAppInfo` utility (this is
+  CyberArk's own algorithm — not a plain sha256; the SHA-256 `build.sh` prints is
+  only the illustrative UI fingerprint):
+  ```bash
+  make cp-app-hash            # runs /opt/CARKaim/bin/javaaimgetappinfo.jar on cp-caller.jar
+  # add --rogue to confirm the rogue jar hashes differently:
+  scripts/host-exec.sh "bash scripts/cp-app-hash.sh --rogue"
+  ```
+- Add **authentication** characteristics on the Application: the **hash** from
+  above, the **OS user** the bridge runs as, and the **path**
+  `/opt/swa-cp/cp-caller.jar`. Do **not** register `cp-rogue.jar`.
+- Grant the Application the authorized **Safe** (scenarios 1, 2, 4). For scenario 3
+  have a Safe it is **not** permitted for; for scenario 4 a **dual-account** pair.
+Edit the seeded `/etc/swa-cp/cp-bridge.env` with your App/Safe/Object/dual values
+(see `hostbridge/cp/cp-bridge.env.example`) and `sudo systemctl restart cp-bridge`.
+
+**Step 3 — `.env`** (injected on deploy):
+```sh
+export CP_BRIDGE_URL="http://host.minikube.internal:8890"
+export CP_APP_ID="SWA-CP-Demo"
+```
+
+**Step 4 — deploy:** `make webapp-deploy`, then open `/cp`.
+
+### CP diagnostics
+
+```bash
+# bridge health + a scenario, from the host
+scripts/host-exec.sh "systemctl --no-pager status cp-bridge | head; curl -s localhost:8890/healthz; echo; curl -s -XPOST 'localhost:8890/cp?scenario=authorized'"
+# does the POD reach the bridge? (host.minikube.internal must resolve in-cluster)
+scripts/host-exec.sh "kubectl -n swa-demo exec deploy/swa-demo-webapp -- sh -c 'wget -qO- --post-data= http://host.minikube.internal:8890/healthz'"
+# tail the caller/CP errors
+scripts/host-exec.sh "journalctl -u cp-bridge --no-pager -n 50"
+```
+
 ## 4. Tear down
 
 ```bash
@@ -262,6 +341,10 @@ These are centralized so you only edit them in one place:
 | webapp shows "demo (no agent socket)" | socket not mounted / agent down | confirm DaemonSet Running and `/run/swa-agent/api.sock` exists on the node |
 | webapp 502 on `/api/svid` | agent reachable but issuance denied | check node-group workload selectors match `ns=swa-demo, sa=swa-demo-webapp` |
 | Postgres scenario fails: gateway leaf `certificate has expired` (UI mislabels it "SPIFFE ID not allow-listed") | **SWA v1.0.2 bug**: X.509 SVID rotation wedges — server logs `subscriber already exists for: id=<pid>` (subscriber keyed by the hostPID-stable PID; not released before the workload's rotation reconnect). Only the long-lived pg-gateway is hit. | Mitigated: `x509_workload_ttl`=8h (terraform-swa) + the `pg-gateway-recycler` CronJob (`k8s/pg-gateway-recycler.yaml`) rolls pg-gateway every 4h for a fresh PID. To clear a live wedge: `kubectl -n swa-system rollout restart deploy/swa-server` then bounce pg-gateway. Report the subscriber-cleanup bug to CyberArk. |
+| CP page: "CP bridge not configured" | `CP_BRIDGE_URL` empty on the pod | set it in `.env`, `make webapp-deploy`; confirm with `kubectl -n swa-demo exec deploy/swa-demo-webapp -- env \| grep CP_BRIDGE` |
+| CP page: "cp-bridge unreachable" | pod can't reach the host, or bridge down | `systemctl status cp-bridge`; check the pod resolves `host.minikube.internal` (see CP diagnostics); ensure the SG/host firewall allows the pod→host:8890 path |
+| CP scenario 1 denied (`APPAP` error) though hash is registered | OS-user / path characteristic mismatch, or CP not running | ensure `cp-bridge` `User=` matches the CP App's OS-user; jar path is `/opt/swa-cp/cp-caller.jar`; `aimprv` is up; re-check the registered hash |
+| CP scenario 2 unexpectedly succeeds | rogue jar's hash/path got registered | it must stay unregistered at `/opt/swa-cp/rogue/cp-caller.jar` — do not add it to the App |
 | minikube won't start | docker group / resources | re-login for docker group; ensure instance ≥ 4 vCPU / 16 GB |
 | node not Ready | k8s version / driver | check `minikube logs`; pinned to v1.34 (SWA range 1.33–1.35) |
 

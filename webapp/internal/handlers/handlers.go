@@ -14,6 +14,7 @@ import (
 	"github.com/strick-j/swa-demo/webapp/internal/foreign"
 	"github.com/strick-j/swa-demo/webapp/internal/retrieve"
 	"github.com/strick-j/swa-demo/webapp/internal/retrieve/ccp"
+	"github.com/strick-j/swa-demo/webapp/internal/retrieve/cp"
 	"github.com/strick-j/swa-demo/webapp/internal/svid"
 )
 
@@ -63,17 +64,19 @@ type Pages struct {
 	Landing             *template.Template
 	SWA                 *template.Template
 	SecretsManager      *template.Template
-	CredentialProviders *template.Template
+	CredentialProviders *template.Template // CCP (AIMWebService)
+	CredentialProvider  *template.Template // CP (local, host bridge)
 }
 
-// Deps are the constructor dependencies for a Server. DB, Foreign, Registry, and
-// CCP may be nil (demo mode / not configured).
+// Deps are the constructor dependencies for a Server. DB, Foreign, Registry,
+// CCP, and CP may be nil (demo mode / not configured).
 type Deps struct {
 	Fetcher  svid.Fetcher
 	DB       DBQuerier
 	Foreign  ForeignProber
 	Registry *retrieve.Registry
 	CCP      *ccp.Client
+	CP       *cp.Client
 	Pages    Pages
 	Static   fs.FS
 	Cfg      Config
@@ -86,6 +89,7 @@ type Server struct {
 	foreign  ForeignProber
 	registry *retrieve.Registry
 	ccp      *ccp.Client
+	cp       *cp.Client
 	pages    Pages
 	static   fs.FS
 	cfg      Config
@@ -99,6 +103,7 @@ func New(d Deps) *Server {
 		foreign:  d.Foreign,
 		registry: d.Registry,
 		ccp:      d.CCP,
+		cp:       d.CP,
 		pages:    d.Pages,
 		static:   d.Static,
 		cfg:      d.Cfg,
@@ -112,9 +117,11 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/swa", s.handleSWA)
 	mux.HandleFunc("/secrets-manager", s.handleSecretsManager)
 	mux.HandleFunc("/credential-providers", s.handleCredentialProviders)
+	mux.HandleFunc("/cp", s.handleCredentialProvider)
 	mux.HandleFunc("/api/catalog", s.handleCatalog)
 	mux.HandleFunc("/api/retrieve", s.handleRetrieve)
 	mux.HandleFunc("/api/ccp", s.handleCCP)
+	mux.HandleFunc("/api/cp", s.handleCP)
 	mux.HandleFunc("/api/svid", s.handleSVID)
 	mux.HandleFunc("/api/scenarios", s.handleScenarios)
 	mux.HandleFunc("/api/db", s.handleDB)
@@ -212,6 +219,35 @@ func (s *Server) handleCCP(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	writeJSON(w, http.StatusOK, s.ccp.Run(ctx, scenario))
+}
+
+// handleCredentialProvider renders the local Credential Provider scenario page.
+func (s *Server) handleCredentialProvider(w http.ResponseWriter, r *http.Request) {
+	data := struct {
+		AppID string
+		Live  bool
+	}{}
+	if s.cp != nil {
+		data.AppID = s.cp.AppID()
+		data.Live = s.cp.Live()
+	}
+	s.renderPage(w, s.pages.CredentialProvider, data)
+}
+
+// handleCP runs one CP scenario (?scenario=authorized|invalid-hash|denied|dual).
+func (s *Server) handleCP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "use POST"})
+		return
+	}
+	if s.cp == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "CP not configured"})
+		return
+	}
+	scenario := cp.Scenario(r.URL.Query().Get("scenario"))
+	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+	defer cancel()
+	writeJSON(w, http.StatusOK, s.cp.Run(ctx, scenario))
 }
 
 // handleCatalog returns the family/mode taxonomy as JSON.
