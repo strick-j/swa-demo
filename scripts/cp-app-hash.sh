@@ -13,9 +13,9 @@
 #   java -jar javaaimgetappinfo.jar GetHash -AppExecutablesPattern="<app>" \
 #     -ClassPath="<lib>" -OnlyExecutablesWithAIMAnnotation=<yes|no> \
 #     -IncludeSubFolders=<yes|no> -OutputDelimiter=";" -LogFileDirectory="<dir>"
-# The caller's fetch() carries @CyberArkGetPassword, so the default uses
-# -OnlyExecutablesWithAIMAnnotation=yes to emit exactly the runtime-checked hash.
-# -ClassPath points at the SDK dir so the annotation + parent SDK types resolve.
+# Defaults to -OnlyExecutablesWithAIMAnnotation=no (as in CyberArk's own example),
+# so the whole caller jar is hashed regardless of annotations. -ClassPath points at
+# the SDK dir so parent SDK types resolve for the hash.
 #
 # Env:
 #   CP_JAVA_AIM_JAR   JavaAIMGetAppInfo utility (default /opt/CARKaim/bin/javaaimgetappinfo.jar)
@@ -23,7 +23,7 @@
 #   CP_ROGUE_JAR      the UNregistered caller jar (default /opt/swa-cp/rogue/cp-caller.jar)
 #   CP_SDK_JAR        SDK jar; its dir becomes -ClassPath (default /opt/CARKaim/sdk/javapasswordsdk.jar)
 #   CP_HASH_CLASSPATH override -ClassPath (default: dir of CP_SDK_JAR)
-#   CP_HASH_ANNOTATION  yes|no for -OnlyExecutablesWithAIMAnnotation (default yes)
+#   CP_HASH_ANNOTATION  yes|no for -OnlyExecutablesWithAIMAnnotation (default no)
 #   CP_HASH_LOGDIR    -LogFileDirectory (default /tmp)
 #   CP_HASH_ARGS      fully override the GetHash args (advanced)
 #   JAVA_BIN          java executable (default java)
@@ -37,7 +37,7 @@ CALLER_JAR="${CP_CALLER_JAR:-/opt/swa-cp/cp-caller.jar}"
 ROGUE_JAR="${CP_ROGUE_JAR:-/opt/swa-cp/rogue/cp-caller.jar}"
 SDK_JAR="${CP_SDK_JAR:-/opt/CARKaim/sdk/javapasswordsdk.jar}"
 CLASSPATH_DIR="${CP_HASH_CLASSPATH:-$(dirname "${SDK_JAR}")}"
-ANNOTATION="${CP_HASH_ANNOTATION:-yes}"
+ANNOTATION="${CP_HASH_ANNOTATION:-no}"
 LOGDIR="${CP_HASH_LOGDIR:-/tmp}"
 WITH_ROGUE=0
 [[ "${1:-}" == "--rogue" ]] && WITH_ROGUE=1

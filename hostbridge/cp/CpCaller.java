@@ -19,7 +19,6 @@
 // Build against the SDK jar shipped with the Credential Provider, typically
 //   /opt/CARKaim/sdk/javapasswordsdk.jar
 
-import javapasswordsdk.CyberArkGetPassword;
 import javapasswordsdk.PSDKPassword;
 import javapasswordsdk.PSDKPasswordRequest;
 import javapasswordsdk.PasswordSDK;
@@ -102,12 +101,9 @@ public final class CpCaller {
         System.exit(0);
     }
 
-    // fetch is the single method that requests a credential. Annotating it with
-    // @CyberArkGetPassword lets JavaAIMGetAppInfo compute the hash for exactly this
-    // executable (with -OnlyExecutablesWithAIMAnnotation=yes), and it is the hash
-    // the Credential Provider verifies at runtime — so what you register matches
-    // what is checked.
-    @CyberArkGetPassword
+    // fetch is the single call site that requests a credential. JavaAIMGetAppInfo
+    // hashes this jar's executables (with -OnlyExecutablesWithAIMAnnotation=no),
+    // and the CP verifies that hash at runtime.
     private static PSDKPassword fetch(PSDKPasswordRequest req) throws PSDKException {
         return PasswordSDK.getPassword(req);
     }
