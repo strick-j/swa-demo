@@ -109,12 +109,17 @@ func New(cfg Config) (*Client, error) {
 	return c, nil
 }
 
-// httpClient builds an HTTP/1.1-only client with the given TLS config.
-// AIMWebService is HTTP/1.1, so we must NOT offer HTTP/2 (ALPN h2): some IIS /
-// load-balancer / WAF tiers in front of CCP reset the connection mid-handshake
-// on the h2 offer — the classic "works with curl, Go gets 'connection reset by
-// peer'" symptom. ForceAttemptHTTP2=false + an empty TLSNextProto disable h2.
+// httpClient builds an HTTP/1.1-only client with the given TLS config, tuned for
+// IIS/AIMWebService:
+//   - No HTTP/2 (ALPN h2). AIMWebService is HTTP/1.1; some IIS/LB/WAF tiers reset
+//     the connection mid-handshake on the h2 offer (works with curl, Go gets
+//     "connection reset by peer"). ForceAttemptHTTP2=false + empty TLSNextProto.
+//   - Allow TLS RENEGOTIATION. IIS requests the client cert by renegotiating
+//     after the initial handshake; Go refuses by default ("local error: tls: no
+//     renegotiation"). RenegotiateFreelyAsClient permits it (survives keep-alive
+//     connection reuse too). Renegotiation is a TLS 1.2 mechanism.
 func httpClient(tlsCfg *tls.Config) *http.Client {
+	tlsCfg.Renegotiation = tls.RenegotiateFreelyAsClient
 	return &http.Client{
 		Timeout: 12 * time.Second,
 		Transport: &http.Transport{
