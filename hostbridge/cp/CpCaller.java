@@ -19,6 +19,7 @@
 // Build against the SDK jar shipped with the Credential Provider, typically
 //   /opt/CARKaim/sdk/javapasswordsdk.jar
 
+import javapasswordsdk.CyberArkGetPassword;
 import javapasswordsdk.PSDKPassword;
 import javapasswordsdk.PSDKPasswordRequest;
 import javapasswordsdk.PasswordSDK;
@@ -62,7 +63,7 @@ public final class CpCaller {
                 req.setObject(require(a, "object"));
             }
 
-            PSDKPassword pw = PasswordSDK.getPassword(req);
+            PSDKPassword pw = fetch(req);
 
             String secret = pw.getContent();
             byte[] raw = secret == null ? new byte[0] : secret.getBytes(StandardCharsets.UTF_8);
@@ -99,6 +100,16 @@ public final class CpCaller {
         // A denial is an EXPECTED demo outcome, not a process failure — exit 0 so
         // the bridge always relays the JSON rather than treating it as a crash.
         System.exit(0);
+    }
+
+    // fetch is the single method that requests a credential. Annotating it with
+    // @CyberArkGetPassword lets JavaAIMGetAppInfo compute the hash for exactly this
+    // executable (with -OnlyExecutablesWithAIMAnnotation=yes), and it is the hash
+    // the Credential Provider verifies at runtime — so what you register matches
+    // what is checked.
+    @CyberArkGetPassword
+    private static PSDKPassword fetch(PSDKPasswordRequest req) throws PSDKException {
+        return PasswordSDK.getPassword(req);
     }
 
     private static Map<String, String> parseArgs(String[] args) {
