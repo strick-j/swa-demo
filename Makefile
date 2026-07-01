@@ -156,8 +156,8 @@ stage: ## (Target host) rsync the project source to ~/swa-demo (no image/chart s
 ccp-cert: stage ## (Target) generate the CCP client cert + store Secret ccp-client-tls
 	bash scripts/host-exec.sh "bash scripts/gen-ccp-cert.sh"
 
-cp-bridge-install: stage ## (Target) build + install the CP host bridge as a systemd service
-	$(ENVSH); bash scripts/host-exec.sh "CP_SDK_JAR='$$CP_SDK_JAR' CP_RUN_USER='$$CP_RUN_USER' bash scripts/install-cp-bridge.sh"
+cp-bridge-install: stage ## (Target) build + install the CP host bridge (Safe/Object default to the CCP demo's)
+	$(ENVSH); bash scripts/host-exec.sh "CP_SDK_JAR='$$CP_SDK_JAR' CP_RUN_USER='$$CP_RUN_USER' CP_APP_ID='$$CP_APP_ID' CP_BRIDGE_ADDR='$$CP_BRIDGE_ADDR' CP_SAFE='$$CP_SAFE' CP_OBJECT='$$CP_OBJECT' CP_FOLDER='$$CP_FOLDER' CP_DENIED_SAFE='$$CP_DENIED_SAFE' CP_DENIED_OBJECT='$$CP_DENIED_OBJECT' CP_DUAL_QUERY='$$CP_DUAL_QUERY' CP_DUAL_VIRTUAL='$$CP_DUAL_VIRTUAL' CCP_SAFE='$$CCP_SAFE' CCP_OBJECT='$$CCP_OBJECT' CCP_DENIED_SAFE='$$CCP_DENIED_SAFE' CCP_DENIED_OBJECT='$$CCP_DENIED_OBJECT' CP_BRIDGE_ENV_KEEP='$$CP_BRIDGE_ENV_KEEP' bash scripts/install-cp-bridge.sh"
 
 cp-app-hash: ## (Target) compute the CyberArk app hash of the caller jar (JavaAIMGetAppInfo) to register in PVWA
 	$(ENVSH); bash scripts/host-exec.sh "CP_JAVA_AIM_JAR='$$CP_JAVA_AIM_JAR' bash scripts/cp-app-hash.sh"

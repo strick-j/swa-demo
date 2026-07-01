@@ -35,11 +35,35 @@ sudo install -m 0644 "${BRIDGE_SRC}/out/cp-bridge.jar" "${PREFIX}/cp-bridge.jar"
 sudo install -m 0644 "${BRIDGE_SRC}/out/cp-caller.jar" "${PREFIX}/cp-caller.jar"
 sudo install -m 0644 "${BRIDGE_SRC}/out/cp-rogue.jar" "${PREFIX}/rogue/cp-caller.jar"
 
-if [[ ! -f "${ENV_DIR}/cp-bridge.env" ]]; then
-  log "Seeding ${ENV_DIR}/cp-bridge.env — EDIT it with your CyberArk App/Safe/Object values"
-  sudo install -m 0640 "${BRIDGE_SRC}/cp-bridge.env.example" "${ENV_DIR}/cp-bridge.env"
+# Render the bridge env file from the passed-in config (driven by the control-host
+# .env). The four Safe/Object values fall back to the CCP demo's — set
+# CP_BRIDGE_ENV_KEEP=1 to preserve a hand-edited file instead.
+if [[ "${CP_BRIDGE_ENV_KEEP:-0}" == "1" && -f "${ENV_DIR}/cp-bridge.env" ]]; then
+  log "Keeping existing ${ENV_DIR}/cp-bridge.env (CP_BRIDGE_ENV_KEEP=1)"
 else
-  log "Keeping existing ${ENV_DIR}/cp-bridge.env"
+  cp_safe="${CP_SAFE:-${CCP_SAFE:-}}"
+  cp_object="${CP_OBJECT:-${CCP_OBJECT:-}}"
+  cp_denied_safe="${CP_DENIED_SAFE:-${CCP_DENIED_SAFE:-}}"
+  cp_denied_object="${CP_DENIED_OBJECT:-${CCP_DENIED_OBJECT:-}}"
+  log "Rendering ${ENV_DIR}/cp-bridge.env (safe=${cp_safe:-<unset>} object=${cp_object:-<unset>}; denied safe=${cp_denied_safe:-<unset>})"
+  sudo tee "${ENV_DIR}/cp-bridge.env" >/dev/null <<EOF
+# Rendered by scripts/install-cp-bridge.sh from the control-host .env.
+# Edit .env (not this file) and re-run 'make cp-bridge-install', or set
+# CP_BRIDGE_ENV_KEEP=1 to hand-edit here instead.
+CP_BRIDGE_ADDR=${CP_BRIDGE_ADDR:-0.0.0.0:8890}
+CP_APP_ID=${CP_APP_ID:-}
+CP_SAFE=${cp_safe}
+CP_OBJECT=${cp_object}
+CP_FOLDER=${CP_FOLDER:-Root}
+CP_DENIED_SAFE=${cp_denied_safe}
+CP_DENIED_OBJECT=${cp_denied_object}
+CP_DUAL_QUERY=${CP_DUAL_QUERY:-}
+CP_DUAL_VIRTUAL=${CP_DUAL_VIRTUAL:-}
+CP_SDK_JAR=${CP_SDK_JAR}
+CP_CALLER_JAR=${PREFIX}/cp-caller.jar
+CP_ROGUE_JAR=${PREFIX}/rogue/cp-caller.jar
+EOF
+  sudo chmod 0640 "${ENV_DIR}/cp-bridge.env"
 fi
 
 log "Installing systemd unit (User=${CP_RUN_USER})"

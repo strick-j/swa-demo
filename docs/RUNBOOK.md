@@ -263,13 +263,28 @@ with the CyberArk `cyberark.aam` Ansible collection
 (<https://github.com/cyberark/ansible-security-automation-collection/blob/master/docs/aimprovider.md>);
 automation is optional for a one-off.
 
-**Step 1 — install the bridge (host).** Sets `.env` `CP_SDK_JAR` / `CP_RUN_USER`,
-then:
-```bash
-make cp-bridge-install     # builds jars, installs /opt/swa-cp + systemd cp-bridge, starts it
+**Step 1 — `.env`.** Set the host build vars and the CP object coordinates. The
+Safe/Object values **default to the CCP demo's** — leave them empty to reuse the
+same objects, or set them to point the CP elsewhere:
+```sh
+export CP_SDK_JAR="/opt/CARKaim/sdk/JavaPasswordSDK.jar"
+export CP_RUN_USER=""                 # OS user the bridge runs as (blank = host user)
+export CP_APP_ID="SWA-CP-Demo"        # a hash-auth Application, separate from the CCP one
+export CP_BRIDGE_URL="http://host.minikube.internal:8890"
+# Safe/Object — leave empty to inherit CCP_SAFE/CCP_OBJECT + CCP_DENIED_*:
+export CP_SAFE="" CP_OBJECT="" CP_DENIED_SAFE="" CP_DENIED_OBJECT=""
+export CP_DUAL_QUERY="Safe=<safe>;Folder=Root;Object=<obj>"  CP_DUAL_VIRTUAL="<name>"
 ```
 
-**Step 2 — CyberArk side.**
+**Step 2 — install the bridge (host).**
+```bash
+make cp-bridge-install     # builds jars, installs /opt/swa-cp + systemd cp-bridge, renders
+                           # /etc/swa-cp/cp-bridge.env from .env (CCP fallback), starts it
+```
+The bridge env file is regenerated from `.env` on every run. To hand-edit
+`/etc/swa-cp/cp-bridge.env` directly instead, set `CP_BRIDGE_ENV_KEEP=1`.
+
+**Step 3 — CyberArk side.**
 - Create the CP **Application** (e.g. `SWA-CP-Demo`).
 - Get the **application hash** with CyberArk's `JavaAIMGetAppInfo` utility (this is
   CyberArk's own algorithm — not a plain sha256; the SHA-256 `build.sh` prints is
@@ -282,18 +297,12 @@ make cp-bridge-install     # builds jars, installs /opt/swa-cp + systemd cp-brid
 - Add **authentication** characteristics on the Application: the **hash** from
   above, the **OS user** the bridge runs as, and the **path**
   `/opt/swa-cp/cp-caller.jar`. Do **not** register `cp-rogue.jar`.
-- Grant the Application the authorized **Safe** (scenarios 1, 2, 4). For scenario 3
-  have a Safe it is **not** permitted for; for scenario 4 a **dual-account** pair.
-Edit the seeded `/etc/swa-cp/cp-bridge.env` with your App/Safe/Object/dual values
-(see `hostbridge/cp/cp-bridge.env.example`) and `sudo systemctl restart cp-bridge`.
+- Grant the Application the authorized **Safe** (scenarios 1, 2, 4) — the same Safe
+  the CCP demo uses if you left `CP_SAFE` empty. For scenario 3 have a Safe it is
+  **not** permitted for; for scenario 4 a **dual-account** pair.
 
-**Step 3 — `.env`** (injected on deploy):
-```sh
-export CP_BRIDGE_URL="http://host.minikube.internal:8890"
-export CP_APP_ID="SWA-CP-Demo"
-```
-
-**Step 4 — deploy:** `make webapp-deploy`, then open `/cp`.
+**Step 4 — deploy:** `make webapp-deploy` (injects `CP_BRIDGE_URL` + `CP_APP_ID`
+onto the pod), then open `/cp`.
 
 ### CP diagnostics
 
