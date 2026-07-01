@@ -98,6 +98,20 @@ variable "jwt_signing_key_ttl" {
   default     = 86400
 }
 
+variable "x509_workload_ttl" {
+  description = <<-EOT
+    TTL (seconds) for issued X.509-SVIDs (webapp client + pg-gateway server certs).
+    Kept LONG on purpose: SWA v1.0.2 has a subscriber-cleanup race — when a
+    long-lived workload's X.509 stream reconnects at the rotation boundary, the
+    server rejects it with "subscriber already exists for: id=<pid>" (PID-keyed,
+    and hostPID makes the pid stable), so rotation wedges and the SVID expires.
+    A long TTL means rotation rarely fires within a demo session, avoiding the
+    bug. Bounded by the server CA lifetime; lower this if the server rejects it.
+  EOT
+  type        = number
+  default     = 28800 # 8h (was 3600 / 1h, which expired hourly)
+}
+
 variable "jwt_signature_algorithm" {
   description = "Trust domain JWT-SVID signature algorithm. Conjur authn-jwt requires RS* (paired with an RSA signing_key_type). Allowed: RS256/RS384/RS512, ES256/ES384/ES512."
   type        = string

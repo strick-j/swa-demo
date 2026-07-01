@@ -16,7 +16,7 @@ resource "swa_trust_domain" "this" {
   }
 
   x509 = {
-    workload_ttl = 3600
+    workload_ttl = var.x509_workload_ttl
   }
 }
 
