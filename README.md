@@ -17,16 +17,17 @@ the value's length and SHA-256 — enough to match by eye against the Vault/Conj
 ## What it builds
 
 ```
-AWS (Terraform)            RHEL host (Ansible)              minikube
-┌──────────────┐          ┌────────────────────┐          ┌────────────────────────────┐
-│ VPC + subnet │          │ RHEL 8/9 EC2       │          │ ns swa-system              │
-│ SG, IGW      │ ───────▶ │ docker + minikube  │ ───────▶ │  SWA Server ──▶ tenant      │
-│ EC2 host     │          │ kubectl + helm     │          │  SWA Agent (DaemonSet)      │
-└──────────────┘          │                    │          │ ns swa-demo                 │
-                          │ CyberArk CP  ◀──────┼───cp─────┼── demo-webapp ──socket──▶ Agent
-                          │  + cp-bridge (8890)│  bridge   │    └─ SVID + retrieval UI   │
-                          └────────────────────┘          │ ns swa-data (pg-gateway)    │
-                                                           └────────────────────────────┘
+AWS (Terraform)          RHEL host (Ansible)           minikube
+┌──────────────┐         ┌───────────────────┐         ┌────────────────────────────────┐
+│ VPC + subnet │         │ RHEL 8/9 EC2      │         │ ns swa-system                  │
+│ SG, IGW      │ ──────▶ │ docker + minikube │ ──────▶ │   SWA Server → tenant          │
+│ EC2 host     │         │ kubectl + helm    │         │   SWA Agent (DaemonSet)        │
+└──────────────┘         │                   │         │ ns swa-demo                    │
+                         │ CyberArk CP       │◀── cp ──│   demo-webapp → Agent (socket) │
+                         │ + cp-bridge :8890 │         │   └ SVID + retrieval UI        │
+                         └───────────────────┘         │ ns swa-data                    │
+                                                       │   pg-gateway (X.509 mTLS)      │
+                                                       └────────────────────────────────┘
 ```
 
 ## Retrieval modes (the webapp)
@@ -103,7 +104,7 @@ CP Safe/Object coordinates default to the CCP demo's (`CCP_SAFE`/`CCP_OBJECT`,
 
 ## Prerequisites
 
-- Terraform >= 1.5, Ansible >= 2.15, AWS CLI configured, Go >= 1.22 (local build), `kubectl`, `helm`.
+- Terraform >= 1.5, Ansible >= 2.15, AWS CLI configured, Go >= 1.25 (local build; matches `go.mod` / the `golang:1.25` build image), `kubectl`, `helm`.
 - An active **Secrets Manager – SaaS** tenant with the **Admin** role.
 - **SWA** SKU entitlement (Palo Alto Networks Marketplace). Images are delivered as
   `*.tar.gz` and hosted in **your S3 bucket** — no registry needed; the host loads

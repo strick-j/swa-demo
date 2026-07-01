@@ -2,8 +2,13 @@
 
 ## Goal
 
-Demonstrate CyberArk **Secure Workload Access (SWA)** issuing a SPIFFE
-**JWT-SVID** to a workload on minikube, with a visual UI of the full lifecycle.
+Demonstrate CyberArk **Secure Workload Access (SWA)** issuing SPIFFE SVIDs to a
+workload on minikube, with a visual UI of the full lifecycle — and set it side by
+side with the **other ways a workload can obtain a credential from CyberArk**: the
+local **Credential Provider (CP)**, the **Central Credential Provider (CCP)**, and
+**Conjur Cloud**. SWA is the centerpiece; the other families exist so the UI can
+contrast "ephemeral identity, no stored secret" against "authenticate, then fetch a
+stored secret."
 
 > "Idira" is CyberArk's brand for the **Secrets Manager – SaaS** docs/tenant.
 > SWA is the SPIFFE-compliant workload-identity capability of that product.
@@ -71,6 +76,67 @@ The resulting SPIFFE ID follows the node-group template
 the JWT `sub` claim. The webapp decodes the token (header + claims) and displays
 validity (`iat`/`exp`).
 
+## Secrets-retrieval families (the webapp)
+
+Beyond the SWA flow above, the webapp is a landing **chooser** over four CyberArk
+retrieval families, all behind one seam — `internal/retrieve.Retriever` — so the
+HTTP/UI layer treats every mode identically: run it, get a narrated lifecycle plus
+a **masked proof-of-retrieval**. The raw secret never reaches the browser or logs;
+only a short **6-char preview + length + SHA-256** (`retrieve.Mask`) is surfaced —
+enough to match by eye against the source of truth and to see it change on
+rotation. Modes render an illustrative/simulated result until their backend is
+configured (SWA works via `DEMO_MODE`; **CP is live-only**).
+
+| Family | Mode | Authenticates the workload by | Then |
+|--------|------|-------------------------------|------|
+| Secure Workload Access | SPIFFE SVID → gateway | ephemeral `x509`/`jwt` SVID (node + workload attestation) | authorize by SPIFFE ID — **no stored secret** |
+| Secrets Manager – SaaS | Conjur · JWT / Conjur · AWS STS | `authn-jwt` (JWT-SVID) / `authn-iam` (signed `sts:GetCallerIdentity`) | read a Conjur variable over the API |
+| Credential Providers | CCP (AIMWebService) | client **certificate** (mTLS) mapped to an Application | authorize App → Safe, return the account |
+| Credential Providers | CP (local) | application **hash** / path / OS user of the calling process | authorize App → Safe, return the account |
+
+CP and CCP are deliberately symmetric — the same four use cases (authorized · authn
+deny · authz/denied-safe · dual-account), with the client certificate (CCP) swapped
+for the calling application's hash (CP).
+
+### The CP host bridge (an out-of-cluster component)
+
+The Credential Provider authenticates the **calling application** by measuring the
+process that invokes its SDK (hash + path + OS user). A container can't load the
+host's native SDK — and even if it could, its identity would be the pod's, not a
+host application's. So the real caller runs **on the host**, and the pod reaches it
+through a thin HTTP bridge:
+
+```
+ ns swa-demo (minikube)                    RHEL host
+ ┌──────────────────────┐   POST /cp     ┌───────────────────────────────────────────┐
+ │ webapp: cp Retriever  │ ─────────────▶ │ cp-bridge (systemd, JDK)  :8890            │
+ │ (Go, in the pod)      │  host.minikube │   exec java -cp javapasswordsdk.jar:<jar>  │
+ │                       │  .internal:8890│        CpCaller  ──JavaPasswordSDK──▶ CP ──▶ Vault
+ │  masked result ◀──────┼── JSON ────────┤   scenario → registered cp-caller.jar      │
+ └──────────────────────┘  {preview,len,  │            → OR unregistered cp-rogue.jar  │
+                            sha256,acct…}  └───────────────────────────────────────────┘
+```
+
+Design points:
+
+- **Per-scenario subprocess.** The bridge `exec`s a fresh JVM per request so each
+  scenario's *calling application* has its own hash. A **registered**
+  `cp-caller.jar` vs an **unregistered** `cp-rogue.jar` (different content + install
+  path, `/opt/swa-cp/rogue/`) is exactly what the "invalid hash" scenario proves.
+- **Secret stays on the host.** `CpCaller` hashes the retrieved value on the host
+  and emits only its preview/length/SHA-256 — the full credential never crosses the
+  bridge. The bridge holds the Safe/Object coordinates in its own env (rendered from
+  `.env`, defaulting to the CCP demo's), so no object names travel from the cluster.
+- **Hash registration.** The runtime hash the CP computes equals the output of
+  CyberArk's `javaaimgetappinfo.jar GetHash` (`scripts/cp-app-hash.sh`); that value
+  is registered on the Application in PVWA. If it isn't authorized, the provider
+  logs `APPAP133E … Hash "…" is unauthorized` and the retrieval fails.
+- **JDK, not just a JRE.** The CP ships a runtime only; `cp-bridge-install`
+  compiles the caller/bridge, so it installs a `-devel` JDK if `javac`/`jar` are
+  absent. The bridge itself needs only `java`.
+
+See `hostbridge/cp/` and **RUNBOOK § 3c**.
+
 ## Why these choices
 
 - **Server + agent in minikube via Helm** — lowest-risk path that matches the
@@ -101,6 +167,12 @@ The webapp image is likewise built straight into minikube's docker. See
   Terraform vars / Kubernetes secrets at deploy time. Image pulls need **no**
   credentials (loaded locally); S3 read is via the host's IAM instance profile.
 - The agent socket is mounted **read-only** into the webapp pod.
+- **Retrieved secrets are never returned in full** — the browser and logs only ever
+  see the masked preview/length/SHA-256. On the CP path the value is hashed on the
+  host, so the full credential never crosses the cp-bridge into the cluster.
+- The **cp-bridge** binds a host-only interface (`host.minikube.internal:8890`) and
+  runs the caller as the OS user registered on the CP Application; it holds the
+  Safe/Object coordinates on the host, not in the cluster.
 - The Security Group restricts SSH, the NodePort, and the ALB (80/443) to `admin_cidrs`.
 - Optional HTTPS: set `domain_name` and Terraform requests a DNS-validated,
   auto-renewing **ACM** cert for an ALB that terminates TLS. Add the
