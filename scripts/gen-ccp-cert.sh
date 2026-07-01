@@ -30,8 +30,12 @@ kubectl -n "${NS_DEMO}" create secret tls ccp-client-tls \
   --cert="${TMP}/tls.crt" --key="${TMP}/tls.key" \
   --dry-run=client -o yaml | kubectl apply -f -
 
+SERIAL="$(openssl x509 -in "${TMP}/tls.crt" -noout -serial | sed 's/.*=//')"
 THUMB="$(openssl x509 -in "${TMP}/tls.crt" -noout -fingerprint -sha1 | sed 's/.*=//')"
 log "Done. Register this client with your CCP Application's cert authentication:"
-echo "    CN:           ${CN}"
-echo "    SHA1 thumb:   ${THUMB}"
+echo "    CN:            ${CN}"
+echo "    Serial (hex):  ${SERIAL}"
+echo "    Issuer:        CN=${CN}  (self-signed)"
+echo "    SHA1 thumb:    ${THUMB}"
+log "CyberArk usually maps the cert by Serial Number (and/or CN/Issuer)."
 log "Then 'make webapp-deploy' to roll the pod so it mounts the cert."
