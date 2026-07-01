@@ -16,6 +16,7 @@
     - k8s
     - scripts
     - webapp
+    - hostbridge
     - .env
   become: true
   become_user: "{{ minikube_user }}"
