@@ -94,7 +94,7 @@ func (c *Client) simulate(s Scenario) retrieve.Result {
 	case Dual:
 		dq := firstNonEmpty(c.cfg.DualQuery, "Safe="+safe+";VirtualUsername=svc-app-db")
 		res.Identity = cn
-		res.CCP = &retrieve.CCPInfo{AppID: appID, CertCN: cn, Safe: safe, Query: dq, Account: "svc-app-db-A", Address: "db.internal", DualActive: "svc-app-db-A (active)"}
+		res.CCP = &retrieve.CCPInfo{AppID: appID, CertCN: cn, Safe: safe, Query: dq, Account: "svc-app-db-A", Address: "db.internal", VirtualUsername: "svc-app-db", DualActive: "svc-app-db-A (Active, index 1)"}
 		res.SecretName = "Query: " + dq
 		res.Masked = retrieve.Mask([]byte("s1mul4ted-dual-active-secret"))
 		res.Retrieved = true

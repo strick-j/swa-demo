@@ -49,13 +49,14 @@ type AWSInfo struct {
 // identity the CCP authorizes on and the account fields it returns alongside the
 // (masked) secret — so the UI can show who asked and what came back.
 type CCPInfo struct {
-	AppID      string `json:"app_id"`                // the CCP Application id
-	CertCN     string `json:"cert_cn,omitempty"`     // client-cert subject CN presented (mTLS)
-	Safe       string `json:"safe,omitempty"`        // safe queried
-	Query      string `json:"query,omitempty"`       // object name or custom-property query
-	Account    string `json:"account,omitempty"`     // returned account UserName (NOT the secret)
-	Address    string `json:"address,omitempty"`     // returned account Address/target
-	DualActive string `json:"dual_active,omitempty"` // which account the dual pair resolved to
+	AppID           string `json:"app_id"`                     // the CCP Application id
+	CertCN          string `json:"cert_cn,omitempty"`          // client-cert subject CN presented (mTLS)
+	Safe            string `json:"safe,omitempty"`             // safe queried
+	Query           string `json:"query,omitempty"`            // object name or custom-property query
+	Account         string `json:"account,omitempty"`          // returned account UserName (NOT the secret)
+	Address         string `json:"address,omitempty"`          // returned account Address/target
+	VirtualUsername string `json:"virtual_username,omitempty"` // dual-account fronting identity
+	DualActive      string `json:"dual_active,omitempty"`      // active account + status/index the pair resolved to
 }
 
 // Result is the outcome of a retrieval attempt. It deliberately carries NO raw

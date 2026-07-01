@@ -86,10 +86,7 @@ type Client struct {
 // certificate; otherwise the client runs simulated (New still succeeds).
 func New(cfg Config) (*Client, error) {
 	c := &Client{cfg: cfg}
-	c.noCert = &http.Client{
-		Timeout:   12 * time.Second,
-		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: cfg.InsecureSkipVerify}}, //nolint:gosec // demo: CCP host uses an internal/self-signed cert
-	}
+	c.noCert = httpClient(&tls.Config{InsecureSkipVerify: cfg.InsecureSkipVerify}) //nolint:gosec // demo: internal/self-signed CCP cert
 	if cfg.Live && cfg.CertFile != "" && cfg.KeyFile != "" {
 		cert, err := tls.LoadX509KeyPair(cfg.CertFile, cfg.KeyFile)
 		if err != nil {
@@ -97,22 +94,35 @@ func New(cfg Config) (*Client, error) {
 		}
 		c.certCN = leafCN(cert)
 		clientCert := cert
-		c.withCert = &http.Client{
-			Timeout: 12 * time.Second,
-			Transport: &http.Transport{TLSClientConfig: &tls.Config{
-				// Present the cert UNCONDITIONALLY. With Certificates alone, Go only
-				// sends the cert when it matches the server's advertised acceptable
-				// CAs — a self-signed client cert usually doesn't, so Go would send
-				// an empty cert and CCP cert-auth would fail. GetClientCertificate
-				// forces it (the equivalent of PowerShell Invoke-RestMethod -Certificate).
-				GetClientCertificate: func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
-					return &clientCert, nil
-				},
-				InsecureSkipVerify: cfg.InsecureSkipVerify, //nolint:gosec // demo only
-			}},
-		}
+		c.withCert = httpClient(&tls.Config{
+			// Present the cert UNCONDITIONALLY. With Certificates alone, Go only
+			// sends the cert when it matches the server's advertised acceptable
+			// CAs — a self-signed client cert usually doesn't, so Go would send
+			// an empty cert and CCP cert-auth would fail. GetClientCertificate
+			// forces it (the equivalent of PowerShell Invoke-RestMethod -Certificate).
+			GetClientCertificate: func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
+				return &clientCert, nil
+			},
+			InsecureSkipVerify: cfg.InsecureSkipVerify, //nolint:gosec // demo only
+		})
 	}
 	return c, nil
+}
+
+// httpClient builds an HTTP/1.1-only client with the given TLS config.
+// AIMWebService is HTTP/1.1, so we must NOT offer HTTP/2 (ALPN h2): some IIS /
+// load-balancer / WAF tiers in front of CCP reset the connection mid-handshake
+// on the h2 offer — the classic "works with curl, Go gets 'connection reset by
+// peer'" symptom. ForceAttemptHTTP2=false + an empty TLSNextProto disable h2.
+func httpClient(tlsCfg *tls.Config) *http.Client {
+	return &http.Client{
+		Timeout: 12 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig:   tlsCfg,
+			ForceAttemptHTTP2: false,
+			TLSNextProto:      map[string]func(string, *tls.Conn) http.RoundTripper{},
+		},
+	}
 }
 
 // Mode implements retrieve.Retriever so the registry marks CCP available and the
@@ -154,12 +164,15 @@ func (c *Client) Run(ctx context.Context, s Scenario) retrieve.Result {
 
 // aimResponse is the AIMWebService JSON for both success and error bodies.
 type aimResponse struct {
-	Content   string `json:"Content"`
-	UserName  string `json:"UserName"`
-	Address   string `json:"Address"`
-	Name      string `json:"Name"`
-	ErrorCode string `json:"ErrorCode"`
-	ErrorMsg  string `json:"ErrorMsg"`
+	Content           string `json:"Content"`
+	UserName          string `json:"UserName"`
+	Address           string `json:"Address"`
+	Name              string `json:"Name"`
+	VirtualUsername   string `json:"VirtualUsername"`   // dual-account fronting identity
+	DualAccountStatus string `json:"DualAccountStatus"` // Active / Inactive
+	Index             string `json:"Index"`             // which account of the pair
+	ErrorCode         string `json:"ErrorCode"`
+	ErrorMsg          string `json:"ErrorMsg"`
 }
 
 // fetch performs one AIMWebService GET and maps the outcome to a Result. For the
@@ -227,7 +240,8 @@ func (c *Client) fetch(ctx context.Context, s Scenario, client *http.Client, saf
 	res.CCP.Account = ar.UserName
 	res.CCP.Address = ar.Address
 	if s == Dual {
-		res.CCP.DualActive = firstNonEmpty(ar.UserName, ar.Name)
+		res.CCP.VirtualUsername = ar.VirtualUsername
+		res.CCP.DualActive = dualActive(ar.UserName, ar.Name, ar.DualAccountStatus, ar.Index)
 	}
 	res.SecretName = secretName(safe, object, query)
 	res.Masked = retrieve.Mask([]byte(ar.Content))
@@ -272,6 +286,20 @@ func firstNonEmpty(a, b string) string {
 		return a
 	}
 	return b
+}
+
+// dualActive describes which account of a dual pair resolved, e.g.
+// "admin1 (Active, index 1)".
+func dualActive(user, name, status, index string) string {
+	active := firstNonEmpty(user, name)
+	if status != "" {
+		active += " (" + status
+		if index != "" {
+			active += ", index " + index
+		}
+		active += ")"
+	}
+	return active
 }
 
 // cleanErr collapses an error/body string to a single bounded line for display.

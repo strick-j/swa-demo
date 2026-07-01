@@ -35,7 +35,7 @@
     },
   };
 
-  const RESULT_IDS = ["app-id", "cert-cn", "safe", "query", "account", "dual-active", "masked"];
+  const RESULT_IDS = ["app-id", "cert-cn", "safe", "query", "account", "virtual-username", "dual-active", "masked"];
   let active = "authorized";
 
   function setStatus(text, kind) {
@@ -74,6 +74,7 @@
     show("safe", ccp.safe);
     show("query", ccp.query);
     show("account", ccp.account);
+    show("virtual-username", ccp.virtual_username);
     show("dual-active", ccp.dual_active);
     show("masked", body.masked);
   }
