@@ -256,7 +256,8 @@ installed at a different path, **not** registered). Scenario 2 runs the rogue ja
 with the same App/Safe as scenario 1 — the CP rejects it on the calling
 application's hash/path.
 
-**Prereqs (host).** A JDK (`javac`/`jar`), the CyberArk **Credential Provider**
+**Prereqs (host).** A JDK (`javac`/`jar` — the CP ships only a JRE, so
+`cp-bridge-install` auto-installs a `-devel` JDK if missing), the CyberArk **Credential Provider**
 installed and running (`aimprv`), and its `JavaPasswordSDK.jar` +
 `libjavapasswordsdk.so` (default `/opt/CARKaim/sdk/`). Install the CP manually, or
 with the CyberArk `cyberark.aam` Ansible collection

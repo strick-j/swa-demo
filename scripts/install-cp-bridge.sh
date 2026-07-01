@@ -26,6 +26,38 @@ UNIT="/etc/systemd/system/cp-bridge.service"
 
 log() { echo -e "\033[35m[cp-bridge]\033[0m $*"; }
 
+# The CP ships a JRE (runtime), but compiling the caller/bridge needs a JDK
+# (javac + jar). Install one if it is missing. The bridge itself only needs `java`.
+ensure_jdk() {
+  if command -v javac >/dev/null && command -v jar >/dev/null; then
+    return 0
+  fi
+  log "javac/jar not found — installing a JDK"
+  local pm=""
+  if command -v dnf >/dev/null; then
+    pm="sudo dnf install -y"
+  elif command -v yum >/dev/null; then
+    pm="sudo yum install -y"
+  else
+    echo "ERROR: no dnf/yum available; install a JDK manually (needs javac + jar)." >&2
+    exit 1
+  fi
+  local pkg
+  for pkg in java-17-openjdk-devel java-11-openjdk-devel java-1.8.0-openjdk-devel \
+             java-17-amazon-corretto-devel java-11-amazon-corretto-devel; do
+    log "trying ${pkg}"
+    if ${pm} "${pkg}" >/dev/null 2>&1 && command -v javac >/dev/null && command -v jar >/dev/null; then
+      log "installed ${pkg}"
+      return 0
+    fi
+  done
+  echo "ERROR: could not install a JDK automatically. Install one manually, e.g.:" >&2
+  echo "         sudo yum install -y java-11-openjdk-devel   # or your distro's -devel JDK" >&2
+  exit 1
+}
+
+ensure_jdk
+
 log "Building jars (SDK: ${CP_SDK_JAR})"
 CP_SDK_JAR="${CP_SDK_JAR}" bash "${BRIDGE_SRC}/build.sh"
 
