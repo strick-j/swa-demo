@@ -41,3 +41,6 @@ webapp/dist/
 .vscode/
 *.swp
 *.claude
+
+# Exported CCP public client cert (from make ccp-cert)
+ccp-client.crt
