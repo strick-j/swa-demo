@@ -954,6 +954,7 @@ const swaProvider: Provider = {
   ],
   stages: [
     { key: "request", label: "Request identity", verb: "Requesting identity" },
+    { key: "attest", label: "Node attestation", verb: "Attesting node" },
     { key: "svid", label: "SVID issued", verb: "Issuing SVID" },
     { key: "mtls", label: "mTLS trust", verb: "Verifying trust" },
     {
@@ -992,7 +993,7 @@ const swaProvider: Provider = {
       label: "Untrusted workload",
       tag: "authz deny",
       ok: false,
-      failStage: 3,
+      failStage: 4,
       desc: "Holds a valid SVID, but its SPIFFE ID is NOT allow-listed at the gateway → rejected during the mTLS handshake, before Postgres.",
       evidence: [
         {
@@ -1014,8 +1015,8 @@ const swaProvider: Provider = {
       label: "Unknown workload",
       tag: "no identity",
       ok: false,
-      failStage: 1,
-      desc: "No registration policy matches this workload → the SWA server refuses to issue any SVID. With no identity, it cannot even attempt the resource.",
+      failStage: 2,
+      desc: "The node attests, but no registration policy matches this workload → the SWA server refuses to issue an SVID. With no identity, it cannot even attempt the resource.",
       evidence: [
         {
           lead: "No policy, no identity.",
@@ -1036,7 +1037,7 @@ const swaProvider: Provider = {
       label: "Foreign trust domain",
       tag: "trust boundary",
       ok: false,
-      failStage: 2,
+      failStage: 3,
       desc: "A workload from a foreign trust domain (acme.courier) presents a self-signed identity → rejected at the mTLS trust boundary; no federation is configured.",
       evidence: [
         {
@@ -1072,11 +1073,35 @@ const swaProvider: Provider = {
       ),
     },
     {
-      key: "identity",
-      title: "SWA identity · SVID",
+      key: "attest",
+      title: "Node attestation · k8s_psat",
       stages: [1],
       doneAfter: 2,
-      failsAt: [1],
+      failsAt: [],
+      tag: (s) => (s === "done" ? "node attested" : "attesting"),
+      body: ({ state }) => (
+        <>
+          <div style={grid2}>
+            <Kv
+              k="Attestor"
+              v="k8s_psat"
+              vColor={state === "done" ? INK.ok : INK.mono}
+            />
+            <Kv k="Node group" v={SWA_CTX.nodeGroup} />
+          </div>
+          <span style={foot}>
+            agent proves the node to the SWA server (projected SA token ·
+            TokenReview)
+          </span>
+        </>
+      ),
+    },
+    {
+      key: "identity",
+      title: "SWA identity · SVID",
+      stages: [2],
+      doneAfter: 3,
+      failsAt: [2],
       tag: (s) =>
         s === "failed"
           ? "no identity"
@@ -1085,7 +1110,9 @@ const swaProvider: Provider = {
             : "issuing",
       body: ({ state, result }) =>
         state === "failed" ? (
-          <span style={dangerNote}>no identity issued for this workload</span>
+          <span style={dangerNote}>
+            no identity issued — workload attestation found no matching policy
+          </span>
         ) : (
           <>
             <div style={grid2}>
@@ -1104,7 +1131,8 @@ const swaProvider: Provider = {
               />
             </div>
             <span style={foot}>
-              node attested (k8s_psat) · SVID minted by the trust domain
+              server attests the workload (ns/sa) · SVID minted by the trust
+              domain
             </span>
           </>
         ),
@@ -1112,9 +1140,9 @@ const swaProvider: Provider = {
     {
       key: "gateway",
       title: "SPIFFE gateway",
-      stages: [2, 3],
-      doneAfter: 4,
-      failsAt: [2, 3],
+      stages: [3, 4],
+      doneAfter: 5,
+      failsAt: [3, 4],
       tag: (s) =>
         s === "failed" ? "rejected" : s === "done" ? "authorized" : "verifying",
       body: ({ state, scenario, result }) =>
@@ -1142,8 +1170,8 @@ const swaProvider: Provider = {
     {
       key: "resource",
       title: "Postgres · shipments",
-      stages: [4],
-      doneAfter: 5,
+      stages: [5],
+      doneAfter: 6,
       failsAt: [],
       tag: (s) => (s === "done" ? "rows returned" : ""),
       body: ({ state, result }) =>
@@ -1169,12 +1197,19 @@ const swaProvider: Provider = {
       idle: "call the SWA Agent Workload API",
     },
     {
+      name: "Node attestation",
+      Icon: Fingerprint,
+      pass: () => "node attested · k8s_psat (projected SA token · TokenReview)",
+      reject: () => "node attestation failed",
+      idle: "attest the node identity (k8s_psat)",
+    },
+    {
       name: "SVID issued",
       Icon: BadgeCheck,
       pass: ({ result }) =>
-        `SVID minted${result?.jwtAlg ? ` · ${result.jwtAlg}` : ""} · node attested (k8s_psat)`,
-      reject: () => "no identity issued for this workload",
-      idle: "attest the node and mint a short-lived SVID",
+        `SVID minted${result?.jwtAlg ? ` · ${result.jwtAlg}` : ""} · workload attested (ns/sa)`,
+      reject: () => "no identity issued — no matching workload policy",
+      idle: "attest the workload and mint a short-lived SVID",
     },
     {
       name: "mTLS trust",
@@ -1211,39 +1246,44 @@ const swaProvider: Provider = {
       {
         s: 1,
         kind: "comment",
-        text: "SWA server attests the node (k8s_psat) and mints the SVID",
+        text: "SWA Agent attests the node to the server · k8s_psat (projected SA token · TokenReview)",
       },
       {
         s: 2,
         kind: "comment",
-        text: `present SVID to ${SWA_CTX.gateway}.swa-data.svc · mutual TLS`,
+        text: "server attests the workload (ns/sa selectors) and mints the SVID",
       },
       {
         s: 3,
         kind: "comment",
-        text: "ghostunnel authorizes by SPIFFE ID (allow-uri)",
+        text: `present SVID to ${SWA_CTX.gateway}.swa-data.svc · mutual TLS`,
       },
       {
         s: 4,
+        kind: "comment",
+        text: "ghostunnel authorizes by SPIFFE ID (allow-uri)",
+      },
+      {
+        s: 5,
         kind: "cmd",
         text: "psql 'host=pg-gateway.swa-data.svc.cluster.local port=6432' -c 'SELECT * FROM shipments'",
       },
     ];
     if (r?.retrieved) {
       lines.push({
-        s: 1,
+        s: 2,
         kind: "out",
         text: `SVID: ${spiffe}`,
         terminal: true,
       });
       lines.push({
-        s: 4,
+        s: 5,
         kind: "out",
         text: " ref          | origin    | destination | status     | carrier",
         terminal: true,
       });
       lines.push({
-        s: 4,
+        s: 5,
         kind: "out",
         text: "--------------+-----------+-------------+------------+------------------",
         terminal: true,
@@ -1251,26 +1291,26 @@ const swaProvider: Provider = {
       const rows = (r.dbRows || []).slice(0, 4);
       for (const row of rows) {
         lines.push({
-          s: 4,
+          s: 5,
           kind: "out",
           text: ` ${(row.ref || "").padEnd(12)} | ${(row.origin || "").padEnd(9)} | ${(row.destination || "").padEnd(11)} | ${(row.status || "").padEnd(10)} | ${row.carrier || ""}`,
           terminal: true,
         });
       }
       lines.push({
-        s: 4,
+        s: 5,
         kind: "out",
         text: `(${r.dbRows?.length ?? 0} rows)`,
         terminal: true,
       });
       lines.push({
-        s: 4,
+        s: 5,
         kind: "ok",
         text: "✓ authorized by SPIFFE ID · no stored credential",
         terminal: true,
       });
     } else if (r) {
-      const fs = scenario === "unknown" ? 1 : scenario === "foreign" ? 2 : 3;
+      const fs = scenario === "unknown" ? 2 : scenario === "foreign" ? 3 : 4;
       const errLine =
         scenario === "unknown"
           ? "rpc error: code = PermissionDenied desc = no identity issued for this workload"
