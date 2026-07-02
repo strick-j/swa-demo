@@ -3,52 +3,292 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CyberArk · Secrets Retrieval Demo</title>
-  <link rel="stylesheet" href="/static/style.css" />
+  <title>Idira Secrets</title>
+  <link rel="icon" type="image/png" href="/cp/assets/idira-icon-color.png" />
+  <style>
+    @font-face {
+      font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap;
+      src: url("/cp/fonts/plex-mono/IBMPlexMono-Regular.woff2") format("woff2");
+    }
+    :root {
+      --blue-0: #ADC0FC; --blue-250: #6186FC; --blue-500: #265BFF; --blue-750: #173EB8; --blue-1000: #061D63;
+      --ink: #E6ECF7; --dim: rgba(210,222,255,0.85); --faint: rgba(188,203,252,0.66); --mono: #9DB4FF; --ok: #43E08B;
+      --line: rgba(97,134,252,0.22); --card: rgba(120,150,255,0.05); --card-hover: rgba(38,91,255,0.14);
+      --sans: "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+      --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0; font-family: var(--sans); color: var(--ink); background: #050F38;
+      -webkit-font-smoothing: antialiased;
+    }
+    .bg {
+      position: fixed; inset: 0; z-index: -2;
+      background: radial-gradient(120% 90% at 80% 0%, #0E2A78 0%, #061D63 38%, #050F38 100%);
+    }
+    .bg-tex {
+      position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: 0.35;
+      background: url("/cp/assets/security-layers-blue.png") no-repeat right bottom; background-size: 46%;
+      -webkit-mask-image: linear-gradient(to left, #000 30%, transparent 88%);
+      mask-image: linear-gradient(to left, #000 30%, transparent 88%);
+    }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 0 32px; }
+    .eyebrow {
+      font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--mono); font-weight: 500; margin: 0 0 14px;
+    }
+    a { color: inherit; text-decoration: none; }
+
+    /* nav */
+    nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 32px; max-width: 1120px; margin: 0 auto;
+    }
+    nav .brand { display: flex; align-items: center; gap: 12px; }
+    nav .brand img { height: 26px; width: auto; }
+    nav .brand span { font-weight: 700; font-size: 15px; letter-spacing: 0.01em; }
+    nav .right { display: flex; align-items: center; gap: 18px; }
+    nav .secured {
+      font-family: var(--font-mono); font-size: 11px; color: var(--faint); letter-spacing: 0.04em;
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14.5px;
+      border-radius: 10px; padding: 11px 20px; cursor: pointer; transition: all 160ms ease; border: 1px solid transparent;
+    }
+    .btn-primary { background: var(--blue-500); color: #fff; box-shadow: 0 6px 24px rgba(38,91,255,0.4); }
+    .btn-primary:hover { background: var(--blue-750); transform: translateY(-1px); }
+    .btn-ghost { background: transparent; color: var(--dim); border-color: var(--line); }
+    .btn-ghost:hover { color: var(--ink); border-color: rgba(255,255,255,0.28); }
+    .btn-sm { padding: 8px 15px; font-size: 13px; }
+
+    /* hero */
+    .hero { padding: 60px 0 40px; }
+    .hero h1 {
+      font-size: clamp(2.6rem, 1.6rem + 3.2vw, 4.4rem); line-height: 1.02; letter-spacing: -0.03em;
+      margin: 0 0 22px; max-width: 15ch; font-weight: 700;
+    }
+    .hero h1 .accent { color: var(--blue-250); }
+    .hero p.lede { font-size: clamp(1.05rem, 0.95rem + 0.6vw, 1.35rem); line-height: 1.55; color: var(--dim); max-width: 62ch; margin: 0 0 32px; }
+    .hero .cta { display: flex; gap: 14px; flex-wrap: wrap; }
+
+    /* how-it-works strip */
+    .strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin: 46px 0 8px; }
+    .strip .step {
+      border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; background: var(--card);
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .strip .num { font-family: var(--font-mono); font-size: 13px; color: var(--mono); }
+    .strip .step h4 { margin: 0; font-size: 16px; font-weight: 700; }
+    .strip .step p { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--faint); }
+
+    /* sections */
+    section.block { padding: 66px 0; }
+    section.block h2 { font-size: clamp(1.8rem, 1.3rem + 1.6vw, 2.7rem); letter-spacing: -0.025em; margin: 0 0 16px; font-weight: 700; }
+    section.block .intro { font-size: 1.05rem; line-height: 1.55; color: var(--dim); max-width: 66ch; margin: 0 0 34px; }
+    .divider { height: 1px; background: linear-gradient(90deg, transparent, var(--line), transparent); }
+
+    /* problem cards */
+    .cols-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .pcard { border: 1px solid var(--line); border-radius: 16px; padding: 24px; background: var(--card); }
+    .pcard .k { font-family: var(--font-mono); font-size: 12px; color: var(--blue-250); letter-spacing: 0.08em; text-transform: uppercase; }
+    .pcard h3 { margin: 10px 0 8px; font-size: 19px; font-weight: 700; }
+    .pcard p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--faint); }
+
+    /* variety */
+    .vcard {
+      border: 1px solid var(--line); border-radius: 18px; padding: 26px 26px 22px; background: var(--card);
+      display: flex; flex-direction: column; gap: 12px; transition: all 220ms ease;
+    }
+    .vcard:hover { border-color: var(--blue-500); background: var(--card-hover); }
+    .vcard .tag { font-family: var(--font-mono); font-size: 11.5px; color: var(--mono); letter-spacing: 0.08em; text-transform: uppercase; }
+    .vcard h3 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+    .vcard .who { font-size: 13.5px; color: var(--faint); font-family: var(--font-mono); }
+    .vcard p { margin: 4px 0 0; font-size: 14.5px; line-height: 1.55; color: var(--dim); }
+    .vcard .maps { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--line); font-size: 13px; color: var(--faint); }
+    .vcard .maps b { color: var(--blue-0); font-weight: 600; }
+
+    /* solutions */
+    .family { margin-bottom: 34px; }
+    .family > .fh { display: flex; align-items: baseline; gap: 14px; margin-bottom: 16px; flex-wrap: wrap; }
+    .family > .fh h3 { margin: 0; font-size: 20px; font-weight: 700; }
+    .family > .fh .ftag { font-size: 13.5px; color: var(--faint); }
+    .modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+    .mcard {
+      border: 1px solid var(--line); border-radius: 16px; padding: 22px; background: var(--card);
+      display: flex; flex-direction: column; gap: 10px; transition: all 200ms ease; position: relative;
+    }
+    a.mcard:hover { border-color: var(--blue-500); background: var(--card-hover); transform: translateY(-2px); box-shadow: 0 12px 34px rgba(38,91,255,0.22); }
+    .mcard .mtop { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .mcard .mlabel { font-size: 17px; font-weight: 700; }
+    .chip { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+    .chip.live { color: var(--ok); border: 1px solid rgba(67,224,139,0.4); background: rgba(67,224,139,0.08); }
+    .chip.soon { color: var(--faint); border: 1px solid var(--line); }
+    .mcard .mauth { font-family: var(--font-mono); font-size: 12px; color: var(--mono); }
+    .mcard .mdetail { font-size: 13.5px; line-height: 1.5; color: var(--faint); margin: 0; }
+    .mcard .explore { margin-top: auto; font-size: 13.5px; font-weight: 600; color: var(--blue-0); }
+    a.mcard:hover .explore { color: #fff; }
+
+    /* trust bar */
+    .trust { display: flex; flex-wrap: wrap; gap: 12px 30px; padding: 26px; border: 1px solid var(--line); border-radius: 16px; background: rgba(6,18,55,0.5); justify-content: center; }
+    .trust span { font-family: var(--font-mono); font-size: 13px; color: var(--dim); display: inline-flex; align-items: center; gap: 8px; }
+    .trust span::before { content: "\2713"; color: var(--ok); }
+
+    footer { padding: 40px 0 56px; }
+    footer .frow { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; color: var(--faint); font-size: 13px; }
+    footer .frow img { height: 22px; opacity: 0.85; }
+    footer code { font-family: var(--font-mono); color: var(--mono); }
+
+    @media (max-width: 860px) {
+      .strip, .cols-3, .cols-3.variety { grid-template-columns: 1fr; }
+      nav .secured { display: none; }
+    }
+  </style>
 </head>
 <body>
-  <header>
-    <h1>CyberArk · Secrets Retrieval</h1>
-    <p class="sub">
-      One app, three ways a workload can obtain a secret — pick a path to walk
-      the identity → authentication → retrieval flow end to end.
+  <div class="bg"></div>
+  <div class="bg-tex"></div>
+
+  <nav>
+    <div class="brand">
+      <img src="/cp/assets/idira-icon-white.png" alt="Idira" />
+      <span>Idira Secrets</span>
+    </div>
+    <div class="right">
+      <span class="secured">secured by idira · palo alto networks</span>
+      <a class="btn btn-primary btn-sm" href="#solutions">Start the demo</a>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <header class="hero wrap">
+    <p class="eyebrow">Machine identity for every workload</p>
+    <h1>Your workloads have secrets.<br />They shouldn't have to <span class="accent">store</span> them.</h1>
+    <p class="lede">
+      Idira gives every application — legacy or cloud-native — a cryptographic identity, then delivers
+      short-lived, scoped secrets it never keeps. Pick a path and watch the identity exchange unfold, live.
     </p>
+    <div class="cta">
+      <a class="btn btn-primary" href="#solutions">Choose your adventure &darr;</a>
+      <a class="btn btn-ghost" href="#problem">What's the problem?</a>
+    </div>
+
+    <div class="strip">
+      <div class="step"><span class="num">01</span><h4>Prove identity</h4><p>App hash, client cert, SPIFFE SVID, JWT, or a signed AWS STS request — the workload proves who it is.</p></div>
+      <div class="step"><span class="num">02</span><h4>Get a scoped token</h4><p>A short-lived access token, limited to exactly the secrets this identity is allowed to read.</p></div>
+      <div class="step"><span class="num">03</span><h4>Retrieve, never store</h4><p>The secret is masked at the source and used in memory for one request — nothing lands on disk.</p></div>
+    </div>
   </header>
 
-  <main>
+  <!-- THE PROBLEM -->
+  <section class="block wrap" id="problem">
+    <p class="eyebrow">The problem</p>
+    <h2>Secrets sprawl faster than you can rotate them.</h2>
+    <p class="intro">
+      API keys in config, passwords in environment variables, tokens copied into CI and baked into images.
+      Every one is a standing target, every rotation risks an outage, and every kind of application solves it
+      a little differently. The result is credential sprawl with no consistent notion of <em>who</em> is asking.
+    </p>
+    <div class="cols-3">
+      <div class="pcard"><div class="k">Static</div><h3>Keys everywhere</h3><p>Long-lived credentials scattered across services, files, and pipelines — each a copy that can leak and never expires on its own.</p></div>
+      <div class="pcard"><div class="k">Fragile</div><h3>Rotation = downtime</h3><p>Rotating a shared secret means coordinating every consumer. So it doesn't happen, and the blast radius grows.</p></div>
+      <div class="pcard"><div class="k">Inconsistent</div><h3>No shared identity</h3><p>A VM app, a container, and a lambda each authenticate differently. Without a common identity, policy is guesswork.</p></div>
+    </div>
+  </section>
+
+  <div class="wrap"><div class="divider"></div></div>
+
+  <!-- THE VARIETY -->
+  <section class="block wrap" id="variety">
+    <p class="eyebrow">The variety</p>
+    <h2>Every workload is different. The answer has to fit each one.</h2>
+    <p class="intro">
+      There is no single integration point across a real estate that spans decades. Idira meets each workload
+      where it lives — from a WebSphere app on a VM to a serverless function with no host to install anything on.
+    </p>
+    <div class="cols-3 variety">
+      <div class="vcard">
+        <span class="tag">Traditional</span>
+        <h3>Established apps</h3>
+        <span class="who">Java &middot; .NET &middot; WebSphere &middot; on VMs &amp; app servers</span>
+        <p>No rewrite required. An agent on the host serves cached, rotated credentials locally, or the app makes a mutually-authenticated REST call to a central provider.</p>
+        <div class="maps">Try it &rarr; <b>Credential Provider</b> &middot; <b>Central Credential Provider</b></div>
+      </div>
+      <div class="vcard">
+        <span class="tag">Modern</span>
+        <h3>Cloud-native</h3>
+        <span class="who">Containers &middot; Kubernetes &middot; microservices</span>
+        <p>The platform vouches for the pod. A cryptographic SPIFFE identity is attested and issued automatically, and the gateway authorizes by identity — no stored credential at all.</p>
+        <div class="maps">Try it &rarr; <b>Secure Workload Access</b></div>
+      </div>
+      <div class="vcard">
+        <span class="tag">Agentless</span>
+        <h3>Ephemeral &amp; serverless</h3>
+        <span class="who">Functions &middot; serverless &middot; cloud VMs</span>
+        <p>Nothing to install. Use the identity the platform already issues — a workload JWT or a signed AWS STS request — and exchange it for a short-lived, scoped secret.</p>
+        <div class="maps">Try it &rarr; <b>Conjur &middot; JWT</b> &middot; <b>Conjur &middot; AWS STS</b></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="wrap"><div class="divider"></div></div>
+
+  <!-- THE SOLUTIONS -->
+  <section class="block wrap" id="solutions">
+    <p class="eyebrow">Choose your adventure</p>
+    <h2>Four paths. One principle: identity, not secrets.</h2>
+    <p class="intro">
+      Each demo runs the real flow end to end and shows it in the Idira Inspector — topology, layers of defense,
+      and a live trace of every call. New here? Start with <a href="/swa" style="color:var(--blue-0);font-weight:600;">Secure Workload Access</a>.
+    </p>
+
     {{range .Families}}
-    <section class="panel family">
-      <h2>{{.Title}}</h2>
-      <p class="sub">{{.Tagline}}</p>
-      <div class="mode-list">
+    <div class="family">
+      <div class="fh">
+        <h3>{{.Title}}</h3>
+        <span class="ftag">{{.Tagline}}</span>
+      </div>
+      <div class="modes">
         {{range .Modes}}
         {{if .Available}}
-        <a class="mode-card" href="{{.Href}}">
-          <div class="mode-top">
-            <span class="mode-label">{{.Label}}</span>
-            <span class="tab-tag ok">live</span>
-          </div>
-          <div class="mode-auth mono">{{.Auth}}</div>
-          <p class="detail">{{.Summary}}</p>
+        <a class="mcard" href="{{.Href}}">
+          <div class="mtop"><span class="mlabel">{{.Label}}</span><span class="chip live">live</span></div>
+          <div class="mauth">{{.Auth}}</div>
+          <p class="mdetail">{{.Summary}}</p>
+          <span class="explore">Explore &rarr;</span>
         </a>
         {{else}}
-        <div class="mode-card disabled">
-          <div class="mode-top">
-            <span class="mode-label">{{.Label}}</span>
-            <span class="tab-tag">soon</span>
-          </div>
-          <div class="mode-auth mono">{{.Auth}}</div>
-          <p class="detail">{{.Summary}}</p>
+        <div class="mcard">
+          <div class="mtop"><span class="mlabel">{{.Label}}</span><span class="chip soon">soon</span></div>
+          <div class="mauth">{{.Auth}}</div>
+          <p class="mdetail">{{.Summary}}</p>
         </div>
         {{end}}
         {{end}}
       </div>
-    </section>
+    </div>
     {{end}}
-  </main>
+  </section>
 
-  <footer>
-    <p>swa-demo · <code>/api/catalog</code> · <code>/healthz</code></p>
+  <!-- TRUST -->
+  <section class="block wrap" style="padding-top: 0;">
+    <div class="trust">
+      <span>No stored secrets</span>
+      <span>Short-lived identity</span>
+      <span>Least privilege by policy</span>
+      <span>Masked at the source</span>
+    </div>
+  </section>
+
+  <footer class="wrap">
+    <div class="divider" style="margin-bottom: 28px;"></div>
+    <div class="frow">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <img src="/cp/assets/idira-lockup-white.png" alt="Idira" />
+        <span>Secured by Idira &middot; Palo Alto Networks</span>
+      </div>
+      <div>swa-demo &middot; <code>/api/catalog</code> &middot; <code>/healthz</code></div>
+    </div>
   </footer>
 </body>
 </html>
