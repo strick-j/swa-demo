@@ -7,6 +7,7 @@ import {
   ScanSearch,
   XOctagon,
   CheckCircle2,
+  ChevronLeft,
 } from "lucide-react";
 import { Button } from "./Button";
 import { Badge } from "./Badge";
@@ -41,6 +42,22 @@ const ps = {
     borderBottom: "1px solid var(--border-subtle)",
     flexShrink: 0,
   },
+  homeBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    fontFamily: "var(--font-sans)",
+    fontSize: 12.5,
+    fontWeight: 600,
+    color: "var(--text-muted)",
+    textDecoration: "none",
+    padding: "7px 12px 7px 9px",
+    border: "1px solid var(--border-default)",
+    borderRadius: 999,
+    background: "var(--neutral-0)",
+    transition: "all 160ms var(--ease-standard)",
+    whiteSpace: "nowrap" as const,
+  },
   brand: { display: "flex", alignItems: "center", gap: 11 },
   brandName: {
     fontFamily: "var(--font-display)",
@@ -69,7 +86,7 @@ const ps = {
   body: {
     flex: 1,
     overflowY: "auto" as const,
-    padding: "36px 36px 48px",
+    padding: "36px 36px 72px",
     display: "flex",
     flexDirection: "column" as const,
     gap: 24,
@@ -272,21 +289,41 @@ export function PortalPane({
   return (
     <div style={ps.pane}>
       <header style={ps.appbar}>
-        <div style={ps.brand}>
-          <img
-            src="/cp/assets/idira-icon-color.png"
-            alt=""
-            style={{ height: 22, width: "auto" }}
-          />
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              lineHeight: 1.05,
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <a
+            href="/"
+            style={ps.homeBtn}
+            title="Back to all demos"
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "var(--surface-brand-tint)";
+              e.currentTarget.style.color = "var(--idira-blue-750)";
+              e.currentTarget.style.borderColor = "var(--border-brand)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "var(--neutral-0)";
+              e.currentTarget.style.color = "var(--text-muted)";
+              e.currentTarget.style.borderColor = "var(--border-default)";
             }}
           >
-            <span style={ps.brandName}>Credential Provider</span>
-            <span style={ps.brandSub}>Local AIM · host bridge</span>
+            <ChevronLeft size={16} />
+            <span>All demos</span>
+          </a>
+          <div style={ps.brand}>
+            <img
+              src="/cp/assets/idira-icon-color.png"
+              alt=""
+              style={{ height: 22, width: "auto" }}
+            />
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                lineHeight: 1.05,
+              }}
+            >
+              <span style={ps.brandName}>Credential Provider</span>
+              <span style={ps.brandSub}>Local AIM · host bridge</span>
+            </div>
           </div>
         </div>
         <div style={ps.secured}>
