@@ -4,8 +4,8 @@ import type { ScenarioKey, Provider } from "../engine/providers";
 
 export const INK = {
   text: "#E6ECF7",
-  dim: "rgba(196,210,250,0.62)",
-  faint: "rgba(173,192,252,0.40)",
+  dim: "rgba(210,222,255,0.82)",
+  faint: "rgba(188,203,252,0.66)",
   mono: "#9DB4FF",
   line: "rgba(97,134,252,0.22)",
   lineActive: "var(--idira-blue-500)",

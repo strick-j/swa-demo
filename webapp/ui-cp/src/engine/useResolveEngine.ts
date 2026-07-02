@@ -24,7 +24,6 @@ export interface ResolveEngine {
 
 type Pending = {
   kind: "done" | "error";
-  result: ProviderResult;
   failStage: number;
 };
 
@@ -123,6 +122,9 @@ export function useResolveEngine(provider: Provider): ResolveEngine {
   const maxStage = useRef(-1);
   const statusRef = useRef<EngineStatus>("idle");
   const pending = useRef<Pending | null>(null);
+  // Latest fetched result, applied whenever it arrives (may be after the walk
+  // settles — e.g. a slow foreign-carrier dial).
+  const fetchRes = useRef<ProviderResult | null>(null);
   useEffect(() => {
     statusRef.current = status;
   }, [status]);
@@ -151,13 +153,14 @@ export function useResolveEngine(provider: Provider): ResolveEngine {
       const p = pending.current;
       if (!p) return;
       pending.current = null;
-      setResult(p.result);
+      setStage(-1);
+      // Prefer the real fetched result if it has landed; otherwise the outcome
+      // renders from scenario metadata and the details fill in when it arrives.
+      if (fetchRes.current) setResult(fetchRes.current);
       if (p.kind === "done") {
-        setStage(-1);
         setCompleted(provider.stages.length);
         setStatus("done");
       } else {
-        setStage(-1);
         setCompleted(Math.max(0, p.failStage));
         setStatus("error");
       }
@@ -173,13 +176,24 @@ export function useResolveEngine(provider: Provider): ResolveEngine {
       setResult(null);
       maxStage.current = -1;
       pending.current = null;
+      fetchRes.current = null;
       paceQueue.preemptAndFlush();
 
       const meta = pmeta(provider, scenario);
+      const walk = (target: number) => {
+        for (let i = 0; i <= target; i++) {
+          paceQueue.push({ type: `cp.stage.${i}` });
+        }
+      };
 
-      fetch(`${provider.apiPath}?scenario=${encodeURIComponent(scenario)}`, {
-        method: "POST",
-      })
+      // The fetch never rejects — it always resolves to a ProviderResult and
+      // updates the displayed data as soon as it lands (even after the walk).
+      const fetched = fetch(
+        `${provider.apiPath}?scenario=${encodeURIComponent(scenario)}`,
+        {
+          method: "POST",
+        },
+      )
         .then(async (resp) => {
           let json: Record<string, unknown> = {};
           try {
@@ -187,30 +201,34 @@ export function useResolveEngine(provider: Provider): ResolveEngine {
           } catch {
             json = { error: `HTTP ${resp.status}` };
           }
-          const res = mapResult(provider, json);
-          const success = res.retrieved;
-          const failStage = success
-            ? -1
-            : meta.failStage >= 0
-              ? meta.failStage
-              : 0;
-          const target = success ? provider.stages.length - 1 : failStage;
+          return mapResult(provider, json);
+        })
+        .catch((err) => ({ ...EMPTY, error: String(err) }) as ProviderResult)
+        .then((res) => {
+          fetchRes.current = res;
+          setResult(res);
+          return res;
+        });
 
+      if (!meta.ok) {
+        // Expected-failure scenarios are deterministic — animate the denial
+        // immediately (don't wait for a possibly-slow backend call, e.g. the
+        // foreign-carrier dial). The fetch fills in the real error details.
+        const failStage = meta.failStage >= 0 ? meta.failStage : 0;
+        pending.current = { kind: "error", failStage };
+        walk(failStage);
+      } else {
+        // Expected-success scenarios confirm via the fetch (fast) so a
+        // not-configured backend still surfaces the real failure.
+        fetched.then((res) => {
+          const success = res.retrieved;
           pending.current = {
             kind: success ? "done" : "error",
-            result: res,
-            failStage,
+            failStage: success ? -1 : 0,
           };
-          for (let i = 0; i <= target; i++) {
-            paceQueue.push({ type: `cp.stage.${i}` });
-          }
-        })
-        .catch((err) => {
-          pending.current = null;
-          setResult({ ...EMPTY, error: String(err) });
-          setStatus("error");
-          setStage(-1);
+          walk(success ? provider.stages.length - 1 : 0);
         });
+      }
     },
     [provider],
   );
@@ -218,6 +236,7 @@ export function useResolveEngine(provider: Provider): ResolveEngine {
   const reset = useCallback(() => {
     paceQueue.preemptAndFlush();
     pending.current = null;
+    fetchRes.current = null;
     setStatus("idle");
     setStage(-1);
     setCompleted(0);
