@@ -22,11 +22,16 @@ function Curtain({ state }: { state: LayerState }) {
               background: danger
                 ? "linear-gradient(180deg, #FF724D, #B23808)"
                 : "linear-gradient(180deg, #6186FC, #173EB8)",
-              opacity: lit ? 0.35 + 0.65 * Math.sin((i / bars.length) * Math.PI) : 0.08,
+              opacity: lit
+                ? 0.35 + 0.65 * Math.sin((i / bars.length) * Math.PI)
+                : 0.08,
               transform: lit ? "scaleY(1)" : "scaleY(0.45)",
               transformOrigin: "bottom",
               transition: `opacity 420ms ${i * 22}ms var(--ease-standard), transform 420ms ${i * 22}ms var(--ease-emphasis)`,
-              animation: state === "active" ? `layShimmer 1.1s ${i * 40}ms ease-in-out infinite` : "none",
+              animation:
+                state === "active"
+                  ? `layShimmer 1.1s ${i * 40}ms ease-in-out infinite`
+                  : "none",
               borderRadius: 1,
             }}
           />
@@ -36,7 +41,15 @@ function Curtain({ state }: { state: LayerState }) {
   );
 }
 
-export function LayersInspector({ provider, status, stage, completed, scenario, failStage, result }: InspectorProps) {
+export function LayersInspector({
+  provider,
+  status,
+  stage,
+  completed,
+  scenario,
+  failStage,
+  result,
+}: InspectorProps) {
   const errored = status === "error";
   const n = provider.layers.length;
 
@@ -52,7 +65,13 @@ export function LayersInspector({ provider, status, stage, completed, scenario, 
   };
 
   const passedCount = errored ? Math.max(0, failStage) : completed;
-  const dotPos = errored ? failStage : stage >= 0 ? stage : status === "done" ? n : 0;
+  const dotPos = errored
+    ? failStage
+    : stage >= 0
+      ? stage
+      : status === "done"
+        ? n
+        : 0;
   const railDotTop = `calc(${(Math.min(dotPos + 0.5, n) / n) * 100}%)`;
 
   const headSub =
@@ -112,7 +131,11 @@ export function LayersInspector({ provider, status, stage, completed, scenario, 
                   key={i}
                   style={{
                     ...ls.layer,
-                    borderColor: danger ? INK.dangerLine : lit ? "var(--idira-blue-500)" : INK.line,
+                    borderColor: danger
+                      ? INK.dangerLine
+                      : lit
+                        ? "var(--idira-blue-500)"
+                        : INK.line,
                     background: danger
                       ? "rgba(250,88,45,0.08)"
                       : st === "active"
@@ -120,7 +143,10 @@ export function LayersInspector({ provider, status, stage, completed, scenario, 
                         : st === "passed"
                           ? "rgba(38,91,255,0.06)"
                           : "rgba(120,150,255,0.03)",
-                    boxShadow: st === "active" ? "0 0 0 1px var(--idira-blue-500), 0 10px 30px rgba(38,91,255,0.22)" : "none",
+                    boxShadow:
+                      st === "active"
+                        ? "0 0 0 1px var(--idira-blue-500), 0 10px 30px rgba(38,91,255,0.22)"
+                        : "none",
                     opacity: st === "locked" ? 0.5 : 1,
                   }}
                 >
@@ -128,7 +154,11 @@ export function LayersInspector({ provider, status, stage, completed, scenario, 
                     style={{
                       ...ls.num,
                       color: danger ? INK.danger : lit ? "#fff" : INK.faint,
-                      background: danger ? "rgba(250,88,45,0.18)" : lit ? "var(--idira-blue-500)" : "rgba(255,255,255,0.05)",
+                      background: danger
+                        ? "rgba(250,88,45,0.18)"
+                        : lit
+                          ? "var(--idira-blue-500)"
+                          : "rgba(255,255,255,0.05)",
                     }}
                   >
                     {st === "passed" ? (
@@ -146,16 +176,33 @@ export function LayersInspector({ provider, status, stage, completed, scenario, 
                       <span
                         style={{
                           ...ls.layerStatus,
-                          color: danger ? INK.danger : st === "passed" ? INK.ok : st === "active" ? INK.mono : INK.faint,
+                          color: danger
+                            ? INK.danger
+                            : st === "passed"
+                              ? INK.ok
+                              : st === "active"
+                                ? INK.mono
+                                : INK.faint,
                         }}
                       >
-                        {danger ? "rejected" : st === "passed" ? "cleared" : st === "active" ? "verifying…" : "waiting"}
+                        {danger
+                          ? "rejected"
+                          : st === "passed"
+                            ? "cleared"
+                            : st === "active"
+                              ? "verifying…"
+                              : "waiting"}
                       </span>
                     </div>
                     <div
                       style={{
                         ...ls.layerDetail,
-                        color: lit && !danger ? INK.dim : danger ? "rgba(255,170,140,0.85)" : INK.faint,
+                        color:
+                          lit && !danger
+                            ? INK.dim
+                            : danger
+                              ? "rgba(255,170,140,0.85)"
+                              : INK.faint,
                       }}
                     >
                       {detail}
@@ -200,9 +247,19 @@ export function LayersInspector({ provider, status, stage, completed, scenario, 
 }
 
 const ls = {
-  scroll: { height: "100%", overflowY: "auto" as const, padding: "24px 32px 32px" },
+  scroll: {
+    height: "100%",
+    overflowY: "auto" as const,
+    overflowX: "hidden" as const,
+    padding: "24px 32px 32px",
+  },
   canvas: { maxWidth: 580, margin: "0 auto" },
-  headline: { display: "flex", flexDirection: "column" as const, gap: 4, marginBottom: 18 },
+  headline: {
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 4,
+    marginBottom: 18,
+  },
   headSub: { fontSize: 13.5, color: INK.dim, lineHeight: 1.4 },
   stack: { display: "flex", gap: 16 },
   rail: {
@@ -214,7 +271,14 @@ const ls = {
     marginTop: 6,
     marginBottom: 6,
   },
-  railFill: { position: "absolute" as const, top: 0, left: 0, width: "100%", borderRadius: 3, transition: "height 600ms var(--ease-emphasis)" },
+  railFill: {
+    position: "absolute" as const,
+    top: 0,
+    left: 0,
+    width: "100%",
+    borderRadius: 3,
+    transition: "height 600ms var(--ease-emphasis)",
+  },
   railDot: {
     position: "absolute" as const,
     left: "50%",
@@ -225,7 +289,12 @@ const ls = {
     boxShadow: "0 0 12px #9DB4FF",
     transition: "top 600ms var(--ease-emphasis)",
   },
-  layers: { flex: 1, display: "flex", flexDirection: "column" as const, gap: 12 },
+  layers: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 12,
+  },
   layer: {
     position: "relative" as const,
     display: "flex",
@@ -238,7 +307,15 @@ const ls = {
     transition: "all 340ms var(--ease-standard)",
     minHeight: 74,
   },
-  num: { width: 34, height: 34, borderRadius: 9, display: "grid", placeItems: "center", flexShrink: 0, transition: "all 320ms" },
+  num: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    display: "grid",
+    placeItems: "center",
+    flexShrink: 0,
+    transition: "all 320ms",
+  },
   meta: { flex: 1, minWidth: 0, zIndex: 1 },
   layerName: {
     display: "flex",
@@ -249,8 +326,19 @@ const ls = {
     color: INK.text,
     fontFamily: "var(--font-display)",
   },
-  layerStatus: { fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" as const, fontWeight: 600 },
-  layerDetail: { fontFamily: "var(--font-mono)", fontSize: 11.5, lineHeight: 1.45, marginTop: 3 },
+  layerStatus: {
+    fontFamily: "var(--font-mono)",
+    fontSize: 10,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase" as const,
+    fontWeight: 600,
+  },
+  layerDetail: {
+    fontFamily: "var(--font-mono)",
+    fontSize: 11.5,
+    lineHeight: 1.45,
+    marginTop: 3,
+  },
   curtain: {
     position: "absolute" as const,
     right: 0,
@@ -277,5 +365,10 @@ const ls = {
     gap: 7,
     animation: "layPop 360ms var(--ease-emphasis) both",
   },
-  boundaryBody: { fontFamily: "var(--font-mono)", fontSize: 11.5, color: "rgba(255,180,150,0.85)", lineHeight: 1.55 },
+  boundaryBody: {
+    fontFamily: "var(--font-mono)",
+    fontSize: 11.5,
+    color: "rgba(255,180,150,0.85)",
+    lineHeight: 1.55,
+  },
 };

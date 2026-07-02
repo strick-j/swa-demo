@@ -12,16 +12,26 @@ function VLink({ state }: { state: CVS }) {
       <div
         style={{
           ...ts.vlinkBase,
-          background: lit ? "var(--idira-blue-500)" : state === "failed" ? INK.dangerLine : INK.line,
+          background: lit
+            ? "var(--idira-blue-500)"
+            : state === "failed"
+              ? INK.dangerLine
+              : INK.line,
         }}
       >
-        {state === "active" && <div className="ic-flow" style={ts.vlinkPulse} />}
+        {state === "active" && (
+          <div className="ic-flow" style={ts.vlinkPulse} />
+        )}
       </div>
       {state !== "locked" && (
         <div
           style={{
             ...ts.vArrow,
-            borderTopColor: lit ? "var(--idira-blue-500)" : state === "failed" ? INK.danger : INK.mono,
+            borderTopColor: lit
+              ? "var(--idira-blue-500)"
+              : state === "failed"
+                ? INK.danger
+                : INK.mono,
           }}
         />
       )}
@@ -43,7 +53,11 @@ function NodeCard({
   const isActive = state === "active";
   const isDone = state === "done";
   const isFailed = state === "failed";
-  const border = isFailed ? INK.dangerLine : isDone || isActive ? "var(--idira-blue-500)" : INK.line;
+  const border = isFailed
+    ? INK.dangerLine
+    : isDone || isActive
+      ? "var(--idira-blue-500)"
+      : INK.line;
   const tagColor = isFailed ? INK.danger : isDone ? INK.ok : INK.mono;
 
   return (
@@ -59,13 +73,19 @@ function NodeCard({
             : isDone
               ? "rgba(38,91,255,0.07)"
               : INK.card,
-        boxShadow: isActive ? "0 0 0 1px var(--idira-blue-500), 0 8px 30px rgba(38,91,255,0.25)" : "none",
+        boxShadow: isActive
+          ? "0 0 0 1px var(--idira-blue-500), 0 8px 30px rgba(38,91,255,0.25)"
+          : "none",
         opacity: state === "locked" ? 0.5 : 1,
-        animation: isActive ? "topoPop 360ms var(--ease-emphasis) both" : "none",
+        animation: isActive
+          ? "topoPop 360ms var(--ease-emphasis) both"
+          : "none",
       }}
     >
       <div style={ts.cardHead}>
-        <span style={{ ...ts.cardTitle, color: isFailed ? INK.danger : INK.text }}>
+        <span
+          style={{ ...ts.cardTitle, color: isFailed ? INK.danger : INK.text }}
+        >
           <span
             style={{
               ...ts.cornerTick,
@@ -82,11 +102,23 @@ function NodeCard({
   );
 }
 
-export function TopologyInspector({ provider, status, stage, completed, scenario, failStage, result }: InspectorProps) {
+export function TopologyInspector({
+  provider,
+  status,
+  stage,
+  completed,
+  scenario,
+  failStage,
+  result,
+}: InspectorProps) {
   const errored = status === "error";
   const done = status === "done";
 
-  const stateFor = (stages: number[], doneAfter: number, failsAt: number[]): CVS => {
+  const stateFor = (
+    stages: number[],
+    doneAfter: number,
+    failsAt: number[],
+  ): CVS => {
     if (errored && failsAt.includes(failStage)) return "failed";
     if (completed >= doneAfter) return "done";
     if (stages.includes(stage)) return "active";
@@ -100,7 +132,10 @@ export function TopologyInspector({ provider, status, stage, completed, scenario
     return "locked";
   };
 
-  const boundaryTitle = scenario === "denied" ? "Authorization boundary" : "Authentication boundary";
+  const boundaryTitle =
+    scenario === "denied"
+      ? "Authorization boundary"
+      : "Authentication boundary";
   const boundaryBody =
     scenario === "denied"
       ? "The caller was authenticated, but the Application is not a member of the requested Safe. Nothing was returned."
@@ -146,7 +181,8 @@ export function TopologyInspector({ provider, status, stage, completed, scenario
           style={{
             position: "absolute",
             inset: 0,
-            background: "linear-gradient(90deg, transparent, rgba(38,91,255,0.4), transparent)",
+            background:
+              "linear-gradient(90deg, transparent, rgba(38,91,255,0.4), transparent)",
             animation: "topoFlash 280ms cubic-bezier(0.16, 1, 0.3, 1) forwards",
             pointerEvents: "none" as const,
             zIndex: 10,
@@ -158,8 +194,19 @@ export function TopologyInspector({ provider, status, stage, completed, scenario
 }
 
 const ts = {
-  scroll: { position: "relative" as const, height: "100%", overflowY: "auto" as const, padding: "22px 30px 30px" },
-  canvas: { maxWidth: 560, margin: "0 auto", display: "flex", flexDirection: "column" as const },
+  scroll: {
+    position: "relative" as const,
+    height: "100%",
+    overflowY: "auto" as const,
+    overflowX: "hidden" as const,
+    padding: "22px 30px 30px",
+  },
+  canvas: {
+    maxWidth: 560,
+    margin: "0 auto",
+    display: "flex",
+    flexDirection: "column" as const,
+  },
   card: {
     display: "flex",
     flexDirection: "column" as const,
@@ -170,7 +217,12 @@ const ts = {
     transition: "all 320ms var(--ease-standard)",
     backdropFilter: "blur(2px)",
   },
-  cardHead: { display: "flex", alignItems: "center", gap: 8, justifyContent: "space-between" },
+  cardHead: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    justifyContent: "space-between",
+  },
   cardTitle: {
     display: "flex",
     alignItems: "center",
@@ -180,7 +232,13 @@ const ts = {
     letterSpacing: "0.08em",
     textTransform: "uppercase" as const,
   },
-  cornerTick: { width: 7, height: 7, borderLeft: "2px solid", borderTop: "2px solid", display: "inline-block" },
+  cornerTick: {
+    width: 7,
+    height: 7,
+    borderLeft: "2px solid",
+    borderTop: "2px solid",
+    display: "inline-block",
+  },
   cardTag: {
     fontFamily: "var(--font-mono)",
     fontSize: 10.5,
@@ -188,8 +246,20 @@ const ts = {
     textTransform: "uppercase" as const,
     fontWeight: 600,
   },
-  vlinkWrap: { position: "relative" as const, height: 30, display: "flex", justifyContent: "center", alignItems: "center" },
-  vlinkBase: { position: "relative" as const, width: 2, height: "100%", overflow: "hidden", transition: "background 300ms" },
+  vlinkWrap: {
+    position: "relative" as const,
+    height: 30,
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  vlinkBase: {
+    position: "relative" as const,
+    width: 2,
+    height: "100%",
+    overflow: "hidden",
+    transition: "background 300ms",
+  },
   vlinkPulse: {
     position: "absolute" as const,
     top: 0,
@@ -219,7 +289,12 @@ const ts = {
     gap: 7,
     animation: "topoPop 360ms var(--ease-emphasis) both",
   },
-  boundaryBody: { fontFamily: "var(--font-mono)", fontSize: 11.5, color: "rgba(255,180,150,0.85)", lineHeight: 1.55 },
+  boundaryBody: {
+    fontFamily: "var(--font-mono)",
+    fontSize: 11.5,
+    color: "rgba(255,180,150,0.85)",
+    lineHeight: 1.55,
+  },
   resolved: {
     marginTop: 18,
     display: "flex",
