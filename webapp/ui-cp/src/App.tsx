@@ -19,9 +19,21 @@ type ViewMode = "topology" | "layers" | "trace";
 type PaceMode = "off" | "fast" | "medium" | "slow";
 
 const VIEW_OPTIONS: { v: ViewMode; label: string; icon: React.ReactNode }[] = [
-  { v: "topology", label: "Topo", icon: <GitFork style={{ width: 13, height: 13 }} /> },
-  { v: "layers", label: "Layers", icon: <Layers style={{ width: 13, height: 13 }} /> },
-  { v: "trace", label: "Trace", icon: <Terminal style={{ width: 13, height: 13 }} /> },
+  {
+    v: "topology",
+    label: "Topo",
+    icon: <GitFork style={{ width: 13, height: 13 }} />,
+  },
+  {
+    v: "layers",
+    label: "Layers",
+    icon: <Layers style={{ width: 13, height: 13 }} />,
+  },
+  {
+    v: "trace",
+    label: "Trace",
+    icon: <Terminal style={{ width: 13, height: 13 }} />,
+  },
 ];
 
 const PACE_OPTIONS: { v: PaceMode; label: string }[] = [
@@ -31,11 +43,16 @@ const PACE_OPTIONS: { v: PaceMode; label: string }[] = [
   { v: "slow", label: "Slow" },
 ];
 
-// Provider is fixed per page (chosen by URL); resolve it once.
-const provider = providerFromPath(typeof window !== "undefined" ? window.location.pathname : "/cp");
+// Provider is fixed per page (chosen by URL + hash); resolve it once.
+const provider =
+  typeof window !== "undefined"
+    ? providerFromPath(window.location.pathname, window.location.hash)
+    : providerFromPath("/cp");
 
 export function App() {
-  const [scenario, setScenario] = useState<ScenarioKey>(() => provider.scenarioOrder[0]!);
+  const [scenario, setScenario] = useState<ScenarioKey>(
+    () => provider.scenarioOrder[0]!,
+  );
   const [view, setView] = useState<ViewMode>("topology");
   const [pace, setPace] = useState<PaceMode>("medium");
   const engine = useResolveEngine(provider);
@@ -63,8 +80,17 @@ export function App() {
   const inspectorControls = useMemo(
     () => (
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <DarkSeg<ViewMode> value={view} onChange={setView} options={VIEW_OPTIONS} />
-        <DarkSeg<PaceMode> value={pace} onChange={setPace} options={PACE_OPTIONS} label="Pace" />
+        <DarkSeg<ViewMode>
+          value={view}
+          onChange={setView}
+          options={VIEW_OPTIONS}
+        />
+        <DarkSeg<PaceMode>
+          value={pace}
+          onChange={setPace}
+          options={PACE_OPTIONS}
+          label="Pace"
+        />
       </div>
     ),
     [view, pace],
@@ -83,11 +109,24 @@ export function App() {
   return (
     <div
       data-motion="cinematic"
-      style={{ display: "flex", height: "100vh", width: "100vw", overflow: "hidden" }}
+      style={{
+        display: "flex",
+        height: "100vh",
+        width: "100vw",
+        overflow: "hidden",
+      }}
     >
       <AccessibilityHints onReset={handleReset} targetId="main-content" />
 
-      <div id="main-content" style={{ flex: "0 0 44%", minWidth: 440, maxWidth: 640, height: "100%" }}>
+      <div
+        id="main-content"
+        style={{
+          flex: "0 0 44%",
+          minWidth: 440,
+          maxWidth: 640,
+          height: "100%",
+        }}
+      >
         <PortalPane
           provider={provider}
           scenario={scenario}

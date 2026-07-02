@@ -117,7 +117,6 @@ func New(d Deps) *Server {
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleLanding)
-	mux.HandleFunc("/secrets-manager", s.handleSecretsManager)
 	// The one inspector SPA (Vite base=/cp/, assets under /cp/) serves the whole
 	// Credential-Providers + SWA family: /cp (local CP), /credential-providers
 	// (CCP), and /swa. The React app picks the provider from the URL path; the
@@ -133,10 +132,15 @@ func (s *Server) Routes() http.Handler {
 		mux.HandleFunc("/credential-providers/", s.serveInspectorIndex)
 		mux.HandleFunc("/swa", s.serveInspectorIndex)
 		mux.HandleFunc("/swa/", s.serveInspectorIndex)
+		// Secrets Manager (Conjur); the SPA reads the URL hash to pick authn-jwt
+		// vs authn-iam (both under /secrets-manager).
+		mux.HandleFunc("/secrets-manager", s.serveInspectorIndex)
+		mux.HandleFunc("/secrets-manager/", s.serveInspectorIndex)
 	} else {
 		mux.HandleFunc("/cp", s.handleCredentialProvider)
 		mux.HandleFunc("/credential-providers", s.handleCredentialProviders)
 		mux.HandleFunc("/swa", s.handleSWA)
+		mux.HandleFunc("/secrets-manager", s.handleSecretsManager)
 	}
 	mux.HandleFunc("/api/catalog", s.handleCatalog)
 	mux.HandleFunc("/api/retrieve", s.handleRetrieve)
@@ -145,6 +149,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/svid", s.handleSVID)
 	mux.HandleFunc("/api/scenarios", s.handleScenarios)
 	mux.HandleFunc("/api/swa", s.handleAPISWA)
+	mux.HandleFunc("/api/conjur", s.handleConjur)
 	mux.HandleFunc("/api/db", s.handleDB)
 	mux.HandleFunc("/probe", s.handleProbe)
 	mux.HandleFunc("/probe-svid", s.handleProbeSVID)
@@ -554,6 +559,95 @@ func firstNonEmpty(a, b string) string {
 		return a
 	}
 	return b
+}
+
+// conjurInfo is the Secrets Manager (Conjur) inspector payload: the workload
+// identity that authenticated, the scoped access-token, and the variable read.
+type conjurInfo struct {
+	AuthMethod string `json:"auth_method"`
+	Identity   string `json:"identity,omitempty"` // spiffe sub (jwt) or caller ARN (iam)
+	Audience   string `json:"audience,omitempty"` // jwt
+	Issuer     string `json:"issuer,omitempty"`   // jwt
+	HostID     string `json:"host_id,omitempty"`  // conjur host the identity maps to
+	AwsAccount string `json:"aws_account,omitempty"`
+	AwsRegion  string `json:"aws_region,omitempty"`
+	SecretName string `json:"secret_name,omitempty"` // variable requested
+	TokenScope string `json:"token_scope,omitempty"` // variables the token may read
+}
+
+type conjurResp struct {
+	Family    string     `json:"family"`
+	Mode      string     `json:"mode"`
+	Retrieved bool       `json:"retrieved"`
+	Simulated bool       `json:"simulated"`
+	Error     string     `json:"error,omitempty"`
+	Masked    string     `json:"masked,omitempty"`
+	Conjur    conjurInfo `json:"conjur"`
+}
+
+// deniedConjurVar is the out-of-scope variable used by the denied scenario.
+const deniedConjurVar = "data/vault/prod/master-api-key"
+
+// handleConjur runs one Secrets Manager (Conjur) scenario for the inspector:
+// ?mode=jwt|iam&scenario=authorized|denied. It reshapes the existing conjur-jwt /
+// conjur-iam retrievers into a flat payload. The denied scenario keeps the
+// (successful) authentication but refuses an out-of-scope variable read.
+func (s *Server) handleConjur(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "use POST"})
+		return
+	}
+	mode := "conjur-jwt"
+	if r.URL.Query().Get("mode") == "iam" {
+		mode = "conjur-iam"
+	}
+	scenario := r.URL.Query().Get("scenario")
+
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+
+	if s.registry == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "registry unavailable"})
+		return
+	}
+	res, ok := s.registry.Retrieve(ctx, mode)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "unknown conjur mode"})
+		return
+	}
+
+	info := conjurInfo{AuthMethod: res.AuthMethod, Identity: res.Identity, SecretName: res.SecretName, TokenScope: res.SecretName}
+	if res.JWT != nil {
+		if v, ok := res.JWT.Claims["sub"].(string); ok && v != "" {
+			info.Identity = v
+		}
+		if v, ok := res.JWT.Claims["aud"].(string); ok {
+			info.Audience = v
+		}
+		if v, ok := res.JWT.Claims["iss"].(string); ok {
+			info.Issuer = v
+		}
+	}
+	if res.AWS != nil {
+		info.Identity = firstNonEmpty(res.AWS.CallerARN, info.Identity)
+		info.AwsAccount = res.AWS.Account
+		info.AwsRegion = res.AWS.Region
+		info.HostID = res.AWS.HostID
+	}
+
+	resp := conjurResp{Family: "secrets-manager", Mode: mode, Simulated: res.Simulated, Conjur: info}
+	if scenario == "denied" {
+		// Authentication succeeded and a scoped token was granted, but the token
+		// is not permitted to read this out-of-scope variable.
+		resp.Retrieved = false
+		resp.Conjur.SecretName = deniedConjurVar
+		resp.Error = "403 Forbidden — the scoped access token is not authorized to read " + deniedConjurVar
+	} else {
+		resp.Retrieved = res.Retrieved
+		resp.Masked = res.Masked
+		resp.Error = res.Error
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // handleScenarios aggregates the three identity outcomes for the switcher: the

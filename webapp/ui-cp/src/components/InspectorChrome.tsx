@@ -75,7 +75,7 @@ function errorPhrase(scenario: ScenarioKey): string {
     case "no-cert":
       return "Rejected · no client certificate";
     case "denied":
-      return "Denied · Safe not authorized";
+      return "Denied · not authorized";
     case "untrusted":
       return "Denied · SPIFFE ID not allow-listed";
     case "unknown":
@@ -106,7 +106,9 @@ export function InspectorChrome({
       ? "Retrieved · secret hashed on host, never stored"
       : provider.id === "swa"
         ? "Reached the database · authorized by SPIFFE ID"
-        : "Retrieved · credential masked at the source";
+        : provider.id === "conjur-jwt" || provider.id === "conjur-iam"
+          ? "Retrieved · scoped token, secret masked at the source"
+          : "Retrieved · credential masked at the source";
 
   const phase =
     status === "idle"

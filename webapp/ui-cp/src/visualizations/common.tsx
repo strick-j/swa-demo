@@ -61,6 +61,14 @@ export interface ProviderResult {
   peerUri: string;
   issuer: string;
   trustDomain: string;
+  // Conjur (Secrets Manager) fields:
+  identity: string; // spiffe sub (jwt) or caller ARN (iam)
+  authMethod: string;
+  conjurHost: string;
+  awsAccount: string;
+  awsRegion: string;
+  secretName: string;
+  tokenScope: string;
 }
 
 /** Shared props for all inspector visualizations. */

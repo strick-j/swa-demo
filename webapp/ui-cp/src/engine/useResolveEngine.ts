@@ -77,8 +77,15 @@ function mapResult(
     dbRows: rows,
     dbError: s(obj.db_error),
     peerUri: s(obj.peer_uri),
-    issuer: s(obj.issuer),
+    issuer: s(obj.issuer) || s(json.issuer),
     trustDomain: s(obj.trust_domain),
+    identity: s(obj.identity),
+    authMethod: s(obj.auth_method),
+    conjurHost: s(obj.host_id),
+    awsAccount: s(obj.aws_account),
+    awsRegion: s(obj.aws_region),
+    secretName: s(obj.secret_name),
+    tokenScope: s(obj.token_scope),
   };
 }
 
@@ -111,6 +118,13 @@ const EMPTY: ProviderResult = {
   peerUri: "",
   issuer: "",
   trustDomain: "",
+  identity: "",
+  authMethod: "",
+  conjurHost: "",
+  awsAccount: "",
+  awsRegion: "",
+  secretName: "",
+  tokenScope: "",
 };
 
 export function useResolveEngine(provider: Provider): ResolveEngine {
@@ -188,8 +202,9 @@ export function useResolveEngine(provider: Provider): ResolveEngine {
 
       // The fetch never rejects — it always resolves to a ProviderResult and
       // updates the displayed data as soon as it lands (even after the walk).
+      const sep = provider.apiPath.includes("?") ? "&" : "?";
       const fetched = fetch(
-        `${provider.apiPath}?scenario=${encodeURIComponent(scenario)}`,
+        `${provider.apiPath}${sep}scenario=${encodeURIComponent(scenario)}`,
         {
           method: "POST",
         },

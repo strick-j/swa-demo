@@ -491,6 +491,10 @@ export function PortalPane({
               </div>
               <div style={ps.manifest}>
                 <Row k="Application" v={r.appId} />
+                <Row k="Identity" v={r.identity} />
+                <Row k="Auth method" v={r.authMethod} />
+                <Row k="Conjur host" v={r.conjurHost} />
+                <Row k="Variable" v={r.secretName} />
                 <Row k="Client certificate (CN)" v={r.certCn} />
                 <Row k="Caller fingerprint" v={r.appHash} />
                 <Row
@@ -545,7 +549,7 @@ export function PortalPane({
                 <div style={ps.errBar}>
                   <div style={ps.errCode}>
                     <XOctagon size={18} />
-                    <span>{r?.errorCode || "retrieval failed"}</span>
+                    <span>{r?.errorCode || meta.label}</span>
                   </div>
                   <Tag tone="danger">
                     {scenario === "denied" ? "authz deny" : "authn deny"}
