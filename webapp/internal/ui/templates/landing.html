@@ -28,10 +28,12 @@
       background: radial-gradient(120% 90% at 80% 0%, #0E2A78 0%, #061D63 38%, #050F38 100%);
     }
     .bg-tex {
-      position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: 0.35;
+      position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: 0.3;
       background: url("/cp/assets/security-layers-blue.png") no-repeat right bottom; background-size: 46%;
-      -webkit-mask-image: linear-gradient(to left, #000 30%, transparent 88%);
-      mask-image: linear-gradient(to left, #000 30%, transparent 88%);
+      /* Radial fade anchored to the bottom-right corner so the artwork dissolves
+         smoothly toward the top-left — no hard top or left edge. */
+      -webkit-mask-image: radial-gradient(115% 115% at 100% 100%, #000 10%, rgba(0,0,0,0.45) 42%, transparent 76%);
+      mask-image: radial-gradient(115% 115% at 100% 100%, #000 10%, rgba(0,0,0,0.45) 42%, transparent 76%);
     }
     .wrap { max-width: 1120px; margin: 0 auto; padding: 0 32px; }
     .eyebrow {

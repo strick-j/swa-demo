@@ -636,13 +636,22 @@ func (s *Server) handleConjur(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := conjurResp{Family: "secrets-manager", Mode: mode, Simulated: res.Simulated, Conjur: info}
-	if scenario == "denied" {
+	switch scenario {
+	case "invalid":
+		// The presented credential fails authentication before any token is issued.
+		resp.Retrieved = false
+		if mode == "conjur-iam" {
+			resp.Error = "401 Unauthorized — authn-iam rejected the signed request (AWS replay failed: invalid/expired signature, or the ARN is not authorized)"
+		} else {
+			resp.Error = "401 Unauthorized — authn-jwt rejected the token (JWT validation failed: signature, issuer, audience, or expiry)"
+		}
+	case "denied":
 		// Authentication succeeded and a scoped token was granted, but the token
 		// is not permitted to read this out-of-scope variable.
 		resp.Retrieved = false
 		resp.Conjur.SecretName = deniedConjurVar
 		resp.Error = "403 Forbidden — the scoped access token is not authorized to read " + deniedConjurVar
-	} else {
+	default:
 		resp.Retrieved = res.Retrieved
 		resp.Masked = res.Masked
 		resp.Error = res.Error

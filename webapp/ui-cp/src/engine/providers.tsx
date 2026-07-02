@@ -14,6 +14,8 @@ import {
   Send,
   ShieldCheck,
   Database,
+  Server,
+  Cloud,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -26,6 +28,7 @@ import {
 export type ScenarioKey =
   | "authorized"
   | "invalid-hash"
+  | "invalid"
   | "no-cert"
   | "denied"
   | "dual"
@@ -1345,6 +1348,13 @@ const CONJUR_WORKLOAD =
 // identity (JWT-SVID vs a signed sts:GetCallerIdentity).
 function makeConjur(jwt: boolean): Provider {
   const authn = jwt ? "authn-jwt" : "authn-iam";
+  const readStage = jwt ? 4 : 5; // index of the "retrieve secret" stage
+  const authnFail = jwt ? 2 : 3; // index of the stage where authentication fails
+  const arn = "arn:aws:sts::123456789012:assumed-role/swa-demo-host/i-0abc123";
+  const authnDenyNote = jwt
+    ? "401 · authn-jwt rejected — the JWT failed validation"
+    : "401 · authn-iam rejected — AWS did not verify the signed request";
+
   return {
     id: jwt ? "conjur-jwt" : "conjur-iam",
     apiPath: `/api/conjur?mode=${jwt ? "jwt" : "iam"}`,
@@ -1376,31 +1386,63 @@ function makeConjur(jwt: boolean): Provider {
       { k: "Variable", v: CONJUR_SECRET },
       { k: "Auth", v: authn, brand: true },
     ],
-    stages: [
-      jwt
-        ? {
-            key: "identity",
-            label: "Fetch JWT-SVID",
-            verb: "Fetching JWT-SVID",
-          }
-        : {
-            key: "identity",
+    stages: jwt
+      ? [
+          { key: "fetch", label: "Fetch JWT-SVID", verb: "Fetching JWT-SVID" },
+          {
+            key: "present",
+            label: "Send to Conjur",
+            verb: "Sending to Conjur",
+          },
+          {
+            key: "verify",
+            label: "Validate JWT",
+            verb: "Validating JWT (JWKS + claims)",
+          },
+          {
+            key: "token",
+            label: "Access token",
+            verb: "Granting scoped token",
+          },
+          {
+            key: "read",
+            label: "Retrieve secret",
+            verb: "Reading the variable",
+          },
+        ]
+      : [
+          {
+            key: "imds",
+            label: "Instance profile",
+            verb: "Fetching instance profile",
+          },
+          {
+            key: "sign",
             label: "Sign STS identity",
             verb: "Signing STS identity",
           },
-      {
-        key: "authn",
-        label: "Conjur authentication",
-        verb: `Authenticating (${authn})`,
-      },
-      {
-        key: "token",
-        label: "Access token granted",
-        verb: "Granting scoped token",
-      },
-      { key: "read", label: "Retrieve secret", verb: "Reading the variable" },
-    ],
-    scenarioOrder: ["authorized", "denied"],
+          {
+            key: "present",
+            label: "Send to Conjur",
+            verb: "Sending to Conjur",
+          },
+          {
+            key: "verify",
+            label: "AWS verification",
+            verb: "Verifying with AWS STS",
+          },
+          {
+            key: "token",
+            label: "Access token",
+            verb: "Granting scoped token",
+          },
+          {
+            key: "read",
+            label: "Retrieve secret",
+            verb: "Reading the variable",
+          },
+        ],
+    scenarioOrder: ["authorized", "invalid", "denied"],
     scenarios: {
       authorized: {
         key: "authorized",
@@ -1428,12 +1470,44 @@ function makeConjur(jwt: boolean): Provider {
           },
         ],
       },
+      invalid: {
+        key: "invalid",
+        label: "Invalid credential · expected authn deny",
+        tag: "authn deny",
+        ok: false,
+        failStage: authnFail,
+        desc: jwt
+          ? "Present an invalid or expired JWT (bad signature / wrong audience / expired) → Conjur's authn-jwt validation rejects it before any token is issued."
+          : "Present a tampered or expired STS request (or an ARN mapped to no host) → Conjur replays it to AWS, AWS rejects it, and authn-iam fails before any token is issued.",
+        evidence: [
+          {
+            lead: jwt
+              ? "The token failed validation."
+              : "AWS didn't verify the request.",
+            body: jwt
+              ? "Conjur checked the JWT against the trust-domain JWKS and required claims (issuer, audience, expiry) — it did not pass."
+              : "Conjur replayed the sts:GetCallerIdentity to AWS; AWS rejected it (bad or expired signature), or the verified ARN maps to no Conjur host.",
+          },
+          {
+            lead: "No token, no secret.",
+            body: "Authentication failed before any access token was issued — nothing was authorized and nothing was read.",
+          },
+          {
+            lead: jwt
+              ? "Signatures, not secrets."
+              : "Verified, not trusted blindly.",
+            body: jwt
+              ? "A forged or expired JWT can't be minted without the trust domain's signing key — the boundary holds."
+              : "Conjur doesn't take the caller's word for it; it re-verifies the identity with AWS on every request.",
+          },
+        ],
+      },
       denied: {
         key: "denied",
         label: "Out of scope · expected authz deny",
         tag: "authz deny",
         ok: false,
-        failStage: 3,
+        failStage: readStage,
         desc: "Authentication succeeds and a scoped token is granted — but the token is NOT authorized to read a variable outside its scope → Conjur refuses the read (403).",
         evidence: [
           {
@@ -1451,161 +1525,322 @@ function makeConjur(jwt: boolean): Provider {
         ],
       },
     },
-    nodes: [
-      {
-        key: "workload",
-        title: jwt ? "Workload · JWT-SVID" : "Workload · AWS STS",
-        stages: [0],
-        doneAfter: 1,
-        failsAt: [],
-        tag: (s) => (s === "done" ? "identity" : "workload"),
-        body: ({ result }) =>
-          jwt ? (
-            <>
-              <Kv
-                k="SPIFFE ID (sub)"
-                v={result?.identity || result?.spiffeId || CONJUR_WORKLOAD}
-              />
-              <span style={foot}>
-                fetches a JWT-SVID from the SWA Workload API · aud=conjur
-              </span>
-            </>
-          ) : (
-            <>
-              <Kv
-                k="Caller ARN"
-                v={
-                  result?.identity ||
-                  "arn:aws:sts::…:assumed-role/swa-demo-webapp"
-                }
-              />
-              <span style={foot}>
-                signs sts:GetCallerIdentity with the instance-profile role
-                (IMDS)
-              </span>
-            </>
-          ),
-      },
-      {
-        key: "authn",
-        title: jwt ? "Conjur · authn-jwt" : "Conjur · authn-iam",
-        stages: [1],
-        doneAfter: 2,
-        failsAt: [],
-        tag: (s) => (s === "done" ? "authenticated" : "verifying"),
-        body: ({ state }) => (
-          <>
-            <Kv
-              k="Validated"
-              v={
-                jwt
-                  ? "trust-domain JWKS + claims"
-                  : "STS replayed · ARN verified"
-              }
-              vColor={state === "done" ? INK.ok : INK.mono}
-            />
-            <span style={foot}>
-              {jwt
-                ? "Conjur checks the JWT signature, issuer, and audience"
-                : "Conjur replays the signed request to AWS STS and maps the ARN to a host"}
-            </span>
-          </>
-        ),
-      },
-      {
-        key: "token",
-        title: "Access token · scoped",
-        stages: [2],
-        doneAfter: 3,
-        failsAt: [],
-        tag: (s) => (s === "done" ? "granted" : ""),
-        body: ({ state, result }) => (
-          <>
-            <Kv
-              k="Scope"
-              v={result?.tokenScope || CONJUR_SECRET}
-              vColor={state === "done" ? INK.ok : INK.mono}
-            />
-            <span style={foot}>
-              short-lived · limited to specific variables by policy
-            </span>
-          </>
-        ),
-      },
-      {
-        key: "secret",
-        title: "Secret · variable",
-        stages: [3],
-        doneAfter: 4,
-        failsAt: [3],
-        tag: (s) =>
-          s === "failed" ? "authz deny" : s === "done" ? "returned" : "",
-        body: ({ state, result }) =>
-          state === "failed" ? (
-            <span style={dangerNote}>
-              403 · token not authorized to read{" "}
-              {result?.secretName || "this variable"}
-            </span>
-          ) : state === "done" ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <Kv k="Variable" v={result?.secretName || CONJUR_SECRET} />
-              <Kv
-                k="Value (masked)"
-                v={result?.masked || "—"}
-                vColor={INK.ok}
-              />
-            </div>
-          ) : (
-            <span style={dimNote}>read the variable with the scoped token</span>
-          ),
-      },
-    ],
-    layers: [
-      {
-        name: jwt ? "Fetch JWT-SVID" : "Sign STS identity",
-        Icon: jwt ? BadgeCheck : Fingerprint,
-        pass: () =>
-          jwt
-            ? "JWT-SVID fetched from the Workload API · aud=conjur"
-            : "sts:GetCallerIdentity signed with the instance-profile role",
-        reject: () => "could not obtain a workload identity",
-        idle: jwt
-          ? "fetch a JWT-SVID from SWA"
-          : "sign an STS caller identity (IMDS)",
-      },
-      {
-        name: "Conjur authentication",
-        Icon: ShieldCheck,
-        pass: () =>
-          jwt
-            ? `${authn} · JWKS + claims verified`
-            : `${authn} · STS replayed · ARN verified`,
-        reject: () => `${authn} rejected the identity`,
-        idle: `authenticate to Conjur (${authn})`,
-      },
-      {
-        name: "Access token",
-        Icon: KeyRound,
-        pass: ({ result }) =>
-          `scoped token granted · ${result?.tokenScope || CONJUR_SECRET}`,
-        reject: () => "no access token granted",
-        idle: "receive a short-lived, scoped access token",
-      },
-      {
-        name: "Retrieve secret",
-        Icon: Database,
-        pass: ({ result }) =>
-          `${result?.masked || "returned"} · ${result?.secretName || CONJUR_SECRET}`,
-        reject: ({ result }) =>
-          `403 · token not authorized to read ${result?.secretName || "this variable"}`,
-        idle: "read the variable with the scoped token",
-      },
-    ],
-    buildTrace: (_scenario, r) => {
+    nodes: jwt
+      ? [
+          {
+            key: "workload",
+            title: "Workload · JWT-SVID",
+            stages: [0],
+            doneAfter: 1,
+            failsAt: [],
+            tag: (s) => (s === "done" ? "identity" : "workload"),
+            body: ({ result }) => (
+              <>
+                <Kv
+                  k="SPIFFE ID (sub)"
+                  v={result?.identity || result?.spiffeId || CONJUR_WORKLOAD}
+                />
+                <span style={foot}>
+                  fetches a JWT-SVID from the SWA Workload API · aud=conjur
+                </span>
+              </>
+            ),
+          },
+          {
+            key: "authn",
+            title: "Conjur · authn-jwt",
+            stages: [1, 2],
+            doneAfter: 3,
+            failsAt: [1, 2],
+            tag: (s) =>
+              s === "failed"
+                ? "authn deny"
+                : s === "done"
+                  ? "authenticated"
+                  : "validating",
+            body: ({ state }) =>
+              state === "failed" ? (
+                <span style={dangerNote}>{authnDenyNote}</span>
+              ) : (
+                <>
+                  <Kv
+                    k="Validated"
+                    v="trust-domain JWKS + claims"
+                    vColor={state === "done" ? INK.ok : INK.mono}
+                  />
+                  <span style={foot}>
+                    Conjur checks the JWT signature, issuer, and audience
+                  </span>
+                </>
+              ),
+          },
+          {
+            key: "token",
+            title: "Access token · scoped",
+            stages: [3],
+            doneAfter: 4,
+            failsAt: [],
+            tag: (s) => (s === "done" ? "granted" : ""),
+            body: ({ state, result }) => (
+              <>
+                <Kv
+                  k="Scope"
+                  v={result?.tokenScope || CONJUR_SECRET}
+                  vColor={state === "done" ? INK.ok : INK.mono}
+                />
+                <span style={foot}>
+                  short-lived · limited to specific variables by policy
+                </span>
+              </>
+            ),
+          },
+          {
+            key: "secret",
+            title: "Secret · variable",
+            stages: [4],
+            doneAfter: 5,
+            failsAt: [4],
+            tag: (s) =>
+              s === "failed" ? "authz deny" : s === "done" ? "returned" : "",
+            body: ({ state, result }) =>
+              state === "failed" ? (
+                <span style={dangerNote}>
+                  403 · token not authorized to read{" "}
+                  {result?.secretName || "this variable"}
+                </span>
+              ) : state === "done" ? (
+                <div
+                  style={{ display: "flex", flexDirection: "column", gap: 8 }}
+                >
+                  <Kv k="Variable" v={result?.secretName || CONJUR_SECRET} />
+                  <Kv
+                    k="Value (masked)"
+                    v={result?.masked || "—"}
+                    vColor={INK.ok}
+                  />
+                </div>
+              ) : (
+                <span style={dimNote}>
+                  read the variable with the scoped token
+                </span>
+              ),
+          },
+        ]
+      : [
+          {
+            key: "workload",
+            title: "Workload · this pod",
+            stages: [0],
+            doneAfter: 1,
+            failsAt: [],
+            tag: (s) => (s === "done" ? "profile" : "workload"),
+            body: ({ result }) => (
+              <>
+                <Kv k="Instance role" v={result?.identity || arn} />
+                <span style={foot}>
+                  asks the host (IMDS) for its instance-profile role
+                </span>
+              </>
+            ),
+          },
+          {
+            key: "sts",
+            title: "AWS STS · signed identity",
+            stages: [1],
+            doneAfter: 2,
+            failsAt: [],
+            tag: (s) => (s === "done" ? "signed" : "signing"),
+            body: ({ state, result }) => (
+              <>
+                <Kv
+                  k="Caller ARN"
+                  v={result?.identity || arn}
+                  vColor={state === "done" ? INK.ok : INK.mono}
+                />
+                <span style={foot}>
+                  signs sts:GetCallerIdentity with the role credentials
+                </span>
+              </>
+            ),
+          },
+          {
+            key: "authn",
+            title: "Conjur · authn-iam",
+            stages: [2, 3],
+            doneAfter: 4,
+            failsAt: [2, 3],
+            tag: (s) =>
+              s === "failed"
+                ? "authn deny"
+                : s === "done"
+                  ? "verified"
+                  : "verifying",
+            body: ({ state }) =>
+              state === "failed" ? (
+                <span style={dangerNote}>{authnDenyNote}</span>
+              ) : (
+                <>
+                  <Kv
+                    k="AWS verify"
+                    v="replayed · ARN confirmed"
+                    vColor={state === "done" ? INK.ok : INK.mono}
+                  />
+                  <span style={foot}>
+                    Conjur replays the signed request to AWS STS and maps the
+                    ARN to a host
+                  </span>
+                </>
+              ),
+          },
+          {
+            key: "token",
+            title: "Access token · scoped",
+            stages: [4],
+            doneAfter: 5,
+            failsAt: [],
+            tag: (s) => (s === "done" ? "granted" : ""),
+            body: ({ state, result }) => (
+              <>
+                <Kv
+                  k="Scope"
+                  v={result?.tokenScope || CONJUR_SECRET}
+                  vColor={state === "done" ? INK.ok : INK.mono}
+                />
+                <span style={foot}>
+                  short-lived · limited to specific variables by policy
+                </span>
+              </>
+            ),
+          },
+          {
+            key: "secret",
+            title: "Secret · variable",
+            stages: [5],
+            doneAfter: 6,
+            failsAt: [5],
+            tag: (s) =>
+              s === "failed" ? "authz deny" : s === "done" ? "returned" : "",
+            body: ({ state, result }) =>
+              state === "failed" ? (
+                <span style={dangerNote}>
+                  403 · token not authorized to read{" "}
+                  {result?.secretName || "this variable"}
+                </span>
+              ) : state === "done" ? (
+                <div
+                  style={{ display: "flex", flexDirection: "column", gap: 8 }}
+                >
+                  <Kv k="Variable" v={result?.secretName || CONJUR_SECRET} />
+                  <Kv
+                    k="Value (masked)"
+                    v={result?.masked || "—"}
+                    vColor={INK.ok}
+                  />
+                </div>
+              ) : (
+                <span style={dimNote}>
+                  read the variable with the scoped token
+                </span>
+              ),
+          },
+        ],
+    layers: jwt
+      ? [
+          {
+            name: "Fetch JWT-SVID",
+            Icon: BadgeCheck,
+            pass: () => "JWT-SVID fetched from the Workload API · aud=conjur",
+            reject: () => "could not obtain a JWT-SVID",
+            idle: "fetch a JWT-SVID from SWA",
+          },
+          {
+            name: "Send to Conjur",
+            Icon: Send,
+            pass: () => "JWT presented to authn-jwt",
+            reject: () => "could not reach Conjur",
+            idle: "present the JWT to Conjur",
+          },
+          {
+            name: "Validate JWT",
+            Icon: ShieldCheck,
+            pass: () => "JWKS + claims verified (issuer · audience · expiry)",
+            reject: () => "401 · authn-jwt: the JWT failed validation",
+            idle: "validate signature, issuer, and audience",
+          },
+          {
+            name: "Access token",
+            Icon: KeyRound,
+            pass: ({ result }) =>
+              `scoped token granted · ${result?.tokenScope || CONJUR_SECRET}`,
+            reject: () => "no access token granted",
+            idle: "receive a short-lived, scoped token",
+          },
+          {
+            name: "Retrieve secret",
+            Icon: Database,
+            pass: ({ result }) =>
+              `${result?.masked || "returned"} · ${result?.secretName || CONJUR_SECRET}`,
+            reject: ({ result }) =>
+              `403 · token not authorized to read ${result?.secretName || "this variable"}`,
+            idle: "read the variable with the scoped token",
+          },
+        ]
+      : [
+          {
+            name: "Instance profile",
+            Icon: Server,
+            pass: () => "instance-profile role obtained from IMDS",
+            reject: () => "could not read instance metadata",
+            idle: "fetch the instance-profile role (IMDS)",
+          },
+          {
+            name: "Sign STS identity",
+            Icon: Fingerprint,
+            pass: () =>
+              "sts:GetCallerIdentity signed with the role credentials",
+            reject: () => "could not sign the STS request",
+            idle: "sign an STS caller identity",
+          },
+          {
+            name: "Send to Conjur",
+            Icon: Send,
+            pass: () => "signed request presented to authn-iam",
+            reject: () => "could not reach Conjur",
+            idle: "present the signed request to Conjur",
+          },
+          {
+            name: "AWS verification",
+            Icon: Cloud,
+            pass: () => "Conjur replayed to AWS STS · caller ARN verified",
+            reject: () => "401 · authn-iam: AWS rejected the signed request",
+            idle: "Conjur replays the request to AWS STS",
+          },
+          {
+            name: "Access token",
+            Icon: KeyRound,
+            pass: ({ result }) =>
+              `scoped token granted · ${result?.tokenScope || CONJUR_SECRET}`,
+            reject: () => "no access token granted",
+            idle: "receive a short-lived, scoped token",
+          },
+          {
+            name: "Retrieve secret",
+            Icon: Database,
+            pass: ({ result }) =>
+              `${result?.masked || "returned"} · ${result?.secretName || CONJUR_SECRET}`,
+            reject: ({ result }) =>
+              `403 · token not authorized to read ${result?.secretName || "this variable"}`,
+            idle: "read the variable with the scoped token",
+          },
+        ],
+    buildTrace: (scenario, r) => {
       const secret = r?.secretName || CONJUR_SECRET;
-      const ident =
-        r?.identity ||
-        (jwt ? CONJUR_WORKLOAD : "arn:aws:sts::…:assumed-role/swa-demo-webapp");
+      const ident = r?.identity || (jwt ? CONJUR_WORKLOAD : arn);
+      const readCmd: Line = {
+        s: readStage,
+        kind: "cmd",
+        text: `GET /secrets/conjur/variable/${encodeURIComponent(secret)}   (Authorization: Token …)`,
+      };
       const lines: Line[] = jwt
         ? [
             { s: 0, kind: "comment", text: "workload → SWA Workload API" },
@@ -1613,86 +1848,120 @@ function makeConjur(jwt: boolean): Provider {
             {
               s: 1,
               kind: "comment",
-              text: "POST /authn-jwt/swa/conjur/authenticate  (present the JWT-SVID)",
+              text: "POST /authn-jwt/swa/conjur/authenticate   (present the JWT-SVID)",
             },
             {
-              s: 1,
+              s: 2,
               kind: "comment",
-              text: "Conjur validates the JWT against the trust-domain JWKS + claims",
+              text: "Conjur validates the JWT against the trust-domain JWKS + claims (iss · aud · exp)",
             },
+            {
+              s: 3,
+              kind: "comment",
+              text: "Conjur returns a short-lived access token (scoped to specific variables)",
+            },
+            readCmd,
           ]
         : [
             {
               s: 0,
               kind: "comment",
-              text: "workload signs its identity with the instance-profile role (IMDS)",
+              text: "container → host instance metadata (IMDS v2)",
             },
             {
               s: 0,
               kind: "cmd",
-              text: "aws sts get-caller-identity   # signed request headers",
+              text: 'curl -s -H "X-aws-ec2-metadata-token: $TOK" http://169.254.169.254/latest/meta-data/iam/security-credentials/',
             },
             {
               s: 1,
               kind: "comment",
-              text: "POST /authn-iam/swa/conjur/<host>/authenticate  (signed STS headers)",
+              text: "sign sts:GetCallerIdentity with the instance-profile role",
             },
             {
               s: 1,
-              kind: "comment",
-              text: "Conjur replays the signed request to AWS STS and verifies the ARN",
+              kind: "cmd",
+              text: "aws sts get-caller-identity   # produces a SigV4-signed request",
             },
+            {
+              s: 2,
+              kind: "comment",
+              text: "POST /authn-iam/swa/conjur/<host>/authenticate   (signed STS headers)",
+            },
+            {
+              s: 3,
+              kind: "comment",
+              text: "Conjur replays the signed request to AWS STS → AWS returns the verified caller ARN",
+            },
+            {
+              s: 4,
+              kind: "comment",
+              text: "Conjur returns a short-lived access token (scoped to specific variables)",
+            },
+            readCmd,
           ];
-      lines.push({
-        s: 2,
-        kind: "comment",
-        text: "Conjur returns a short-lived access token (scoped to specific variables)",
-      });
-      lines.push({
-        s: 3,
-        kind: "cmd",
-        text: `GET /secrets/conjur/variable/${encodeURIComponent(secret)}   (Authorization: Token …)`,
-      });
+
       if (r?.retrieved) {
         lines.push({
-          s: 1,
+          s: authnFail,
           kind: "out",
           text: `identity: ${ident}`,
           terminal: true,
         });
         lines.push({
-          s: 3,
+          s: readStage,
           kind: "out",
           text: "HTTP/1.1 200 OK",
           terminal: true,
         });
         lines.push({
-          s: 3,
+          s: readStage,
           kind: "out",
           text: `${secret} = ${r.masked}   // masked — full value never shown`,
           terminal: true,
         });
         lines.push({
-          s: 3,
+          s: readStage,
           kind: "ok",
           text: "✓ retrieved · scoped token · secret masked at the source",
           terminal: true,
         });
+      } else if (r && scenario === "invalid") {
+        lines.push({
+          s: authnFail,
+          kind: "err",
+          text: "HTTP/1.1 401 Unauthorized",
+          terminal: true,
+        });
+        lines.push({
+          s: authnFail,
+          kind: "out",
+          text: `{ "error": "${(r.error || "authentication failed").replace(/"/g, "'")}" }`,
+          terminal: true,
+        });
+        lines.push({
+          s: authnFail,
+          kind: "err",
+          text: jwt
+            ? "✗ authn-jwt failed — the JWT did not validate; no token was issued"
+            : "✗ authn-iam failed — AWS rejected the signed request; no token was issued",
+          terminal: true,
+        });
       } else if (r) {
         lines.push({
-          s: 3,
+          s: readStage,
           kind: "err",
           text: "HTTP/1.1 403 Forbidden",
           terminal: true,
         });
         lines.push({
-          s: 3,
+          s: readStage,
           kind: "out",
           text: `{ "error": "${(r.error || "not authorized").replace(/"/g, "'")}" }`,
           terminal: true,
         });
         lines.push({
-          s: 3,
+          s: readStage,
           kind: "err",
           text: "✗ denied — the scoped token is not authorized for this variable",
           terminal: true,

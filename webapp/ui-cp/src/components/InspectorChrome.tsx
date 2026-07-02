@@ -74,6 +74,8 @@ function errorPhrase(scenario: ScenarioKey): string {
       return "Rejected · application hash unauthorized";
     case "no-cert":
       return "Rejected · no client certificate";
+    case "invalid":
+      return "Rejected · authentication failed";
     case "denied":
       return "Denied · not authorized";
     case "untrusted":
@@ -217,8 +219,10 @@ const ic = {
     backgroundPosition: "right bottom",
     opacity: 0.45,
     pointerEvents: "none" as const,
-    maskImage: "linear-gradient(to left, #000 35%, transparent 92%)",
-    WebkitMaskImage: "linear-gradient(to left, #000 35%, transparent 92%)",
+    maskImage:
+      "radial-gradient(120% 120% at 100% 100%, #000 12%, rgba(0,0,0,0.5) 45%, transparent 80%)",
+    WebkitMaskImage:
+      "radial-gradient(120% 120% at 100% 100%, #000 12%, rgba(0,0,0,0.5) 45%, transparent 80%)",
   },
   shimmer: {
     position: "absolute" as const,
