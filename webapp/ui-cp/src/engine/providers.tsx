@@ -1359,23 +1359,23 @@ function makeConjur(jwt: boolean): Provider {
     id: jwt ? "conjur-jwt" : "conjur-iam",
     apiPath: `/api/conjur?mode=${jwt ? "jwt" : "iam"}`,
     resultKey: "conjur",
-    subtitle: `conjur cloud · ${authn}`,
+    subtitle: `secrets manager · ${authn}`,
     brand: {
-      name: jwt ? "Secrets Manager · JWT" : "Secrets Manager · AWS STS",
-      sub: "Conjur Cloud",
+      name: jwt ? "Open Standard · JWT" : "Native Platform · AWS STS",
+      sub: "Idira Secrets Manager",
     },
     heroTitle: "Fetch a scoped secret.",
     heroLede: jwt ? (
       <>
-        The workload presents a <strong>JWT-SVID</strong> to Conjur (authn-jwt).
-        Conjur validates it against the trust-domain JWKS, returns a{" "}
+        The workload presents a <strong>JWT-SVID</strong> to Secrets Manager (authn-jwt).
+        Secrets Manager validates it against the trust-domain JWKS, returns a{" "}
         <strong>short-lived, scoped</strong> access token, and the app reads a
         variable — no stored API key.
       </>
     ) : (
       <>
         The workload signs an <strong>sts:GetCallerIdentity</strong> with its
-        instance-profile role (via IMDS). Conjur replays it to AWS (authn-iam),
+        instance-profile role (via IMDS). Secrets Manager replays it to AWS (authn-iam),
         verifies the ARN, and returns a <strong>short-lived, scoped</strong>{" "}
         access token — no static AWS secret, no API key.
       </>
@@ -1391,8 +1391,8 @@ function makeConjur(jwt: boolean): Provider {
           { key: "fetch", label: "Fetch JWT-SVID", verb: "Fetching JWT-SVID" },
           {
             key: "present",
-            label: "Send to Conjur",
-            verb: "Sending to Conjur",
+            label: "Send to Secrets Manager",
+            verb: "Sending to Secrets Manager",
           },
           {
             key: "verify",
@@ -1423,8 +1423,8 @@ function makeConjur(jwt: boolean): Provider {
           },
           {
             key: "present",
-            label: "Send to Conjur",
-            verb: "Sending to Conjur",
+            label: "Send to Secrets Manager",
+            verb: "Sending to Secrets Manager",
           },
           {
             key: "verify",
@@ -1451,18 +1451,18 @@ function makeConjur(jwt: boolean): Provider {
         ok: true,
         failStage: -1,
         desc: jwt
-          ? "Present a JWT-SVID → Conjur authenticates it (authn-jwt), grants a scoped token, and the app reads the in-scope variable."
-          : "Sign an STS caller identity → Conjur verifies the ARN (authn-iam), grants a scoped token, and the app reads the in-scope variable.",
+          ? "Present a JWT-SVID → Secrets Manager authenticates it (authn-jwt), grants a scoped token, and the app reads the in-scope variable."
+          : "Sign an STS caller identity → Secrets Manager verifies the ARN (authn-iam), grants a scoped token, and the app reads the in-scope variable.",
         evidence: [
           {
             lead: "Workload-native identity, no key.",
             body: jwt
               ? "The app authenticated with a JWT-SVID from SWA — no static API key and no long-lived credential."
-              : "The app authenticated with a signed sts:GetCallerIdentity from its instance-profile role — no static AWS secret, no Conjur API key.",
+              : "The app authenticated with a signed sts:GetCallerIdentity from its instance-profile role — no static AWS secret, no Secrets Manager API key.",
           },
           {
             lead: "Short-lived, scoped token.",
-            body: "Conjur returned an access token scoped to a limited set of variables; it expires quickly and is held only in memory.",
+            body: "Secrets Manager returned an access token scoped to a limited set of variables; it expires quickly and is held only in memory.",
           },
           {
             lead: "Masked at the source.",
@@ -1477,16 +1477,16 @@ function makeConjur(jwt: boolean): Provider {
         ok: false,
         failStage: authnFail,
         desc: jwt
-          ? "Present an invalid or expired JWT (bad signature / wrong audience / expired) → Conjur's authn-jwt validation rejects it before any token is issued."
-          : "Present a tampered or expired STS request (or an ARN mapped to no host) → Conjur replays it to AWS, AWS rejects it, and authn-iam fails before any token is issued.",
+          ? "Present an invalid or expired JWT (bad signature / wrong audience / expired) → Secrets Manager's authn-jwt validation rejects it before any token is issued."
+          : "Present a tampered or expired STS request (or an ARN mapped to no host) → Secrets Manager replays it to AWS, AWS rejects it, and authn-iam fails before any token is issued.",
         evidence: [
           {
             lead: jwt
               ? "The token failed validation."
               : "AWS didn't verify the request.",
             body: jwt
-              ? "Conjur checked the JWT against the trust-domain JWKS and required claims (issuer, audience, expiry) — it did not pass."
-              : "Conjur replayed the sts:GetCallerIdentity to AWS; AWS rejected it (bad or expired signature), or the verified ARN maps to no Conjur host.",
+              ? "Secrets Manager checked the JWT against the trust-domain JWKS and required claims (issuer, audience, expiry) — it did not pass."
+              : "Secrets Manager replayed the sts:GetCallerIdentity to AWS; AWS rejected it (bad or expired signature), or the verified ARN maps to no Secrets Manager host.",
           },
           {
             lead: "No token, no secret.",
@@ -1498,7 +1498,7 @@ function makeConjur(jwt: boolean): Provider {
               : "Verified, not trusted blindly.",
             body: jwt
               ? "A forged or expired JWT can't be minted without the trust domain's signing key — the boundary holds."
-              : "Conjur doesn't take the caller's word for it; it re-verifies the identity with AWS on every request.",
+              : "Secrets Manager doesn't take the caller's word for it; it re-verifies the identity with AWS on every request.",
           },
         ],
       },
@@ -1508,11 +1508,11 @@ function makeConjur(jwt: boolean): Provider {
         tag: "authz deny",
         ok: false,
         failStage: readStage,
-        desc: "Authentication succeeds and a scoped token is granted — but the token is NOT authorized to read a variable outside its scope → Conjur refuses the read (403).",
+        desc: "Authentication succeeds and a scoped token is granted — but the token is NOT authorized to read a variable outside its scope → Secrets Manager refuses the read (403).",
         evidence: [
           {
             lead: "The token is scoped.",
-            body: "The access token may only read the variables its Conjur policy grants — this one is outside that set.",
+            body: "The access token may only read the variables its Secrets Manager policy grants — this one is outside that set.",
           },
           {
             lead: "Least privilege by policy.",
@@ -1541,14 +1541,14 @@ function makeConjur(jwt: boolean): Provider {
                   v={result?.identity || result?.spiffeId || CONJUR_WORKLOAD}
                 />
                 <span style={foot}>
-                  fetches a JWT-SVID from the SWA Workload API · aud=conjur
+                  fetches a JWT-SVID from the SWA Workload API · aud=idira
                 </span>
               </>
             ),
           },
           {
             key: "authn",
-            title: "Conjur · authn-jwt",
+            title: "Secrets Manager · authn-jwt",
             stages: [1, 2],
             doneAfter: 3,
             failsAt: [1, 2],
@@ -1569,7 +1569,7 @@ function makeConjur(jwt: boolean): Provider {
                     vColor={state === "done" ? INK.ok : INK.mono}
                   />
                   <span style={foot}>
-                    Conjur checks the JWT signature, issuer, and audience
+                    Secrets Manager checks the JWT signature, issuer, and audience
                   </span>
                 </>
               ),
@@ -1665,7 +1665,7 @@ function makeConjur(jwt: boolean): Provider {
           },
           {
             key: "authn",
-            title: "Conjur · authn-iam",
+            title: "Secrets Manager · authn-iam",
             stages: [2, 3],
             doneAfter: 4,
             failsAt: [2, 3],
@@ -1686,7 +1686,7 @@ function makeConjur(jwt: boolean): Provider {
                     vColor={state === "done" ? INK.ok : INK.mono}
                   />
                   <span style={foot}>
-                    Conjur replays the signed request to AWS STS and maps the
+                    Secrets Manager replays the signed request to AWS STS and maps the
                     ARN to a host
                   </span>
                 </>
@@ -1749,16 +1749,16 @@ function makeConjur(jwt: boolean): Provider {
           {
             name: "Fetch JWT-SVID",
             Icon: BadgeCheck,
-            pass: () => "JWT-SVID fetched from the Workload API · aud=conjur",
+            pass: () => "JWT-SVID fetched from the Workload API · aud=idira",
             reject: () => "could not obtain a JWT-SVID",
             idle: "fetch a JWT-SVID from SWA",
           },
           {
-            name: "Send to Conjur",
+            name: "Send to Secrets Manager",
             Icon: Send,
             pass: () => "JWT presented to authn-jwt",
-            reject: () => "could not reach Conjur",
-            idle: "present the JWT to Conjur",
+            reject: () => "could not reach Secrets Manager",
+            idle: "present the JWT to Secrets Manager",
           },
           {
             name: "Validate JWT",
@@ -1802,18 +1802,18 @@ function makeConjur(jwt: boolean): Provider {
             idle: "sign an STS caller identity",
           },
           {
-            name: "Send to Conjur",
+            name: "Send to Secrets Manager",
             Icon: Send,
             pass: () => "signed request presented to authn-iam",
-            reject: () => "could not reach Conjur",
-            idle: "present the signed request to Conjur",
+            reject: () => "could not reach Secrets Manager",
+            idle: "present the signed request to Secrets Manager",
           },
           {
             name: "AWS verification",
             Icon: Cloud,
-            pass: () => "Conjur replayed to AWS STS · caller ARN verified",
+            pass: () => "Secrets Manager replayed to AWS STS · caller ARN verified",
             reject: () => "401 · authn-iam: AWS rejected the signed request",
-            idle: "Conjur replays the request to AWS STS",
+            idle: "Secrets Manager replays the request to AWS STS",
           },
           {
             name: "Access token",
@@ -1839,26 +1839,26 @@ function makeConjur(jwt: boolean): Provider {
       const readCmd: Line = {
         s: readStage,
         kind: "cmd",
-        text: `GET /secrets/conjur/variable/${encodeURIComponent(secret)}   (Authorization: Token …)`,
+        text: `GET /secrets/idira/variable/${encodeURIComponent(secret)}   (Authorization: Token …)`,
       };
       const lines: Line[] = jwt
         ? [
             { s: 0, kind: "comment", text: "workload → SWA Workload API" },
-            { s: 0, kind: "cmd", text: "FetchJWTSVID(audience=conjur)" },
+            { s: 0, kind: "cmd", text: "FetchJWTSVID(audience=idira)" },
             {
               s: 1,
               kind: "comment",
-              text: "POST /authn-jwt/swa/conjur/authenticate   (present the JWT-SVID)",
+              text: "POST /authn-jwt/swa/idira/authenticate   (present the JWT-SVID)",
             },
             {
               s: 2,
               kind: "comment",
-              text: "Conjur validates the JWT against the trust-domain JWKS + claims (iss · aud · exp)",
+              text: "Secrets Manager validates the JWT against the trust-domain JWKS + claims (iss · aud · exp)",
             },
             {
               s: 3,
               kind: "comment",
-              text: "Conjur returns a short-lived access token (scoped to specific variables)",
+              text: "Secrets Manager returns a short-lived access token (scoped to specific variables)",
             },
             readCmd,
           ]
@@ -1886,17 +1886,17 @@ function makeConjur(jwt: boolean): Provider {
             {
               s: 2,
               kind: "comment",
-              text: "POST /authn-iam/swa/conjur/<host>/authenticate   (signed STS headers)",
+              text: "POST /authn-iam/swa/idira/<host>/authenticate   (signed STS headers)",
             },
             {
               s: 3,
               kind: "comment",
-              text: "Conjur replays the signed request to AWS STS → AWS returns the verified caller ARN",
+              text: "Secrets Manager replays the signed request to AWS STS → AWS returns the verified caller ARN",
             },
             {
               s: 4,
               kind: "comment",
-              text: "Conjur returns a short-lived access token (scoped to specific variables)",
+              text: "Secrets Manager returns a short-lived access token (scoped to specific variables)",
             },
             readCmd,
           ];

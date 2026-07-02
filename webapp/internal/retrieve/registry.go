@@ -72,10 +72,10 @@ func (r *Registry) Catalog() []FamilyInfo {
 		{
 			Family:  FamilySecretsManager,
 			Title:   "Secrets Manager SaaS",
-			Tagline: "Conjur Cloud — authenticate with a workload-native identity, then fetch a secret over the API.",
+			Tagline: "Authenticate with a workload-native identity — an open standard like JWT/OIDC, or your platform's native mechanism (AWS, Azure, GCP, Kubernetes) — then fetch a scoped secret over the API. These are two of many.",
 			Modes: []ModeInfo{
-				{Mode: "conjur-jwt", Label: "Conjur · JWT auth", Auth: "authn-jwt", Href: "/secrets-manager", Summary: "Present a workload JWT-SVID to Conjur authn-jwt, then read a variable.", Available: false},
-				{Mode: "conjur-iam", Label: "Conjur · AWS STS", Auth: "authn-iam", Href: "/secrets-manager#conjur-iam", Summary: "Sign sts:GetCallerIdentity with the workload's AWS IAM role; Conjur authn-iam verifies the ARN, then read a variable.", Available: false},
+				{Mode: "conjur-jwt", Label: "Open Standard · JWT", Auth: "authn-jwt", Href: "/secrets-manager", Summary: "Present a workload JWT-SVID — an open standard — to authn-jwt, then read a scoped variable. OIDC and other JWT issuers work the same way.", Available: false},
+				{Mode: "conjur-iam", Label: "Native Platform · AWS STS", Auth: "authn-iam", Href: "/secrets-manager#conjur-iam", Summary: "Prove identity with the platform's own mechanism — here a signed AWS STS request (authn-iam) verifies the ARN. Azure, GCP, and Kubernetes authenticate the same way. Then read a scoped variable.", Available: false},
 			},
 		},
 		{

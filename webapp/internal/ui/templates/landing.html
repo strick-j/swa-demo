@@ -136,7 +136,7 @@
     .trust span { font-family: var(--font-mono); font-size: 13px; color: var(--dim); display: inline-flex; align-items: center; gap: 8px; }
     .trust span::before { content: "\2713"; color: var(--ok); }
 
-    footer { padding: 40px 0 56px; }
+    footer { padding: 40px 0 96px; }
     footer .frow { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; color: var(--faint); font-size: 13px; }
     footer .frow img { height: 22px; opacity: 0.85; }
     footer code { font-family: var(--font-mono); color: var(--mono); }
@@ -176,7 +176,7 @@
     </div>
 
     <div class="strip">
-      <div class="step"><span class="num">01</span><h4>Prove identity</h4><p>App hash, client cert, SPIFFE SVID, JWT, or a signed AWS STS request — the workload proves who it is.</p></div>
+      <div class="step"><span class="num">01</span><h4>Prove identity</h4><p>App hash, client cert, SPIFFE SVID, JWT, a native cloud identity (AWS / Azure / GCP), and more — the workload proves who it is.</p></div>
       <div class="step"><span class="num">02</span><h4>Get a scoped token</h4><p>A short-lived access token, limited to exactly the secrets this identity is allowed to read.</p></div>
       <div class="step"><span class="num">03</span><h4>Retrieve, never store</h4><p>The secret is masked at the source and used in memory for one request — nothing lands on disk.</p></div>
     </div>
@@ -214,21 +214,18 @@
         <h3>Established apps</h3>
         <span class="who">Java &middot; .NET &middot; WebSphere &middot; on VMs &amp; app servers</span>
         <p>No rewrite required. An agent on the host serves cached, rotated credentials locally, or the app makes a mutually-authenticated REST call to a central provider.</p>
-        <div class="maps">Try it &rarr; <b>Credential Provider</b> &middot; <b>Central Credential Provider</b></div>
       </div>
       <div class="vcard">
         <span class="tag">Modern</span>
         <h3>Cloud-native</h3>
         <span class="who">Containers &middot; Kubernetes &middot; microservices</span>
         <p>The platform vouches for the pod. A cryptographic SPIFFE identity is attested and issued automatically, and the gateway authorizes by identity — no stored credential at all.</p>
-        <div class="maps">Try it &rarr; <b>Secure Workload Access</b></div>
       </div>
       <div class="vcard">
         <span class="tag">Agentless</span>
         <h3>Ephemeral &amp; serverless</h3>
         <span class="who">Functions &middot; serverless &middot; cloud VMs</span>
-        <p>Nothing to install. Use the identity the platform already issues — a workload JWT or a signed AWS STS request — and exchange it for a short-lived, scoped secret.</p>
-        <div class="maps">Try it &rarr; <b>Conjur &middot; JWT</b> &middot; <b>Conjur &middot; AWS STS</b></div>
+        <p>Nothing to install. Use the identity the platform already issues — an open-standard JWT, or a native cloud identity (AWS STS, Azure, GCP, Kubernetes) — and exchange it for a short-lived, scoped secret.</p>
       </div>
     </div>
   </section>
@@ -242,6 +239,8 @@
     <p class="intro">
       Each demo runs the real flow end to end and shows it in the Idira Inspector — topology, layers of defense,
       and a live trace of every call. New here? Start with <a href="/swa" style="color:var(--blue-0);font-weight:600;">Secure Workload Access</a>.
+      These are a few of the paths — the platform also authenticates via OIDC, Azure, GCP, Kubernetes, LDAP, API keys,
+      mTLS, and combinations of them.
     </p>
 
     {{range .Families}}
