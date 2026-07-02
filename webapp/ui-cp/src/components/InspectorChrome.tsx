@@ -76,6 +76,12 @@ function errorPhrase(scenario: ScenarioKey): string {
       return "Rejected · no client certificate";
     case "denied":
       return "Denied · Safe not authorized";
+    case "untrusted":
+      return "Denied · SPIFFE ID not allow-listed";
+    case "unknown":
+      return "Refused · no identity issued";
+    case "foreign":
+      return "Rejected · foreign trust domain";
     default:
       return "Rejected · retrieval failed";
   }
@@ -98,7 +104,9 @@ export function InspectorChrome({
   const doneTxt =
     provider.id === "cp"
       ? "Retrieved · secret hashed on host, never stored"
-      : "Retrieved · credential masked at the source";
+      : provider.id === "swa"
+        ? "Reached the database · authorized by SPIFFE ID"
+        : "Retrieved · credential masked at the source";
 
   const phase =
     status === "idle"

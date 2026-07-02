@@ -117,23 +117,26 @@ func New(d Deps) *Server {
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleLanding)
-	mux.HandleFunc("/swa", s.handleSWA)
 	mux.HandleFunc("/secrets-manager", s.handleSecretsManager)
-	// The one inspector SPA (Vite base=/cp/, assets under /cp/) serves BOTH the
-	// local CP (/cp) and the Central CP (/credential-providers). The React app
-	// picks the provider from the URL path; /api/cp and /api/ccp are its data
-	// endpoints. Falls back to the legacy templates when the SPA is absent.
+	// The one inspector SPA (Vite base=/cp/, assets under /cp/) serves the whole
+	// Credential-Providers + SWA family: /cp (local CP), /credential-providers
+	// (CCP), and /swa. The React app picks the provider from the URL path; the
+	// /api/cp, /api/ccp, and /api/swa endpoints supply its data. Falls back to the
+	// legacy templates when the SPA is absent.
 	if s.cpApp != nil {
 		mux.Handle("/cp/", http.StripPrefix("/cp/", http.FileServer(http.FS(s.cpApp))))
 		mux.HandleFunc("/cp", func(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/cp/", http.StatusFound)
 		})
-		// CCP shares the same SPA; its assets still load from /cp/ (absolute).
+		// CCP + SWA share the same SPA; assets still load from /cp/ (absolute).
 		mux.HandleFunc("/credential-providers", s.serveInspectorIndex)
 		mux.HandleFunc("/credential-providers/", s.serveInspectorIndex)
+		mux.HandleFunc("/swa", s.serveInspectorIndex)
+		mux.HandleFunc("/swa/", s.serveInspectorIndex)
 	} else {
 		mux.HandleFunc("/cp", s.handleCredentialProvider)
 		mux.HandleFunc("/credential-providers", s.handleCredentialProviders)
+		mux.HandleFunc("/swa", s.handleSWA)
 	}
 	mux.HandleFunc("/api/catalog", s.handleCatalog)
 	mux.HandleFunc("/api/retrieve", s.handleRetrieve)
@@ -141,6 +144,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/cp", s.handleCP)
 	mux.HandleFunc("/api/svid", s.handleSVID)
 	mux.HandleFunc("/api/scenarios", s.handleScenarios)
+	mux.HandleFunc("/api/swa", s.handleAPISWA)
 	mux.HandleFunc("/api/db", s.handleDB)
 	mux.HandleFunc("/probe", s.handleProbe)
 	mux.HandleFunc("/probe-svid", s.handleProbeSVID)
@@ -427,6 +431,129 @@ type scenariosResponse struct {
 	Untrusted scenario     `json:"untrusted"`
 	Unknown   scenario     `json:"unknown"`
 	Foreign   *foreignView `json:"foreign"`
+}
+
+// swaInfo is the SWA inspector's per-scenario payload: the workload's identity
+// outcome + the resource (Postgres via the SPIFFE gateway) it reached.
+type swaInfo struct {
+	Scenario    string        `json:"scenario"`
+	Issued      bool          `json:"issued"`
+	SPIFFEID    string        `json:"spiffe_id,omitempty"`
+	JWTAlg      string        `json:"jwt_alg,omitempty"`
+	JWTKid      string        `json:"jwt_kid,omitempty"`
+	Audience    string        `json:"audience,omitempty"`
+	ExpiresAt   string        `json:"expires_at,omitempty"`
+	Token       string        `json:"token,omitempty"`
+	DBAllowed   bool          `json:"db_allowed"`
+	DBRows      []db.Shipment `json:"db_rows,omitempty"`
+	DBError     string        `json:"db_error,omitempty"`
+	PeerURI     string        `json:"peer_uri,omitempty"`
+	Issuer      string        `json:"issuer,omitempty"`
+	TrustDomain string        `json:"trust_domain,omitempty"`
+}
+
+type swaResp struct {
+	Family    string  `json:"family"`
+	Mode      string  `json:"mode"`
+	Retrieved bool    `json:"retrieved"`
+	Simulated bool    `json:"simulated"`
+	Error     string  `json:"error,omitempty"`
+	SWA       swaInfo `json:"swa"`
+}
+
+// fillSVID copies the decoded JWT-SVID fields into the swa payload.
+func fillSVID(info *swaInfo, sv *svidProbe) {
+	if sv == nil {
+		return
+	}
+	info.Issued = sv.Issued
+	if sv.Result == nil {
+		return
+	}
+	r := sv.Result
+	if info.SPIFFEID == "" {
+		info.SPIFFEID = r.SPIFFEID
+	}
+	info.Token = r.Token
+	if len(r.Audience) > 0 {
+		info.Audience = r.Audience[0]
+	}
+	if !r.ExpiresAt.IsZero() {
+		info.ExpiresAt = r.ExpiresAt.Format(time.RFC3339)
+	}
+	if a, ok := r.Header["alg"].(string); ok {
+		info.JWTAlg = a
+	}
+	if k, ok := r.Header["kid"].(string); ok {
+		info.JWTKid = k
+	}
+}
+
+// handleAPISWA runs one SWA identity scenario (?scenario=trusted|untrusted|
+// unknown|foreign) and returns a unified payload for the inspector SPA. It reuses
+// the same scenario helpers as /api/scenarios, projected to one scenario.
+func (s *Server) handleAPISWA(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "use POST"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+
+	audience := s.cfg.Audience
+	scenario := r.URL.Query().Get("scenario")
+	resp := swaResp{Family: "workload-access", Mode: "swa", Simulated: s.cfg.Demo}
+	info := swaInfo{Scenario: scenario, TrustDomain: s.cfg.TrustDomain}
+
+	switch scenario {
+	case "trusted":
+		fillSVID(&info, s.selfSVID(ctx, audience))
+		var dbr *db.Result
+		if s.cfg.Demo && s.db == nil {
+			dbr = demoRows(s.demoID("swa-demo", "swa-demo-webapp"))
+		} else {
+			dbr = s.selfQuery(ctx)
+		}
+		info.DBAllowed, info.DBRows, info.DBError = dbr.Allowed, dbr.Rows, dbr.Error
+		resp.Retrieved = dbr.Allowed
+		if !dbr.Allowed {
+			resp.Error = dbr.Error
+		}
+	case "untrusted":
+		sc := s.untrustedScenario(ctx, audience)
+		fillSVID(&info, sc.SVID)
+		if sc.DB != nil {
+			info.DBAllowed, info.DBRows, info.DBError = sc.DB.Allowed, sc.DB.Rows, sc.DB.Error
+			if info.SPIFFEID == "" {
+				info.SPIFFEID = sc.DB.SPIFFEID
+			}
+		}
+		resp.Error = firstNonEmpty(info.DBError, "SPIFFE ID not allow-listed at the gateway")
+	case "unknown":
+		sc := s.unknownScenario(ctx, audience)
+		fillSVID(&info, sc.SVID)
+		if sc.SVID != nil {
+			resp.Error = firstNonEmpty(sc.SVID.Error, "no identity issued for this workload")
+		}
+	case "foreign":
+		fv := s.foreignScenario(ctx)
+		info.PeerURI, info.Issuer, info.SPIFFEID = fv.PeerURI, fv.Issuer, fv.PeerURI
+		resp.Error = firstNonEmpty(fv.Error, "foreign trust domain — trust roots do not anchor it")
+	default:
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unknown scenario: " + scenario})
+		return
+	}
+
+	resp.SWA = info
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// firstNonEmpty returns a if non-empty, else b.
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }
 
 // handleScenarios aggregates the three identity outcomes for the switcher: the

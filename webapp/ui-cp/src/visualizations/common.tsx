@@ -19,9 +19,18 @@ export const INK = {
 /** Card visual state used by the topology + layers views. */
 export type CVS = "locked" | "active" | "done" | "failed";
 
-/** Masked-result payload the engine derives from the provider's API. Carries
- *  fields for both the CP (hash/path/os-user) and CCP (cert CN) providers; the
- *  unused ones are empty. Never the full secret — `masked` is a preview summary. */
+/** One row of the demo Postgres shipments table (SWA resource access). */
+export interface DbRow {
+  ref: string;
+  origin: string;
+  destination: string;
+  status: string;
+  carrier: string;
+}
+
+/** Result payload the engine derives from the provider's API. Carries fields for
+ *  the CP (hash/path/os-user), CCP (cert CN), and SWA (SPIFFE/JWT/DB) providers;
+ *  the unused ones are empty. Never the full secret — `masked` is a preview. */
 export interface ProviderResult {
   retrieved: boolean;
   simulated: boolean;
@@ -39,6 +48,19 @@ export interface ProviderResult {
   address: string;
   virtualUsername: string;
   dualActive: string;
+  // SWA (workload identity) fields:
+  spiffeId: string;
+  issued: boolean;
+  jwtAlg: string;
+  jwtKid: string;
+  audience: string;
+  expiresAt: string;
+  dbAllowed: boolean;
+  dbRows: DbRow[];
+  dbError: string;
+  peerUri: string;
+  issuer: string;
+  trustDomain: string;
 }
 
 /** Shared props for all inspector visualizations. */
@@ -60,7 +82,11 @@ interface MeterProps {
 
 export function Meter({ pct, tone = "brand", active = false }: MeterProps) {
   const color =
-    tone === "danger" ? INK.danger : tone === "muted" ? INK.faint : "var(--idira-blue-500)";
+    tone === "danger"
+      ? INK.danger
+      : tone === "muted"
+        ? INK.faint
+        : "var(--idira-blue-500)";
   return (
     <div
       style={{

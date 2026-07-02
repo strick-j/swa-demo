@@ -11,6 +11,9 @@ import {
   Lock,
   KeyRound,
   FileCheck,
+  Send,
+  ShieldCheck,
+  Database,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -21,7 +24,15 @@ import {
 } from "../visualizations/common";
 
 export type ScenarioKey =
-  "authorized" | "invalid-hash" | "no-cert" | "denied" | "dual";
+  | "authorized"
+  | "invalid-hash"
+  | "no-cert"
+  | "denied"
+  | "dual"
+  | "trusted"
+  | "untrusted"
+  | "unknown"
+  | "foreign";
 
 export interface Stage {
   key: string;
@@ -80,9 +91,9 @@ export interface Line {
 }
 
 export interface Provider {
-  id: "cp" | "ccp";
+  id: "cp" | "ccp" | "swa";
   apiPath: string;
-  resultKey: "cp" | "ccp";
+  resultKey: "cp" | "ccp" | "swa";
   subtitle: string;
   brand: { name: string; sub: string };
   heroTitle: string;
@@ -910,16 +921,390 @@ function appendOutcome(
   });
 }
 
-export const PROVIDERS: Record<"cp" | "ccp", Provider> = {
-  cp: cpProvider,
-  ccp: ccpProvider,
+/* ==================== SWA (Secure Workload Access · SPIFFE) ==================== */
+
+const SWA_CTX = {
+  trustDomain: "swa-demo.example.com",
+  nodeGroup: "minikube-nodes",
+  attestor: "k8s_psat",
+  gateway: "pg-gateway",
+};
+const SWA_WORKLOAD =
+  "spiffe://swa-demo.example.com/minikube-nodes/ns/swa-demo/sa/swa-demo-webapp";
+
+const swaProvider: Provider = {
+  id: "swa",
+  apiPath: "/api/swa",
+  resultKey: "swa",
+  subtitle: "spiffe · mtls · jwt-svid",
+  brand: { name: "Secure Workload Access", sub: "SPIFFE workload identity" },
+  heroTitle: "Reach the database by identity.",
+  heroLede: (
+    <>
+      This workload stores <strong>no credential</strong>. It proves who it is
+      with a short-lived SPIFFE SVID; the gateway authorizes by{" "}
+      <strong>SPIFFE ID</strong> before Postgres is ever reached.
+    </>
+  ),
+  ctx: [
+    { k: "Trust domain", v: SWA_CTX.trustDomain, wide: true },
+    { k: "Node group", v: SWA_CTX.nodeGroup },
+    { k: "Attestor", v: SWA_CTX.attestor },
+    { k: "Gateway", v: SWA_CTX.gateway, brand: true },
+  ],
+  stages: [
+    { key: "request", label: "Request identity", verb: "Requesting identity" },
+    { key: "svid", label: "SVID issued", verb: "Issuing SVID" },
+    { key: "mtls", label: "mTLS trust", verb: "Verifying trust" },
+    {
+      key: "authz",
+      label: "Gateway authorization",
+      verb: "Authorizing at gateway",
+    },
+    { key: "resource", label: "Resource access", verb: "Reading the database" },
+  ],
+  scenarioOrder: ["trusted", "untrusted", "unknown", "foreign"],
+  scenarios: {
+    trusted: {
+      key: "trusted",
+      label: "Trusted workload",
+      tag: "expect ✓",
+      ok: true,
+      failStage: -1,
+      desc: "Issued a valid SVID, passes mTLS, and its SPIFFE ID is allow-listed at the gateway → it reads the shipments database.",
+      evidence: [
+        {
+          lead: "Cryptographic identity, not a key.",
+          body: "The workload proved who it is with a short-lived SPIFFE SVID issued by the trust domain — no static API key or password anywhere.",
+        },
+        {
+          lead: "Authorized by SPIFFE ID at the gateway.",
+          body: "ghostunnel allow-lists the exact SPIFFE ID before the connection reaches Postgres; identity is the authorization.",
+        },
+        {
+          lead: "Nothing stored, nothing to leak.",
+          body: "The SVID is ephemeral and rotates; there is no credential on disk to steal or rotate manually.",
+        },
+      ],
+    },
+    untrusted: {
+      key: "untrusted",
+      label: "Untrusted workload",
+      tag: "authz deny",
+      ok: false,
+      failStage: 3,
+      desc: "Holds a valid SVID, but its SPIFFE ID is NOT allow-listed at the gateway → rejected during the mTLS handshake, before Postgres.",
+      evidence: [
+        {
+          lead: "Valid identity, not authorized.",
+          body: "The workload has a genuine SVID from the same trust domain — but the gateway's allow-list does not include its SPIFFE ID.",
+        },
+        {
+          lead: "Authorization is on the identity.",
+          body: "Same CA, valid certificate — the gateway rejects the handshake purely because the SPIFFE ID is not permitted.",
+        },
+        {
+          lead: "No data crossed the wire.",
+          body: "The connection was refused at the gateway; Postgres was never reached.",
+        },
+      ],
+    },
+    unknown: {
+      key: "unknown",
+      label: "Unknown workload",
+      tag: "no identity",
+      ok: false,
+      failStage: 1,
+      desc: "No registration policy matches this workload → the SWA server refuses to issue any SVID. With no identity, it cannot even attempt the resource.",
+      evidence: [
+        {
+          lead: "No policy, no identity.",
+          body: "The SWA server has no node-group selector matching this workload, so it declines to mint an SVID at all.",
+        },
+        {
+          lead: "Failure is the default.",
+          body: "Without an SVID there is nothing to present at the gateway — the request never leaves the starting line.",
+        },
+        {
+          lead: "Explicit allow-listing.",
+          body: "Only workloads whose ns/sa match a registration entry receive an identity — everything else is unknown by design.",
+        },
+      ],
+    },
+    foreign: {
+      key: "foreign",
+      label: "Foreign trust domain",
+      tag: "trust boundary",
+      ok: false,
+      failStage: 2,
+      desc: "A workload from a foreign trust domain (acme.courier) presents a self-signed identity → rejected at the mTLS trust boundary; no federation is configured.",
+      evidence: [
+        {
+          lead: "Signed by a CA you don't anchor.",
+          body: "The peer presented a valid certificate — just from a foreign trust domain. Without federation, your trust roots don't anchor it.",
+        },
+        {
+          lead: "Rejected before any data moved.",
+          body: "The mTLS handshake failed at the door; no SVID exchange, no gateway authorization, no database access.",
+        },
+        {
+          lead: "This is the boundary working.",
+          body: "acme.courier still has its own identity — your trust roots simply do not anchor it. SWA trust-domain federation would resolve this.",
+        },
+      ],
+    },
+  },
+  nodes: [
+    {
+      key: "workload",
+      title: "Workload · this pod",
+      stages: [0],
+      doneAfter: 1,
+      failsAt: [],
+      tag: (s) => (s === "done" ? "requested" : "workload"),
+      body: ({ result }) => (
+        <>
+          <Kv k="Workload" v={result?.spiffeId || SWA_WORKLOAD} />
+          <span style={foot}>
+            holds no stored credential — asks the Workload API for an SVID
+          </span>
+        </>
+      ),
+    },
+    {
+      key: "identity",
+      title: "SWA identity · SVID",
+      stages: [1],
+      doneAfter: 2,
+      failsAt: [1],
+      tag: (s) =>
+        s === "failed"
+          ? "no identity"
+          : s === "done"
+            ? "SVID issued"
+            : "issuing",
+      body: ({ state, result }) =>
+        state === "failed" ? (
+          <span style={dangerNote}>no identity issued for this workload</span>
+        ) : (
+          <>
+            <div style={grid2}>
+              <Kv
+                k="SPIFFE ID"
+                v={result?.spiffeId || SWA_WORKLOAD}
+                vColor={state === "done" ? INK.ok : INK.mono}
+              />
+              <Kv
+                k="SVID"
+                v={
+                  result?.jwtAlg
+                    ? `${result.jwtAlg} · short-lived`
+                    : "jwt-svid · short-lived"
+                }
+              />
+            </div>
+            <span style={foot}>
+              node attested (k8s_psat) · SVID minted by the trust domain
+            </span>
+          </>
+        ),
+    },
+    {
+      key: "gateway",
+      title: "SPIFFE gateway",
+      stages: [2, 3],
+      doneAfter: 4,
+      failsAt: [2, 3],
+      tag: (s) =>
+        s === "failed" ? "rejected" : s === "done" ? "authorized" : "verifying",
+      body: ({ state, scenario, result }) =>
+        state === "failed" ? (
+          <span style={dangerNote}>
+            {scenario === "foreign"
+              ? "foreign trust domain — trust roots do not anchor it"
+              : "SPIFFE ID not allow-listed at the gateway"}
+          </span>
+        ) : (
+          <>
+            <Kv
+              k="mTLS"
+              v="peer verified by SPIFFE ID"
+              vColor={state === "done" ? INK.ok : INK.mono}
+            />
+            <span style={foot}>
+              ghostunnel authorizes{" "}
+              {result?.spiffeId ? "the SPIFFE ID" : "by SPIFFE ID"} before
+              Postgres
+            </span>
+          </>
+        ),
+    },
+    {
+      key: "resource",
+      title: "Postgres · shipments",
+      stages: [4],
+      doneAfter: 5,
+      failsAt: [],
+      tag: (s) => (s === "done" ? "rows returned" : ""),
+      body: ({ state, result }) =>
+        state === "done" ? (
+          <Kv
+            k="Result"
+            v={`${result?.dbRows.length ?? 0} shipment rows · via the SPIFFE gateway`}
+            vColor={INK.ok}
+          />
+        ) : (
+          <span style={dimNote}>
+            authorized by SPIFFE ID before the query runs
+          </span>
+        ),
+    },
+  ],
+  layers: [
+    {
+      name: "Request identity",
+      Icon: Send,
+      pass: () => "workload called the Workload API for an SVID",
+      reject: () => "could not reach the Workload API",
+      idle: "call the SWA Agent Workload API",
+    },
+    {
+      name: "SVID issued",
+      Icon: BadgeCheck,
+      pass: ({ result }) =>
+        `SVID minted${result?.jwtAlg ? ` · ${result.jwtAlg}` : ""} · node attested (k8s_psat)`,
+      reject: () => "no identity issued for this workload",
+      idle: "attest the node and mint a short-lived SVID",
+    },
+    {
+      name: "mTLS trust",
+      Icon: Lock,
+      pass: () => "peer verified by SPIFFE ID · same trust domain",
+      reject: () => "foreign trust domain — trust roots do not anchor it",
+      idle: "verify the presented SVID at the gateway",
+    },
+    {
+      name: "Gateway authorization",
+      Icon: ShieldCheck,
+      pass: () => `SPIFFE ID allow-listed at ${SWA_CTX.gateway}`,
+      reject: () => "SPIFFE ID not allow-listed at the gateway",
+      idle: "authorize the connection by SPIFFE ID",
+    },
+    {
+      name: "Resource access",
+      Icon: Database,
+      pass: ({ result }) =>
+        `${result?.dbRows.length ?? 0} rows · Postgres via the SPIFFE gateway`,
+      reject: () => "no resource access",
+      idle: "read the shipments database",
+    },
+  ],
+  buildTrace: (scenario, r) => {
+    const spiffe = r?.spiffeId || SWA_WORKLOAD;
+    const lines: Line[] = [
+      {
+        s: 0,
+        kind: "comment",
+        text: "workload → SWA Agent Workload API (unix:///run/swa-agent/api.sock)",
+      },
+      { s: 0, kind: "cmd", text: "FetchJWTSVID(audience=swa-demo-audience)" },
+      {
+        s: 1,
+        kind: "comment",
+        text: "SWA server attests the node (k8s_psat) and mints the SVID",
+      },
+      {
+        s: 2,
+        kind: "comment",
+        text: `present SVID to ${SWA_CTX.gateway}.swa-data.svc · mutual TLS`,
+      },
+      {
+        s: 3,
+        kind: "comment",
+        text: "ghostunnel authorizes by SPIFFE ID (allow-uri)",
+      },
+      {
+        s: 4,
+        kind: "cmd",
+        text: "psql 'host=pg-gateway.swa-data.svc.cluster.local port=6432' -c 'SELECT * FROM shipments'",
+      },
+    ];
+    if (r?.retrieved) {
+      lines.push({
+        s: 1,
+        kind: "out",
+        text: `SVID: ${spiffe}`,
+        terminal: true,
+      });
+      lines.push({
+        s: 4,
+        kind: "out",
+        text: " ref          | origin    | destination | status     | carrier",
+        terminal: true,
+      });
+      lines.push({
+        s: 4,
+        kind: "out",
+        text: "--------------+-----------+-------------+------------+------------------",
+        terminal: true,
+      });
+      const rows = (r.dbRows || []).slice(0, 4);
+      for (const row of rows) {
+        lines.push({
+          s: 4,
+          kind: "out",
+          text: ` ${(row.ref || "").padEnd(12)} | ${(row.origin || "").padEnd(9)} | ${(row.destination || "").padEnd(11)} | ${(row.status || "").padEnd(10)} | ${row.carrier || ""}`,
+          terminal: true,
+        });
+      }
+      lines.push({
+        s: 4,
+        kind: "out",
+        text: `(${r.dbRows?.length ?? 0} rows)`,
+        terminal: true,
+      });
+      lines.push({
+        s: 4,
+        kind: "ok",
+        text: "✓ authorized by SPIFFE ID · no stored credential",
+        terminal: true,
+      });
+    } else if (r) {
+      const fs = scenario === "unknown" ? 1 : scenario === "foreign" ? 2 : 3;
+      const errLine =
+        scenario === "unknown"
+          ? "rpc error: code = PermissionDenied desc = no identity issued for this workload"
+          : scenario === "foreign"
+            ? "remote error: tls: bad certificate — certificate signed by unknown authority"
+            : "pg-gateway: remote error: tls: bad certificate (SPIFFE ID not allow-listed)";
+      lines.push({ s: fs, kind: "err", text: errLine, terminal: true });
+      lines.push({
+        s: fs,
+        kind: "err",
+        text:
+          scenario === "unknown"
+            ? "✗ no SVID — the workload has no identity to present"
+            : scenario === "foreign"
+              ? "✗ rejected at the mTLS trust boundary — foreign trust domain"
+              : "✗ denied at the gateway — SPIFFE ID not allow-listed",
+        terminal: true,
+      });
+    }
+    return lines;
+  },
 };
 
-/** Pick the provider from the page path: /credential-providers → CCP, else CP. */
+export const PROVIDERS: Record<"cp" | "ccp" | "swa", Provider> = {
+  cp: cpProvider,
+  ccp: ccpProvider,
+  swa: swaProvider,
+};
+
+/** Pick the provider from the page path. */
 export function providerFromPath(pathname: string): Provider {
-  return pathname.startsWith("/credential-providers")
-    ? ccpProvider
-    : cpProvider;
+  if (pathname.startsWith("/credential-providers")) return ccpProvider;
+  if (pathname.startsWith("/swa")) return swaProvider;
+  return cpProvider;
 }
 
 /** Scenario meta lookup with a safe fallback to the provider's first scenario. */

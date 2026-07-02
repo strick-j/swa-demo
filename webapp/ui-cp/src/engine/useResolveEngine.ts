@@ -22,17 +22,34 @@ export interface ResolveEngine {
   reset: () => void;
 }
 
-type Pending = { kind: "done" | "error"; result: ProviderResult; failStage: number };
+type Pending = {
+  kind: "done" | "error";
+  result: ProviderResult;
+  failStage: number;
+};
 
 function codeOf(msg: string): string {
   const m = /[A-Z]{3,7}[0-9]{2,4}[A-Z]/.exec(msg || "");
   return m ? m[0] : "";
 }
 
-// Map the provider's API JSON (retrieve.Result) into a ProviderResult.
-function mapResult(provider: Provider, json: Record<string, unknown>): ProviderResult {
-  const obj = (json[provider.resultKey] as Record<string, unknown> | undefined) ?? {};
+// Map the provider's API JSON (retrieve.Result / swaResp) into a ProviderResult.
+function mapResult(
+  provider: Provider,
+  json: Record<string, unknown>,
+): ProviderResult {
+  const obj =
+    (json[provider.resultKey] as Record<string, unknown> | undefined) ?? {};
   const s = (v: unknown): string => (typeof v === "string" ? v : "");
+  const rows = Array.isArray(obj.db_rows)
+    ? (obj.db_rows as Record<string, unknown>[]).map((r) => ({
+        ref: s(r.ref),
+        origin: s(r.origin),
+        destination: s(r.destination),
+        status: s(r.status),
+        carrier: s(r.carrier),
+      }))
+    : [];
   const error = s(json.error);
   return {
     retrieved: json.retrieved === true,
@@ -51,6 +68,18 @@ function mapResult(provider: Provider, json: Record<string, unknown>): ProviderR
     address: s(obj.address),
     virtualUsername: s(obj.virtual_username),
     dualActive: s(obj.dual_active),
+    spiffeId: s(obj.spiffe_id),
+    issued: obj.issued === true,
+    jwtAlg: s(obj.jwt_alg),
+    jwtKid: s(obj.jwt_kid),
+    audience: s(obj.audience),
+    expiresAt: s(obj.expires_at),
+    dbAllowed: obj.db_allowed === true,
+    dbRows: rows,
+    dbError: s(obj.db_error),
+    peerUri: s(obj.peer_uri),
+    issuer: s(obj.issuer),
+    trustDomain: s(obj.trust_domain),
   };
 }
 
@@ -71,6 +100,18 @@ const EMPTY: ProviderResult = {
   address: "",
   virtualUsername: "",
   dualActive: "",
+  spiffeId: "",
+  issued: false,
+  jwtAlg: "",
+  jwtKid: "",
+  audience: "",
+  expiresAt: "",
+  dbAllowed: false,
+  dbRows: [],
+  dbError: "",
+  peerUri: "",
+  issuer: "",
+  trustDomain: "",
 };
 
 export function useResolveEngine(provider: Provider): ResolveEngine {
@@ -102,7 +143,9 @@ export function useResolveEngine(provider: Provider): ResolveEngine {
   useEffect(() => {
     const unsub = paceQueue.onStateChange((state) => {
       if (state === "walking") {
-        setStatus((prev) => (prev === "done" || prev === "error" ? prev : "running"));
+        setStatus((prev) =>
+          prev === "done" || prev === "error" ? prev : "running",
+        );
         return;
       }
       const p = pending.current;
@@ -134,7 +177,9 @@ export function useResolveEngine(provider: Provider): ResolveEngine {
 
       const meta = pmeta(provider, scenario);
 
-      fetch(`${provider.apiPath}?scenario=${encodeURIComponent(scenario)}`, { method: "POST" })
+      fetch(`${provider.apiPath}?scenario=${encodeURIComponent(scenario)}`, {
+        method: "POST",
+      })
         .then(async (resp) => {
           let json: Record<string, unknown> = {};
           try {
@@ -144,10 +189,18 @@ export function useResolveEngine(provider: Provider): ResolveEngine {
           }
           const res = mapResult(provider, json);
           const success = res.retrieved;
-          const failStage = success ? -1 : meta.failStage >= 0 ? meta.failStage : 0;
+          const failStage = success
+            ? -1
+            : meta.failStage >= 0
+              ? meta.failStage
+              : 0;
           const target = success ? provider.stages.length - 1 : failStage;
 
-          pending.current = { kind: success ? "done" : "error", result: res, failStage };
+          pending.current = {
+            kind: success ? "done" : "error",
+            result: res,
+            failStage,
+          };
           for (let i = 0; i <= target; i++) {
             paceQueue.push({ type: `cp.stage.${i}` });
           }

@@ -15,7 +15,7 @@ import { Tag } from "./Tag";
 import { Evidence } from "./Evidence";
 import { pmeta, type Provider, type ScenarioKey } from "../engine/providers";
 import type { EngineStatus } from "../engine/useResolveEngine";
-import type { ProviderResult } from "../visualizations/common";
+import type { DbRow, ProviderResult } from "../visualizations/common";
 
 interface PortalPaneProps {
   provider: Provider;
@@ -223,6 +223,36 @@ const ps = {
     padding: "10px 12px",
     wordBreak: "break-all" as const,
   },
+  dbTable: {
+    marginTop: 8,
+    border: "1px solid var(--border-subtle)",
+    borderRadius: 10,
+    overflow: "hidden" as const,
+  },
+  dbRow: {
+    display: "grid",
+    gridTemplateColumns: "auto 1fr auto",
+    gap: 10,
+    alignItems: "baseline",
+    padding: "9px 12px",
+    borderBottom: "1px solid var(--border-subtle)",
+  },
+  dbRef: {
+    fontFamily: "var(--font-mono)",
+    fontSize: 12,
+    fontWeight: 600,
+    color: "var(--text-strong)",
+  },
+  dbRoute: { fontSize: 12.5, color: "var(--text-muted)" },
+  dbStatus: {
+    fontSize: 11,
+    fontWeight: 600,
+    color: "var(--idira-blue-750)",
+    background: "var(--surface-brand-tint)",
+    borderRadius: 999,
+    padding: "2px 9px",
+    whiteSpace: "nowrap" as const,
+  },
   errAccent: { borderLeft: "3px solid var(--status-danger)", paddingLeft: 12 },
   errBar: {
     display: "flex",
@@ -273,6 +303,29 @@ function Row({ k, v, token }: { k: string; v: string; token?: boolean }) {
   );
 }
 
+// DbTable renders the shipments rows returned through the SPIFFE gateway (SWA).
+function DbTable({ rows }: { rows: DbRow[] }) {
+  if (!rows || rows.length === 0) return null;
+  return (
+    <div>
+      <span className="idira-eyebrow" style={{ color: "var(--text-muted)" }}>
+        Shipments · via the SPIFFE gateway
+      </span>
+      <div style={ps.dbTable}>
+        {rows.map((r, i) => (
+          <div key={i} style={ps.dbRow}>
+            <span style={ps.dbRef}>{r.ref}</span>
+            <span style={ps.dbRoute}>
+              {r.origin} → {r.destination}
+            </span>
+            <span style={ps.dbStatus}>{r.status}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function PortalPane({
   provider,
   scenario,
@@ -287,6 +340,7 @@ export function PortalPane({
   const isError = status === "error";
   const meta = pmeta(provider, scenario);
   const r = result;
+  const isSwa = provider.id === "swa";
 
   return (
     <div style={ps.pane}>
@@ -421,7 +475,7 @@ export function PortalPane({
             </div>
           )}
 
-          {done && r && (
+          {done && r && !isSwa && (
             <div style={ps.resultIn}>
               <div style={ps.mfHead}>
                 <span style={ps.mfTitle}>
@@ -457,7 +511,35 @@ export function PortalPane({
             </div>
           )}
 
-          {isError && (
+          {done && r && isSwa && (
+            <div style={ps.resultIn}>
+              <div style={ps.mfHead}>
+                <span style={ps.mfTitle}>
+                  <CheckCircle2
+                    size={18}
+                    style={{ color: "var(--status-success)" }}
+                  />
+                  Identity verified · resource reached
+                </span>
+                <Badge tone="success" dot>
+                  {r.simulated ? "Simulated" : "Live"}
+                </Badge>
+              </div>
+              <div style={ps.manifest}>
+                <Row k="SPIFFE ID" v={r.spiffeId} />
+                <Row
+                  k="SVID"
+                  v={[r.jwtAlg, r.audience && `aud=${r.audience}`]
+                    .filter(Boolean)
+                    .join(" · ")}
+                />
+              </div>
+              <DbTable rows={r.dbRows} />
+              <Evidence kind="success" items={meta.evidence} />
+            </div>
+          )}
+
+          {isError && !isSwa && (
             <div style={ps.resultIn}>
               <div style={ps.errAccent}>
                 <div style={ps.errBar}>
@@ -470,6 +552,31 @@ export function PortalPane({
                   </Tag>
                 </div>
               </div>
+              {r?.error && <p style={ps.errMsg}>{r.error}</p>}
+              <Evidence kind="error" items={meta.evidence} />
+            </div>
+          )}
+
+          {isError && isSwa && (
+            <div style={ps.resultIn}>
+              <div style={ps.errAccent}>
+                <div style={ps.errBar}>
+                  <div style={ps.errCode}>
+                    <XOctagon size={18} />
+                    <span>{meta.label}</span>
+                  </div>
+                  <Tag tone="danger">{meta.tag}</Tag>
+                </div>
+              </div>
+              {r?.spiffeId && (
+                <div style={ps.manifest}>
+                  <Row
+                    k={scenario === "foreign" ? "Peer identity" : "SPIFFE ID"}
+                    v={r.spiffeId}
+                  />
+                  {r.issuer && <Row k="Issuer" v={r.issuer} />}
+                </div>
+              )}
               {r?.error && <p style={ps.errMsg}>{r.error}</p>}
               <Evidence kind="error" items={meta.evidence} />
             </div>
