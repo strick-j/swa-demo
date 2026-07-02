@@ -1,11 +1,11 @@
-// Evidence -- trust evidence (success) or trust boundary (error) callout.
-// Renders SWA.evidence copy verbatim. The validator greps the rendered DOM
-// for each lead and body string.
+// Evidence -- trust-evidence (success) or trust-boundary (deny) callout. Renders
+// the per-scenario lead/body copy passed in from the CP model.
 import { ShieldCheck, ShieldAlert } from "lucide-react";
-import { SWA } from "../engine/swa";
+import type { EvidenceItem } from "../engine/cp";
 
 interface EvidenceProps {
   kind: "success" | "error";
+  items: EvidenceItem[];
 }
 
 const styles = {
@@ -44,8 +44,7 @@ const styles = {
   },
 };
 
-export function Evidence({ kind }: EvidenceProps) {
-  const items = kind === "error" ? SWA.evidence.error : SWA.evidence.success;
+export function Evidence({ kind, items }: EvidenceProps) {
   const accent = kind === "error" ? "var(--status-danger)" : "var(--brand)";
   const bg = kind === "error" ? "rgba(200,71,39,0.06)" : "var(--surface-brand-tint)";
   const Icon = kind === "error" ? ShieldAlert : ShieldCheck;

@@ -1,37 +1,25 @@
-// TopologyInspector -- the live trust-path diagram (hero visualization).
-// Vertical topology: two X.509 workloads under an mTLS bracket, descending
-// through JWT-SVID, Secrets Manager, Secret. Edges carry energy pulses as
-// each stage fires. Ported from inspector_topology.jsx.
-import { ShieldX, Lock, CircleCheckBig, ShieldOff } from "lucide-react";
-import { INK, Meter, Kv, fmtTtl, type InspectorProps } from "./common";
-import { ShuffleDigits } from "./ShuffleDigits";
-import { SWA } from "../engine/swa";
+// TopologyInspector -- the CP trust-path diagram. A vertical chain of four
+// cards: the trusted app, the AIM Credential Provider (application-hash + OS
+// user/path authentication), the Vault (Safe authorization), and the returned
+// credential. Edges carry energy pulses as each of the five stages fires.
+import { CircleCheckBig, ShieldOff } from "lucide-react";
+import { INK, Kv, type InspectorProps } from "./common";
+import { CP } from "../engine/cp";
 
-type CardVisualState = "locked" | "active" | "done";
+type CVS = "locked" | "active" | "done" | "failed";
 
-// Determines the visual state of a topology card based on engine progress.
-function cardState(
-  reachedAfter: number,
-  completed: number,
-  activeStage: number,
-  errored: boolean,
-  failStage: number,
-): CardVisualState {
-  if (errored && reachedAfter >= failStage) return "locked";
-  if (completed > reachedAfter) return "done";
-  if (activeStage === reachedAfter) return "active";
-  return "locked";
-}
-
-// Vertical connector with energy pulse between topology rows.
-function VLink({ state }: { state: CardVisualState }) {
+function VLink({ state }: { state: CVS }) {
+  const lit = state === "done";
   return (
     <div style={ts.vlinkWrap}>
       <div
         style={{
           ...ts.vlinkBase,
-          background:
-            state === "done" ? "var(--idira-blue-500)" : INK.line,
+          background: lit
+            ? "var(--idira-blue-500)"
+            : state === "failed"
+              ? INK.dangerLine
+              : INK.line,
         }}
       >
         {state === "active" && (
@@ -42,8 +30,11 @@ function VLink({ state }: { state: CardVisualState }) {
         <div
           style={{
             ...ts.vArrow,
-            borderTopColor:
-              state === "done" ? "var(--idira-blue-500)" : INK.mono,
+            borderTopColor: lit
+              ? "var(--idira-blue-500)"
+              : state === "failed"
+                ? INK.danger
+                : INK.mono,
           }}
         />
       )}
@@ -51,37 +42,34 @@ function VLink({ state }: { state: CardVisualState }) {
   );
 }
 
-// Node card -- represents a stage in the topology.
 function NodeCard({
   title,
   tag,
   state,
-  danger = false,
   children,
-  accent,
 }: {
   title: string;
-  tag?: string;
-  state: CardVisualState;
-  danger?: boolean;
+  tag: string;
+  state: CVS;
   children?: React.ReactNode;
-  accent?: React.ReactNode;
 }) {
   const isActive = state === "active";
   const isDone = state === "done";
-  const border = danger
+  const isFailed = state === "failed";
+  const border = isFailed
     ? INK.dangerLine
     : isDone || isActive
       ? "var(--idira-blue-500)"
       : INK.line;
+  const tagColor = isFailed ? INK.danger : isDone ? INK.ok : INK.mono;
 
   return (
     <div
       style={{
         ...ts.card,
         borderColor: border,
-        borderStyle: danger ? "dashed" : "solid",
-        background: danger
+        borderStyle: isFailed ? "dashed" : "solid",
+        background: isFailed
           ? "rgba(250,88,45,0.07)"
           : isActive
             ? INK.cardActive
@@ -91,14 +79,7 @@ function NodeCard({
         boxShadow: isActive
           ? "0 0 0 1px var(--idira-blue-500), 0 8px 30px rgba(38,91,255,0.25)"
           : "none",
-        opacity:
-          state === "locked"
-            ? children
-              ? 0.7
-              : 0.35
-            : state === "done"
-              ? 0.85
-              : 1,
+        opacity: state === "locked" ? 0.5 : 1,
         animation: isActive
           ? "topoPop 360ms var(--ease-emphasis) both"
           : "none",
@@ -106,37 +87,18 @@ function NodeCard({
     >
       <div style={ts.cardHead}>
         <span
-          style={{
-            ...ts.cardTitle,
-            color: danger ? INK.danger : INK.text,
-          }}
+          style={{ ...ts.cardTitle, color: isFailed ? INK.danger : INK.text }}
         >
           <span
             style={{
               ...ts.cornerTick,
-              borderColor: danger
-                ? INK.danger
-                : "var(--idira-blue-500)",
-              opacity: isDone || isActive || danger ? 1 : 0.2,
+              borderColor: isFailed ? INK.danger : "var(--idira-blue-500)",
+              opacity: isDone || isActive || isFailed ? 1 : 0.2,
             }}
           />
           {title}
         </span>
-        {tag && (
-          <span
-            style={{
-              ...ts.cardTag,
-              color: danger
-                ? INK.danger
-                : isDone
-                  ? INK.ok
-                  : INK.mono,
-            }}
-          >
-            {tag}
-          </span>
-        )}
-        {accent}
+        <span style={{ ...ts.cardTag, color: tagColor }}>{tag}</span>
       </div>
       {children}
     </div>
@@ -147,294 +109,184 @@ export function TopologyInspector({
   status,
   stage,
   completed,
-  carrier,
-  jwtTtl,
-  foreignPeerUri,
+  scenario,
+  failStage,
+  result,
 }: InspectorProps) {
-  const ext = carrier === "external";
   const errored = status === "error";
+  const done = status === "done";
+  const dual = scenario === "dual";
 
-  const issued = completed > 0 || stage === 0;
-  const certPct = completed > 0 ? 96 : stage === 0 ? 60 : 0;
+  // Card state helper. activeStages = stages that light this card; doneAfter =
+  // completed threshold at which it is fully passed; failsAt = fail indices.
+  const stateFor = (
+    activeStages: number[],
+    doneAfter: number,
+    failsAt: number[],
+  ): CVS => {
+    if (errored && failsAt.includes(failStage)) return "failed";
+    if (completed >= doneAfter) return "done";
+    if (activeStages.includes(stage)) return "active";
+    return "locked";
+  };
 
-  // mTLS state
-  const mtlsState: "rejected" | "done" | "active" | "locked" = errored
-    ? "rejected"
-    : completed > 1
-      ? "done"
-      : stage === 1
-        ? "active"
-        : "locked";
+  const appState = stateFor([0], 1, [0]);
+  const provState = stateFor([1, 2], 3, [1, 2]);
+  const vaultState = stateFor([3], 4, [3]);
+  const credState = stateFor([4], 5, []);
 
-  const jwtState = cardState(2, completed, stage, errored, 2);
-  const smState = cardState(3, completed, stage, errored, 2);
-  const secState = cardState(4, completed, stage, errored, 2);
+  const linkState = (into: number): CVS => {
+    if (errored && failStage >= 0 && into > failStage) return "locked";
+    if (stage === into) return "active";
+    if (completed >= into) return "done";
+    return "locked";
+  };
 
-  const linkJwt: CardVisualState = errored
-    ? "locked"
-    : completed > 2
-      ? "done"
-      : stage === 2
-        ? "active"
-        : "locked";
-  const linkAuthn: CardVisualState = errored
-    ? "locked"
-    : completed > 3
-      ? "done"
-      : stage === 3
-        ? "active"
-        : "locked";
-  const linkFetch: CardVisualState = errored
-    ? "locked"
-    : completed > 4
-      ? "done"
-      : stage === 4
-        ? "active"
-        : "locked";
-
-  const bracketColor =
-    mtlsState === "rejected"
-      ? INK.dangerLine
-      : mtlsState === "done" || mtlsState === "active"
-        ? "var(--idira-blue-500)"
-        : INK.line;
-
-  const bracketLabelColor =
-    mtlsState === "rejected"
-      ? INK.danger
-      : mtlsState === "done"
-        ? INK.ok
-        : mtlsState === "active"
-          ? INK.mono
-          : INK.dim;
+  const appHash = result?.appHash || "—";
+  const osUser = result?.osUser || CP.ctx.auth;
+  const callerPath = result?.callerPath || "cp-caller.jar";
+  const safe = result?.safe || CP.ctx.safe;
+  const account = result?.account || "—";
 
   return (
     <div style={ts.scroll}>
       <div style={ts.canvas}>
-        {/* mTLS bracket spanning Portal + Carrier cards */}
-        <div
-          style={{
-            ...ts.bracket,
-            borderColor: bracketColor,
-            borderStyle: mtlsState === "rejected" ? "dashed" : "solid",
-          }}
-        >
-          {/* cipher label floating in the bracket top border */}
-          <div
-            style={{
-              ...ts.bracketLabel,
-              color: bracketLabelColor,
-            }}
-          >
-            {mtlsState === "rejected" ? (
-              <ShieldX style={{ width: 12, height: 12 }} />
-            ) : (
-              <Lock style={{ width: 12, height: 12 }} />
-            )}
-            {mtlsState === "rejected"
-              ? "mTLS rejected · untrusted authority"
-              : mtlsState === "done"
-                ? `mTLS ok · ${SWA.cipher}`
-                : mtlsState === "active"
-                  ? "negotiating mutual TLS..."
-                  : "mutual TLS"}
-          </div>
-
-          {/* Portal + Carrier pair row */}
-          <div style={ts.pairRow}>
-          <NodeCard
-            title="Portal"
-            tag="X.509-SVID"
-            state={
-              completed > 0 ? "done" : stage === 0 ? "active" : "locked"
-            }
-          >
-            <Kv k="SAN URI" v={SWA.spiffe.portal} />
-            <div style={ts.validRow}>
-              <span style={ts.validLbl}>VALID</span>
-              <span style={ts.validVal}>{issued ? "58m" : "-"}</span>
-            </div>
-            <Meter pct={certPct} active={stage === 0} />
-            <span style={ts.foot}>RSA-2048 · rotates 60m</span>
-          </NodeCard>
-
-          {/* horizontal mTLS connector */}
-          <div style={ts.hlink}>
-            <div
-              style={{
-                ...ts.hlinkBase,
-                background:
-                  mtlsState === "rejected"
-                    ? INK.dangerLine
-                    : mtlsState === "done"
-                      ? "var(--idira-blue-500)"
-                      : INK.line,
-              }}
-            >
-              {mtlsState === "active" && (
-                <div className="ic-flow" style={ts.hlinkPulse} />
-              )}
-            </div>
-          </div>
-
-          <NodeCard
-            title={ext ? "ACME" : "Carrier"}
-            tag={ext ? "Foreign TD" : "X.509-SVID"}
-            danger={ext}
-            state={
-              completed > 0 ? "done" : stage === 0 ? "active" : "locked"
-            }
-          >
-            <Kv
-              k="SAN URI"
-              v={ext ? (foreignPeerUri ?? SWA.spiffe.foreign) : SWA.spiffe.carrier}
-              vColor={ext ? INK.danger : undefined}
-            />
-            <div style={ts.validRow}>
-              <span style={ts.validLbl}>VALID</span>
-              <span style={ts.validVal}>{issued ? "59m" : "-"}</span>
-            </div>
-            <Meter
-              pct={certPct}
-              tone={ext ? "danger" : "brand"}
-              active={stage === 0}
-            />
-            <span style={ts.foot}>
-              {ext ? "issuer: acme.courier CA" : "RSA-2048 · rotates 60m"}
-            </span>
-          </NodeCard>
-          </div>
-        </div>
-
-        <VLink state={linkJwt} />
-
-        {/* JWT-SVID */}
+        {/* App / trusted JAR */}
         <NodeCard
-          title="Carrier · JWT-SVID"
-          tag={jwtState === "done" ? "accepted" : ext ? "-" : "on resolve"}
-          state={jwtState}
+          title="App · Trusted JAR"
+          tag={appState === "done" ? "invoked" : "caller"}
+          state={appState}
         >
-          {jwtState === "done" ? (
+          <Kv k="Calling application" v={callerPath} />
+          <span style={ts.foot}>
+            the workload stores no password or client cert
+          </span>
+        </NodeCard>
+
+        <VLink state={linkState(1)} />
+
+        {/* AIM Credential Provider */}
+        <NodeCard
+          title="AIM Credential Provider"
+          tag={
+            provState === "failed"
+              ? "authn deny"
+              : provState === "done"
+                ? "authenticated"
+                : "measuring"
+          }
+          state={provState}
+        >
+          {provState === "failed" ? (
+            <span style={ts.dangerNote}>
+              {result?.errorCode ? `${result.errorCode} · ` : ""}application
+              hash is not authorized
+            </span>
+          ) : (
             <div style={ts.grid2}>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <Kv k="sub claim" v={SWA.spiffe.carrier} />
-              </div>
-              <Kv k="aud" v={SWA.jwt.aud} />
-              <Kv k="alg" v={SWA.jwt.alg} />
-              <Kv k="kid" v={SWA.jwt.kid} />
-              <div>
-                <span style={ts.validLbl}>TTL</span>
-                <div
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 14,
-                    color: INK.ok,
-                    marginTop: 2,
-                  }}
-                >
-                  <ShuffleDigits value={fmtTtl(jwtTtl)} />
-                </div>
-              </div>
-              <div style={{ gridColumn: "1 / -1", marginTop: 2 }}>
-                <Meter
-                  pct={Math.round((jwtTtl / 300) * 100)}
-                  tone="brand"
-                  active
-                />
-                <span style={{ ...ts.foot, marginTop: 6 }}>
-                  signed by trust-domain JWKS · aud-bound to conjur
-                </span>
-              </div>
+              <Kv
+                k="Application hash"
+                v={appHash}
+                vColor={provState === "done" ? INK.ok : INK.mono}
+              />
+              <Kv k="OS user · path" v={osUser} />
+            </div>
+          )}
+          <span style={ts.foot}>
+            authenticates the calling application by its characteristics
+          </span>
+        </NodeCard>
+
+        <VLink state={linkState(3)} />
+
+        {/* Vault -- Safe authorization */}
+        <NodeCard
+          title="Vault · App permission"
+          tag={
+            vaultState === "failed"
+              ? "authz deny"
+              : vaultState === "done"
+                ? "authorized"
+                : ""
+          }
+          state={vaultState}
+        >
+          {vaultState === "failed" ? (
+            <span style={ts.dangerNote}>
+              {result?.errorCode ? `${result.errorCode} · ` : ""}Application not
+              permitted for Safe {safe}
+            </span>
+          ) : (
+            <Kv
+              k="Safe"
+              v={safe}
+              vColor={vaultState === "done" ? INK.ok : INK.mono}
+            />
+          )}
+          <span style={ts.foot}>
+            authorizes the Application for the requested Safe
+          </span>
+        </NodeCard>
+
+        <VLink state={linkState(4)} />
+
+        {/* Credential */}
+        <NodeCard
+          title="Credential"
+          tag={credState === "done" ? "returned" : ""}
+          state={credState}
+        >
+          {credState === "done" ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <Kv
+                k={dual ? "Active account" : "Account"}
+                v={dual ? result?.dualActive || account : account}
+              />
+              <Kv
+                k="Value (masked)"
+                v={result?.masked || "—"}
+                vColor={INK.ok}
+              />
             </div>
           ) : (
             <span style={ts.dimNote}>
-              issued on resolve · aud=conjur · alg=RS512 · ttl 5m
+              secret hashed on host · only the preview crosses the bridge
             </span>
           )}
         </NodeCard>
 
-        <VLink state={linkAuthn} />
-
-        {/* Secrets Manager */}
-        <NodeCard
-          title="Secrets Manager · SaaS"
-          tag={smState === "done" ? "token granted" : ""}
-          state={smState}
-        >
-          {smState === "done" ? (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 8,
-              }}
-            >
-              <span style={ts.okNote}>
-                POST /authn-jwt · JWKS verified · access token issued
-              </span>
-              <span style={ts.foot}>
-                scoped to{" "}
-                <b style={{ color: INK.mono }}>{SWA.secret.variable}</b> ·
-                policy denies all others
-              </span>
-            </div>
-          ) : (
-            <span style={ts.dimNote}>
-              policy scoped to exactly one variable
-            </span>
-          )}
-        </NodeCard>
-
-        <VLink state={linkFetch} />
-
-        {/* Secret */}
-        <NodeCard
-          title="Secret"
-          tag={secState === "done" ? "returned" : ""}
-          state={secState}
-        >
-          {secState === "done" ? (
-            <span style={ts.okNote}>
-              bytes={SWA.secret.bytes} · in-process · held for one request ·
-              never on disk
-            </span>
-          ) : (
-            <span style={ts.dimNote}>in-process · never on disk</span>
-          )}
-        </NodeCard>
-
-        {/* trust boundary band for external */}
         {errored && (
           <div style={ts.boundary}>
             <span style={{ ...ts.cardTitle, color: INK.danger }}>
-              <ShieldOff style={{ width: 13, height: 13 }} /> Trust boundary
+              <ShieldOff style={{ width: 13, height: 13 }} />{" "}
+              {scenario === "denied"
+                ? "Authorization boundary"
+                : "Authentication boundary"}
             </span>
             <span style={ts.boundaryBody}>
-              acme.courier is outside idira.demo -- no shared trust roots.
-              SWA trust-domain federation would resolve this; not yet
-              available in this demo.
+              {scenario === "denied"
+                ? "The caller was authenticated, but the Application is not a member of the requested Safe. Nothing was returned."
+                : "The calling application's hash is not registered on the Application. Rejected before any Safe was evaluated — as designed."}
             </span>
           </div>
         )}
 
-        {status === "done" && (
+        {done && (
           <div style={ts.resolved}>
             <CircleCheckBig style={{ width: 14, height: 14 }} />
-            manifest returned to portal · zero credentials stored
+            credential returned · full secret never left the host
           </div>
         )}
       </div>
 
-      {/* resolve-success flash sweep (one-shot 280ms) */}
-      {status === "done" && (
+      {done && (
         <div
           style={{
             position: "absolute",
             inset: 0,
             background:
               "linear-gradient(90deg, transparent, rgba(38,91,255,0.4), transparent)",
-            animation:
-              "topoFlash 280ms cubic-bezier(0.16, 1, 0.3, 1) forwards",
+            animation: "topoFlash 280ms cubic-bezier(0.16, 1, 0.3, 1) forwards",
             pointerEvents: "none" as const,
             zIndex: 10,
           }}
@@ -457,63 +309,7 @@ const ts = {
     display: "flex",
     flexDirection: "column" as const,
   },
-  bracket: {
-    position: "relative" as const,
-    borderTop: "1.5px solid",
-    borderLeft: "1.5px solid",
-    borderRight: "1.5px solid",
-    borderBottom: "none",
-    borderRadius: "10px 10px 0 0",
-    paddingTop: 20,
-    marginBottom: 0,
-    transition: "border-color 300ms var(--ease-standard)",
-  },
-  bracketLabel: {
-    position: "absolute" as const,
-    top: 0,
-    left: "50%",
-    transform: "translate(-50%, -50%)",
-    background: "#0A1A4A",
-    padding: "4px 14px",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 7,
-    fontFamily: "var(--font-mono)",
-    fontSize: 11.5,
-    letterSpacing: "0.01em",
-    whiteSpace: "nowrap" as const,
-    transition: "color 300ms var(--ease-standard)",
-  },
-  pairRow: {
-    display: "grid",
-    gridTemplateColumns: "1fr auto 1fr",
-    alignItems: "center",
-    gap: 0,
-  },
-  hlink: {
-    width: 34,
-    height: 2,
-    position: "relative" as const,
-    alignSelf: "center" as const,
-  },
-  hlinkBase: {
-    position: "absolute" as const,
-    inset: 0,
-    borderRadius: 2,
-    transition: "background 300ms",
-  },
-  hlinkPulse: {
-    position: "absolute" as const,
-    top: 0,
-    left: 0,
-    height: "100%",
-    width: "45%",
-    background:
-      "linear-gradient(90deg, transparent, #9DB4FF, transparent)",
-    animation: "topoFlowX 0.9s linear infinite",
-  },
   card: {
-    flex: 1,
     display: "flex",
     flexDirection: "column" as const,
     gap: 9,
@@ -552,24 +348,10 @@ const ts = {
     textTransform: "uppercase" as const,
     fontWeight: 600,
   },
-  validRow: {
-    display: "flex",
-    alignItems: "baseline",
-    gap: 10,
-    marginTop: 2,
-  },
-  validLbl: {
-    fontSize: 9.5,
-    letterSpacing: "0.12em",
-    textTransform: "uppercase" as const,
-    color: INK.faint,
-    fontWeight: 600,
-  },
-  validVal: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 15,
-    color: INK.text,
-    fontWeight: 600,
+  grid2: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "11px 14px",
   },
   foot: {
     fontFamily: "var(--font-mono)",
@@ -579,7 +361,7 @@ const ts = {
   },
   vlinkWrap: {
     position: "relative" as const,
-    height: 34,
+    height: 30,
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
@@ -597,8 +379,7 @@ const ts = {
     left: 0,
     width: "100%",
     height: "50%",
-    background:
-      "linear-gradient(180deg, transparent, #9DB4FF, transparent)",
+    background: "linear-gradient(180deg, transparent, #9DB4FF, transparent)",
     animation: "topoFlowY 0.9s linear infinite",
   },
   vArrow: {
@@ -610,21 +391,16 @@ const ts = {
     borderRight: "4px solid transparent",
     borderTop: "5px solid",
   },
-  grid2: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr 1fr",
-    gap: "11px 14px",
-  },
   dimNote: {
     fontFamily: "var(--font-mono)",
     fontSize: 12,
     color: INK.faint,
     fontStyle: "italic" as const,
   },
-  okNote: {
+  dangerNote: {
     fontFamily: "var(--font-mono)",
     fontSize: 12,
-    color: INK.text,
+    color: INK.danger,
     lineHeight: 1.5,
   },
   boundary: {

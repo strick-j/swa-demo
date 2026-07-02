@@ -1,47 +1,22 @@
-// PortalPane -- left pane of the SWA demo. Praetor Logistics shipment portal.
-// Reads the resolve engine state and renders idle / running / done / error.
-// Manifest fields come from the real carrier response, not SWA.shipment constants.
-import {
-  PackageSearch,
-  KeyRound,
-  Info,
-  ScanSearch,
-  XOctagon,
-} from "lucide-react";
+// PortalPane -- left pane of the CP demo. "Retrieve a credential": pick one of
+// four use cases, run it, and render idle / running / done (masked result) /
+// error (APPAP denial), with the per-scenario evidence copy.
+import { KeyRound, Info, ScanSearch, XOctagon, CheckCircle2 } from "lucide-react";
 import { Button } from "./Button";
-import { Input } from "./Input";
 import { Badge } from "./Badge";
 import { Tag } from "./Tag";
-import { PraetorMark } from "./PraetorMark";
-import { Segmented } from "./Segmented";
-import { RouteStrip } from "./RouteStrip";
 import { Evidence } from "./Evidence";
-import { VoyageProgress } from "./VoyageProgress";
-import { RecentEvents } from "./RecentEvents";
-import { SWA } from "../engine/swa";
-import type { EngineStatus, ResolveResult, ResolveError } from "../engine/useResolveEngine";
-
-/** "2026-06-09T14:00:00Z" -> "Jun 9, 14:00 UTC" */
-function formatEtaShort(raw: string): string {
-  const d = new Date(raw);
-  if (isNaN(d.getTime())) return raw;
-  const mon = d.toLocaleString("en-US", { month: "short", timeZone: "UTC" });
-  const day = d.getUTCDate();
-  const hh = String(d.getUTCHours()).padStart(2, "0");
-  const mm = String(d.getUTCMinutes()).padStart(2, "0");
-  return `${mon} ${day}, ${hh}:${mm} UTC`;
-}
+import { CP, type ScenarioKey } from "../engine/cp";
+import type { EngineStatus } from "../engine/useResolveEngine";
+import type { CpResult } from "../visualizations/common";
 
 interface PortalPaneProps {
-  carrier: "internal" | "external";
-  setCarrier: (v: "internal" | "external") => void;
+  scenario: ScenarioKey;
+  setScenario: (v: ScenarioKey) => void;
   status: EngineStatus;
   stageVerb: string;
-  shipmentId: string;
-  setShipmentId: (v: string) => void;
   onResolve: () => void;
-  result: ResolveResult | null;
-  error: ResolveError | null;
+  result: CpResult | null;
 }
 
 const ps = {
@@ -84,29 +59,50 @@ const ps = {
   body: {
     flex: 1,
     overflowY: "auto" as const,
-    padding: "40px 36px 48px",
+    padding: "36px 36px 48px",
     display: "flex",
     flexDirection: "column" as const,
-    gap: 28,
+    gap: 24,
   },
-  hero: { display: "flex", flexDirection: "column" as const, gap: 12, maxWidth: 460 },
+  hero: { display: "flex", flexDirection: "column" as const, gap: 12, maxWidth: 470 },
   h1: {
-    fontSize: "clamp(2rem, 1.2rem + 2vw, 2.9rem)",
+    fontSize: "clamp(1.9rem, 1.2rem + 2vw, 2.7rem)",
     margin: 0,
     color: "var(--text-strong)",
     letterSpacing: "-0.025em",
-    lineHeight: 1.02,
+    lineHeight: 1.04,
   },
   lede: {
     margin: 0,
-    fontSize: 15,
+    fontSize: 14.5,
     lineHeight: 1.55,
     color: "var(--text-muted)",
-    maxWidth: 440,
+    maxWidth: 460,
   },
-  form: { display: "flex", flexDirection: "column" as const, gap: 16, maxWidth: 460 },
-  field: { display: "flex", flexDirection: "column" as const, gap: 8 },
-  label: { color: "var(--text-muted)" },
+  selectWrap: { display: "flex", flexDirection: "column" as const, gap: 10, maxWidth: 470 },
+  ucList: { display: "flex", flexDirection: "column" as const, gap: 8 },
+  ucBtn: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    width: "100%",
+    textAlign: "left" as const,
+    padding: "12px 14px",
+    borderRadius: "var(--radius-md)",
+    cursor: "pointer",
+    fontFamily: "var(--font-sans)",
+    transition: "all 160ms var(--ease-standard)",
+  },
+  ucLabel: { fontSize: 14, fontWeight: 600, color: "var(--text-strong)" },
+  desc: {
+    margin: 0,
+    fontSize: 13,
+    lineHeight: 1.55,
+    color: "var(--text-muted)",
+    maxWidth: 470,
+    minHeight: 40,
+  },
   formHint: {
     display: "flex",
     gap: 7,
@@ -114,8 +110,9 @@ const ps = {
     color: "var(--text-subtle)",
     lineHeight: 1.45,
     marginTop: -2,
+    maxWidth: 470,
   },
-  result: { minHeight: 60, maxWidth: 460 },
+  result: { minHeight: 60, maxWidth: 470 },
   empty: {
     display: "flex",
     alignItems: "center",
@@ -131,52 +128,55 @@ const ps = {
     borderRadius: 999,
     background: "var(--brand)",
     flexShrink: 0,
-    boxShadow: "0 0 0 0 rgba(38,91,255,0.5)",
     animation: "praetorPulse 1.1s var(--ease-standard) infinite",
   },
   resultIn: {
     display: "flex",
     flexDirection: "column" as const,
-    gap: 20,
-    paddingTop: 24,
+    gap: 18,
+    paddingTop: 22,
     borderTop: "1px solid var(--border-subtle)",
     animation: "praetorRise 420ms var(--ease-emphasis) both",
   },
-  mfHead: { display: "flex", alignItems: "flex-start", justifyContent: "space-between" },
-  mfId: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 22,
-    fontWeight: 600,
+  mfHead: { display: "flex", alignItems: "center", justifyContent: "space-between" },
+  mfTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    fontSize: 15,
+    fontWeight: 700,
     color: "var(--text-strong)",
-    letterSpacing: "-0.01em",
-    marginTop: 2,
   },
   manifest: { display: "flex", flexDirection: "column" as const },
   mfRow: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "baseline",
-    padding: "11px 0",
+    gap: 16,
+    padding: "10px 0",
     borderBottom: "1px solid var(--border-subtle)",
   },
-  mfRowStack: {
-    display: "flex",
-    flexDirection: "column" as const,
-    alignItems: "flex-end" as const,
-    gap: 2,
-  },
-  mfKey: { fontSize: 12.5, color: "var(--text-muted)", letterSpacing: "0.01em" },
-  mfVal: { fontSize: 14, fontWeight: 600, color: "var(--text-body)" },
-  mfSub: {
-    fontSize: 11.5,
-    color: "var(--text-subtle)",
+  mfKey: { fontSize: 12.5, color: "var(--text-muted)", letterSpacing: "0.01em", flexShrink: 0 },
+  mfVal: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: "var(--text-body)",
     fontFamily: "var(--font-mono)",
-    letterSpacing: "0.01em",
+    textAlign: "right" as const,
+    wordBreak: "break-all" as const,
   },
-  errAccent: {
-    borderLeft: "3px solid var(--status-danger)",
-    paddingLeft: 12,
+  token: {
+    fontFamily: "var(--font-mono)",
+    fontSize: 14,
+    fontWeight: 600,
+    color: "var(--idira-blue-750)",
+    background: "var(--surface-brand-tint)",
+    border: "1px solid var(--border-subtle)",
+    borderRadius: 8,
+    padding: "10px 12px",
+    wordBreak: "break-all" as const,
   },
+  errAccent: { borderLeft: "3px solid var(--status-danger)", paddingLeft: 12 },
   errBar: { display: "flex", alignItems: "center", justifyContent: "space-between" },
   errCode: {
     display: "flex",
@@ -187,84 +187,56 @@ const ps = {
     fontSize: 16,
     fontWeight: 600,
   },
-  errMsg: { margin: 0, fontSize: 13.5, color: "var(--text-muted)", lineHeight: 1.55 },
-  errUriChip: {
-    border: "1px solid #FF7A57",
-    borderRadius: 8,
-    padding: "8px 12px",
-    fontFamily: "var(--font-mono)",
-    fontSize: 12,
+  errMsg: {
+    margin: 0,
+    fontSize: 13,
     color: "var(--text-muted)",
+    lineHeight: 1.55,
+    fontFamily: "var(--font-mono)",
     wordBreak: "break-all" as const,
   },
 };
 
-function ManifestRow({
-  k,
-  v,
-  mono,
-  sub,
-}: {
-  k: string;
-  v: string;
-  mono?: boolean;
-  sub?: string;
-}) {
+function Row({ k, v, token }: { k: string; v: string; token?: boolean }) {
+  if (!v) return null;
+  if (token) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "12px 0 2px" }}>
+        <span style={ps.mfKey}>{k}</span>
+        <span style={ps.token}>{v}</span>
+      </div>
+    );
+  }
   return (
     <div style={ps.mfRow}>
       <span style={ps.mfKey}>{k}</span>
-      <span style={ps.mfRowStack}>
-        <span
-          style={{
-            ...ps.mfVal,
-            fontFamily: mono ? "var(--font-mono)" : "var(--font-sans)",
-          }}
-        >
-          {v}
-        </span>
-        {sub && <span style={ps.mfSub}>{sub}</span>}
-      </span>
+      <span style={ps.mfVal}>{v}</span>
     </div>
   );
 }
 
 export function PortalPane({
-  carrier,
-  setCarrier,
+  scenario,
+  setScenario,
   status,
   stageVerb,
-  shipmentId,
-  setShipmentId,
   onResolve,
   result,
-  error,
 }: PortalPaneProps) {
   const busy = status === "running";
   const done = status === "done";
   const isError = status === "error";
-
-  // Manifest values come from the real carrier response when available.
+  const meta = CP.scenarios[scenario];
   const r = result;
 
   return (
     <div style={ps.pane}>
-      {/* app chrome */}
       <header style={ps.appbar}>
         <div style={ps.brand}>
-          <div
-            style={{
-              display: "inline-flex",
-              animation:
-                done
-                  ? "praetorHit 240ms cubic-bezier(0.16, 1, 0.3, 1) both"
-                  : "none",
-            }}
-          >
-            <PraetorMark />
-          </div>
+          <img src="/cp/assets/idira-icon-color.png" alt="" style={{ height: 22, width: "auto" }} />
           <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.05 }}>
-            <span style={ps.brandName}>Praetor Logistics</span>
-            <span style={ps.brandSub}>Shipment operations</span>
+            <span style={ps.brandName}>Credential Provider</span>
+            <span style={ps.brandSub}>Local AIM · host bridge</span>
           </div>
         </div>
         <div style={ps.secured}>
@@ -275,34 +247,52 @@ export function PortalPane({
 
       <div style={ps.body}>
         <div style={ps.hero}>
-          <h1 style={ps.h1}>Look up a shipment.</h1>
+          <h1 style={ps.h1}>Retrieve a credential.</h1>
           <p style={ps.lede}>
-            The portal resolves a shipment through a carrier service that fetches its API
-            credential at request time -- a credential this workload never stores.
+            A trusted Java application asks a Credential Provider on the host for a Vault
+            credential at request time. The Provider authenticates the calling application by
+            its <strong>hash</strong> (plus OS user and path) — no stored password, no client
+            certificate.
           </p>
         </div>
 
-        {/* lookup form */}
-        <div style={ps.form}>
-          <div style={ps.field}>
-            <label className="idira-eyebrow" style={ps.label}>
-              Shipment ID
-            </label>
-            <Input
-              value={shipmentId}
-              onChange={(e) => setShipmentId(e.target.value)}
-              disabled={busy}
-              iconLeft={<PackageSearch size={18} />}
-            />
+        {/* use-case selection */}
+        <div style={ps.selectWrap}>
+          <label className="idira-eyebrow" style={{ color: "var(--text-muted)" }}>
+            Use case
+          </label>
+          <div style={ps.ucList}>
+            {CP.scenarioOrder.map((k) => {
+              const s = CP.scenarios[k];
+              const on = k === scenario;
+              return (
+                <button
+                  key={k}
+                  onClick={() => setScenario(k)}
+                  disabled={busy}
+                  style={{
+                    ...ps.ucBtn,
+                    border: `1px solid ${on ? "var(--border-brand)" : "var(--border-default)"}`,
+                    background: on ? "var(--surface-brand-tint)" : "var(--neutral-0)",
+                    boxShadow: on ? "var(--shadow-xs)" : "none",
+                    cursor: busy ? "not-allowed" : "pointer",
+                  }}
+                >
+                  <span style={ps.ucLabel}>{s.label}</span>
+                  <Tag tone={s.ok ? "success" : "danger"}>{s.tag}</Tag>
+                </button>
+              );
+            })}
           </div>
-          <div style={ps.field}>
-            <label className="idira-eyebrow" style={ps.label}>
-              Carrier
-            </label>
-            <Segmented value={carrier} onChange={setCarrier} disabled={busy} />
-          </div>
-          <Button size="lg" fullWidth onClick={onResolve} loading={busy} iconLeft={!busy ? <KeyRound size={19} /> : undefined}>
-            {busy ? stageVerb || "Resolving..." : done || isError ? "Resolve again" : "Resolve secret"}
+          <p style={ps.desc}>{meta.desc}</p>
+          <Button
+            size="lg"
+            fullWidth
+            onClick={onResolve}
+            loading={busy}
+            iconLeft={!busy ? <KeyRound size={19} /> : undefined}
+          >
+            {busy ? stageVerb || "Retrieving…" : done || isError ? "Retrieve again" : "Retrieve credential"}
           </Button>
           <div style={ps.formHint}>
             <Info size={13} style={{ flexShrink: 0, marginTop: 1 }} />
@@ -315,52 +305,41 @@ export function PortalPane({
           {status === "idle" && (
             <div style={ps.empty}>
               <ScanSearch size={22} style={{ opacity: 0.5 }} />
-              <span>Resolve to retrieve the manifest and watch the credential exchange.</span>
+              <span>Run a use case to authenticate the caller and retrieve the credential.</span>
             </div>
           )}
 
           {busy && (
             <div style={ps.empty}>
               <span style={ps.workingDot} />
-              <span>{stageVerb || "Working"} -- holding no credential on this workload...</span>
+              <span>{stageVerb || "Working"} — this workload stores no credential…</span>
             </div>
           )}
 
           {done && r && (
             <div style={ps.resultIn}>
               <div style={ps.mfHead}>
-                <div>
-                  <span className="idira-eyebrow" style={{ color: "var(--text-muted)" }}>
-                    Shipment
-                  </span>
-                  <div style={ps.mfId}>{r.shipment_id ?? shipmentId}</div>
-                </div>
+                <span style={ps.mfTitle}>
+                  <CheckCircle2 size={18} style={{ color: "var(--status-success)" }} />
+                  Credential retrieved
+                </span>
                 <Badge tone="success" dot>
-                  In transit
+                  {r.simulated ? "Simulated" : "Live"}
                 </Badge>
               </div>
-              <VoyageProgress current="transit" />
-              <RouteStrip
-                origin={r.origin ?? ""}
-                dest={r.destination ?? ""}
-                eta={r.eta ?? ""}
-              />
               <div style={ps.manifest}>
-                {r.carrier_name && <ManifestRow k="Carrier" v={r.carrier_name} />}
-                {r.mode && <ManifestRow k="Mode" v={r.mode} />}
-                {r.container && (
-                  <ManifestRow
-                    k="Container"
-                    v={r.container}
-                    mono
-                    sub={SWA.shipment.containerDetail}
-                  />
-                )}
-                {r.weight && <ManifestRow k="Gross weight" v={r.weight} />}
-                {r.eta && <ManifestRow k="ETA" v={formatEtaShort(r.eta)} />}
+                <Row k="Application" v={r.appId} />
+                <Row k="Caller hash" v={r.appHash} />
+                <Row k="Caller · OS user" v={[r.callerPath, r.osUser && `(${r.osUser})`].filter(Boolean).join(" ")} />
+                <Row k="Safe" v={r.safe} />
+                <Row k="Object / query" v={r.query} />
+                <Row k="Returned account" v={r.account} />
+                <Row k="Address" v={r.address} />
+                <Row k="Virtual username" v={r.virtualUsername} />
+                <Row k="Active account" v={r.dualActive} />
               </div>
-              <RecentEvents events={SWA.shipment.events} />
-              <Evidence kind="success" />
+              <Row k="Value (masked)" v={r.masked} token />
+              <Evidence kind="success" items={meta.evidence} />
             </div>
           )}
 
@@ -370,22 +349,13 @@ export function PortalPane({
                 <div style={ps.errBar}>
                   <div style={ps.errCode}>
                     <XOctagon size={18} />
-                    <span>502 -- resolve failed</span>
+                    <span>{r?.errorCode || "retrieval failed"}</span>
                   </div>
-                  <Tag tone="brand">mTLS rejected</Tag>
+                  <Tag tone="danger">{scenario === "denied" ? "authz deny" : "authn deny"}</Tag>
                 </div>
               </div>
-              <p style={ps.errMsg}>
-                {error?.message
-                  ? error.message
-                  : "The external carrier could not be authenticated. No secret was issued, so the shipment manifest cannot be returned."}
-              </p>
-              {error?.payload?.uri != null && (
-                <div style={ps.errUriChip}>
-                  {String(error.payload.uri)}
-                </div>
-              )}
-              <Evidence kind="error" />
+              {r?.error && <p style={ps.errMsg}>{r.error}</p>}
+              <Evidence kind="error" items={meta.evidence} />
             </div>
           )}
         </div>

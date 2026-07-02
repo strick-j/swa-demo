@@ -48,4 +48,3 @@ ccp-client.crt
 # CP inspector SPA (Vite/React) build artifacts
 webapp/ui-cp/node_modules/
 webapp/ui-cp/dist/
-webapp/internal/ui/cpapp/assets/

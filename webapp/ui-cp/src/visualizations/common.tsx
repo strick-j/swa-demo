@@ -1,7 +1,7 @@
-// common.tsx -- shared palette, helpers, and small primitives used by
-// all three inspector visualizations. Ported from inspector_common.jsx.
+// common.tsx -- shared palette, helpers, and small primitives used by the
+// inspector visualizations. Dark-theme ink palette + CP result/prop types.
+import type { ScenarioKey } from "../engine/cp";
 
-// Dark-theme ink palette for the inspector surface.
 export const INK = {
   text: "#E6ECF7",
   dim: "rgba(196,210,250,0.62)",
@@ -16,25 +16,40 @@ export const INK = {
   ok: "#43E08B",
 } as const;
 
-/** Formats a positive integer seconds value as "Xm YYs". */
-export function fmtTtl(sec: number): string {
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${m}m ${String(s).padStart(2, "0")}s`;
+/** Masked-result payload the engine derives from POST /api/cp. Never the full
+ *  secret — the `masked` string is a preview + length + SHA-256 summary. */
+export interface CpResult {
+  retrieved: boolean;
+  simulated: boolean;
+  masked: string;
+  error: string;
+  errorCode: string;
+  appId: string;
+  appHash: string;
+  callerPath: string;
+  osUser: string;
+  safe: string;
+  query: string;
+  account: string;
+  address: string;
+  virtualUsername: string;
+  dualActive: string;
 }
 
-/** Shared props for all three inspector visualizations. */
+/** Shared props for all inspector visualizations. */
 export interface InspectorProps {
   status: "idle" | "running" | "done" | "error";
+  /** Currently animating stage index (-1 when idle/settled). */
   stage: number;
+  /** Count of completed stages. */
   completed: number;
-  carrier: "internal" | "external";
-  jwtTtl: number;
-  /** Real peer SPIFFE URI captured from mtls.peer_uri_seen on the external path. */
-  foreignPeerUri?: string;
+  scenario: ScenarioKey;
+  /** Stage index the active scenario fails at (-1 = succeeds). */
+  failStage: number;
+  result: CpResult | null;
 }
 
-// Thin meter bar -- progress visualization used by Topology and Layers.
+// Thin meter bar -- progress visualization used by the topology cards.
 interface MeterProps {
   pct: number;
   tone?: "brand" | "danger" | "muted";
@@ -73,7 +88,7 @@ export function Meter({ pct, tone = "brand", active = false }: MeterProps) {
   );
 }
 
-// Label + value token row -- used by Topology cards.
+// Label + value token row -- used by topology cards.
 interface KvProps {
   k: string;
   v: string;

@@ -1,59 +1,24 @@
-// stageMap.ts -- maps SSE event types to stage indices for the six-stage
-// resolve sequence. Both the happy path (internal carrier) and the failure
-// path (external carrier, mTLS rejected at stage 2) are covered.
+// stageMap.ts -- maps synthetic CP pace events to stage indices, and provides
+// the stage verb shown while running. The engine synthesizes "cp.stage.N"
+// events that the pace queue releases at the chosen tempo.
+import { CP } from "./cp";
 
-/** Maps an SSE event type string to its stage index (0-based) in
- *  SWA.stages. Returns -1 for events that don't correspond to a stage. */
+/** Maps a synthetic CP event type to its stage index (0-based). -1 if none. */
 export function eventToStage(eventType: string): number {
-  switch (eventType) {
-    case "portal.resolve.requested":
-      return 0; // attest
-    case "mtls.handshake.start":
-      return 1; // mtls
-    case "mtls.peer_uri_seen":
-      return 1; // still mtls stage (primes foreign-TD info)
-    case "mtls.handshake.ok":
-      return 1; // mtls complete
-    case "jwt_svid.issued":
-      return 2; // jwt
-    case "sm.authn_jwt.ok":
-      return 3; // authn
-    case "sm.secret_fetched.ok":
-      return 4; // fetch
-    case "portal.resolve.ok":
-      return 5; // resolve complete
-    // Error events
-    case "mtls.handshake.err":
-    case "mtls.handshake.error":
-      return 1; // fails at mtls stage
-    default:
-      return -1;
+  const m = /^cp\.stage\.(\d+)$/.exec(eventType);
+  if (m && m[1] !== undefined) {
+    return Number(m[1]);
   }
+  return -1;
 }
 
-/** Human-readable verb for the currently active stage, shown on the
- *  Resolve button while running. */
+/** Human-readable verb for the active stage, shown on the button while running. */
 export function stageVerb(stageIndex: number): string {
-  switch (stageIndex) {
-    case 0:
-      return "Attesting node...";
-    case 1:
-      return "Opening mTLS...";
-    case 2:
-      return "Requesting JWT-SVID...";
-    case 3:
-      return "Exchanging at Secrets Manager...";
-    case 4:
-      return "Fetching secret...";
-    case 5:
-      return "Resolving shipment...";
-    default:
-      return "Resolving...";
-  }
+  const s = CP.stages[stageIndex];
+  return s ? `${s.verb}…` : "Retrieving…";
 }
 
-/** Returns true if the event type signals an error terminal state. */
+/** True if the event type signals a terminal error state. */
 export function isErrorEvent(eventType: string): boolean {
   return /\.err$|\.error$|\.empty$/.test(eventType);
 }
-
