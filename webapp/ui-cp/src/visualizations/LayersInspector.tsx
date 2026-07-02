@@ -1,72 +1,11 @@
-// LayersInspector -- the "layers of defense" view for the CP flow. Five gates
-// (one per stage) illuminate top-to-bottom as each fires: invoke, application
-// hash, OS user / path, Safe authorization, credential. On a denial the failing
-// gate is marked rejected and the rest stay locked.
-import {
-  Terminal,
-  Fingerprint,
-  BadgeCheck,
-  Lock,
-  KeyRound,
-  Check,
-  X,
-  ShieldOff,
-} from "lucide-react";
-import { INK, type InspectorProps, type CpResult } from "./common";
-import { CP } from "../engine/cp";
+// LayersInspector -- the "layers of defense" view. One gate per stage (from
+// provider.layers) illuminates top-to-bottom on the descent rail; the failing
+// gate is marked rejected on a denial. Generic across CP and CCP.
+import { Check, X, ShieldOff } from "lucide-react";
+import { INK, type InspectorProps } from "./common";
 
 type LayerState = "locked" | "active" | "passed" | "rejected";
 
-interface LayerDef {
-  name: string;
-  Icon: React.ComponentType<{ style?: React.CSSProperties }>;
-  pass: (r: CpResult | null) => string;
-  reject: (r: CpResult | null) => string;
-  idle: string;
-}
-
-const LAYERS: LayerDef[] = [
-  {
-    name: "Invoke caller",
-    Icon: Terminal,
-    pass: () => "host cp-bridge ran the registered Java caller",
-    reject: () => "cp-bridge could not run the caller",
-    idle: "run cp-caller.jar via the host bridge",
-  },
-  {
-    name: "Application hash",
-    Icon: Fingerprint,
-    pass: (r) =>
-      `fingerprint ${r?.appHash || "—"} · matched a registered Application`,
-    reject: (r) =>
-      `${r?.errorCode || "APPAP133E"} · application hash is not authorized`,
-    idle: "measure the calling application's hash",
-  },
-  {
-    name: "OS user / path",
-    Icon: BadgeCheck,
-    pass: (r) => `os-user ${r?.osUser || "—"} + executable path matched`,
-    reject: () => "OS user / path did not match the Application",
-    idle: "verify OS user and executable path",
-  },
-  {
-    name: "Safe authorization",
-    Icon: Lock,
-    pass: (r) => `Application authorized for Safe ${r?.safe || CP.ctx.safe}`,
-    reject: (r) =>
-      `${r?.errorCode || "APPAP"} · not permitted for Safe ${r?.safe || CP.ctx.safe}`,
-    idle: "authorize the Application for the Safe",
-  },
-  {
-    name: "Credential",
-    Icon: KeyRound,
-    pass: (r) => `${r?.masked || "returned"} · hashed on host · never on disk`,
-    reject: () => "no credential returned",
-    idle: "return the account, masked on the host",
-  },
-];
-
-// Decorative bar-curtain on the right edge of each layer.
 function Curtain({ state }: { state: LayerState }) {
   const bars = Array.from({ length: 22 });
   return (
@@ -83,16 +22,11 @@ function Curtain({ state }: { state: LayerState }) {
               background: danger
                 ? "linear-gradient(180deg, #FF724D, #B23808)"
                 : "linear-gradient(180deg, #6186FC, #173EB8)",
-              opacity: lit
-                ? 0.35 + 0.65 * Math.sin((i / bars.length) * Math.PI)
-                : 0.08,
+              opacity: lit ? 0.35 + 0.65 * Math.sin((i / bars.length) * Math.PI) : 0.08,
               transform: lit ? "scaleY(1)" : "scaleY(0.45)",
               transformOrigin: "bottom",
               transition: `opacity 420ms ${i * 22}ms var(--ease-standard), transform 420ms ${i * 22}ms var(--ease-emphasis)`,
-              animation:
-                state === "active"
-                  ? `layShimmer 1.1s ${i * 40}ms ease-in-out infinite`
-                  : "none",
+              animation: state === "active" ? `layShimmer 1.1s ${i * 40}ms ease-in-out infinite` : "none",
               borderRadius: 1,
             }}
           />
@@ -102,16 +36,9 @@ function Curtain({ state }: { state: LayerState }) {
   );
 }
 
-export function LayersInspector({
-  status,
-  stage,
-  completed,
-  scenario,
-  failStage,
-  result,
-}: InspectorProps) {
+export function LayersInspector({ provider, status, stage, completed, scenario, failStage, result }: InspectorProps) {
   const errored = status === "error";
-  const n = LAYERS.length;
+  const n = provider.layers.length;
 
   const stateFor = (idx: number): LayerState => {
     if (errored) {
@@ -125,14 +52,19 @@ export function LayersInspector({
   };
 
   const passedCount = errored ? Math.max(0, failStage) : completed;
-  const dotPos = errored
-    ? failStage
-    : stage >= 0
-      ? stage
-      : status === "done"
-        ? n
-        : 0;
+  const dotPos = errored ? failStage : stage >= 0 ? stage : status === "done" ? n : 0;
   const railDotTop = `calc(${(Math.min(dotPos + 0.5, n) / n) * 100}%)`;
+
+  const headSub =
+    status === "idle"
+      ? `${n} gates between the caller and the credential`
+      : errored
+        ? scenario === "denied"
+          ? "the request stopped at Safe authorization"
+          : "the request stopped at authentication"
+        : status === "done"
+          ? "every gate cleared"
+          : "the request is descending the trust path…";
 
   return (
     <div style={ls.scroll}>
@@ -141,17 +73,7 @@ export function LayersInspector({
           <span className="idira-eyebrow" style={{ color: INK.mono }}>
             Layers of defense
           </span>
-          <span style={ls.headSub}>
-            {status === "idle"
-              ? "five gates between the caller and the credential"
-              : errored
-                ? scenario === "denied"
-                  ? "the request stopped at Safe authorization"
-                  : "the request stopped at application authentication"
-                : status === "done"
-                  ? "every gate cleared by application identity"
-                  : "the request is descending the trust path…"}
-          </span>
+          <span style={ls.headSub}>{headSub}</span>
         </div>
 
         <div style={ls.stack}>
@@ -174,15 +96,15 @@ export function LayersInspector({
           </div>
 
           <div style={ls.layers}>
-            {LAYERS.map((L, i) => {
+            {provider.layers.map((L, i) => {
               const st = stateFor(i);
               const danger = st === "rejected";
               const lit = st === "passed" || st === "active";
               const detail =
                 st === "passed" || st === "active"
-                  ? L.pass(result)
+                  ? L.pass({ result, scenario })
                   : danger
-                    ? L.reject(result)
+                    ? L.reject({ result, scenario })
                     : L.idle;
 
               return (
@@ -190,11 +112,7 @@ export function LayersInspector({
                   key={i}
                   style={{
                     ...ls.layer,
-                    borderColor: danger
-                      ? INK.dangerLine
-                      : lit
-                        ? "var(--idira-blue-500)"
-                        : INK.line,
+                    borderColor: danger ? INK.dangerLine : lit ? "var(--idira-blue-500)" : INK.line,
                     background: danger
                       ? "rgba(250,88,45,0.08)"
                       : st === "active"
@@ -202,10 +120,7 @@ export function LayersInspector({
                         : st === "passed"
                           ? "rgba(38,91,255,0.06)"
                           : "rgba(120,150,255,0.03)",
-                    boxShadow:
-                      st === "active"
-                        ? "0 0 0 1px var(--idira-blue-500), 0 10px 30px rgba(38,91,255,0.22)"
-                        : "none",
+                    boxShadow: st === "active" ? "0 0 0 1px var(--idira-blue-500), 0 10px 30px rgba(38,91,255,0.22)" : "none",
                     opacity: st === "locked" ? 0.5 : 1,
                   }}
                 >
@@ -213,11 +128,7 @@ export function LayersInspector({
                     style={{
                       ...ls.num,
                       color: danger ? INK.danger : lit ? "#fff" : INK.faint,
-                      background: danger
-                        ? "rgba(250,88,45,0.18)"
-                        : lit
-                          ? "var(--idira-blue-500)"
-                          : "rgba(255,255,255,0.05)",
+                      background: danger ? "rgba(250,88,45,0.18)" : lit ? "var(--idira-blue-500)" : "rgba(255,255,255,0.05)",
                     }}
                   >
                     {st === "passed" ? (
@@ -235,33 +146,16 @@ export function LayersInspector({
                       <span
                         style={{
                           ...ls.layerStatus,
-                          color: danger
-                            ? INK.danger
-                            : st === "passed"
-                              ? INK.ok
-                              : st === "active"
-                                ? INK.mono
-                                : INK.faint,
+                          color: danger ? INK.danger : st === "passed" ? INK.ok : st === "active" ? INK.mono : INK.faint,
                         }}
                       >
-                        {danger
-                          ? "rejected"
-                          : st === "passed"
-                            ? "cleared"
-                            : st === "active"
-                              ? "verifying…"
-                              : "waiting"}
+                        {danger ? "rejected" : st === "passed" ? "cleared" : st === "active" ? "verifying…" : "waiting"}
                       </span>
                     </div>
                     <div
                       style={{
                         ...ls.layerDetail,
-                        color:
-                          lit && !danger
-                            ? INK.dim
-                            : danger
-                              ? "rgba(255,170,140,0.85)"
-                              : INK.faint,
+                        color: lit && !danger ? INK.dim : danger ? "rgba(255,170,140,0.85)" : INK.faint,
                       }}
                     >
                       {detail}
@@ -293,8 +187,10 @@ export function LayersInspector({
             </span>
             <span style={ls.boundaryBody}>
               {scenario === "denied"
-                ? "The caller was authenticated, but the Application is not a member of the requested Safe. No credential crossed the bridge."
-                : "The calling application's hash is not registered. Rejected before any Safe was evaluated — as designed."}
+                ? "The caller was authenticated, but the Application is not a member of the requested Safe. No credential was returned."
+                : scenario === "no-cert"
+                  ? "No client certificate was presented; AIMWebService requires mutual TLS. Rejected before any Safe was evaluated."
+                  : "The calling application's hash is not registered. Rejected before any Safe was evaluated — as designed."}
             </span>
           </div>
         )}
@@ -304,18 +200,9 @@ export function LayersInspector({
 }
 
 const ls = {
-  scroll: {
-    height: "100%",
-    overflowY: "auto" as const,
-    padding: "24px 32px 32px",
-  },
+  scroll: { height: "100%", overflowY: "auto" as const, padding: "24px 32px 32px" },
   canvas: { maxWidth: 580, margin: "0 auto" },
-  headline: {
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: 4,
-    marginBottom: 18,
-  },
+  headline: { display: "flex", flexDirection: "column" as const, gap: 4, marginBottom: 18 },
   headSub: { fontSize: 13.5, color: INK.dim, lineHeight: 1.4 },
   stack: { display: "flex", gap: 16 },
   rail: {
@@ -327,14 +214,7 @@ const ls = {
     marginTop: 6,
     marginBottom: 6,
   },
-  railFill: {
-    position: "absolute" as const,
-    top: 0,
-    left: 0,
-    width: "100%",
-    borderRadius: 3,
-    transition: "height 600ms var(--ease-emphasis)",
-  },
+  railFill: { position: "absolute" as const, top: 0, left: 0, width: "100%", borderRadius: 3, transition: "height 600ms var(--ease-emphasis)" },
   railDot: {
     position: "absolute" as const,
     left: "50%",
@@ -345,12 +225,7 @@ const ls = {
     boxShadow: "0 0 12px #9DB4FF",
     transition: "top 600ms var(--ease-emphasis)",
   },
-  layers: {
-    flex: 1,
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: 12,
-  },
+  layers: { flex: 1, display: "flex", flexDirection: "column" as const, gap: 12 },
   layer: {
     position: "relative" as const,
     display: "flex",
@@ -363,15 +238,7 @@ const ls = {
     transition: "all 340ms var(--ease-standard)",
     minHeight: 74,
   },
-  num: {
-    width: 34,
-    height: 34,
-    borderRadius: 9,
-    display: "grid",
-    placeItems: "center",
-    flexShrink: 0,
-    transition: "all 320ms",
-  },
+  num: { width: 34, height: 34, borderRadius: 9, display: "grid", placeItems: "center", flexShrink: 0, transition: "all 320ms" },
   meta: { flex: 1, minWidth: 0, zIndex: 1 },
   layerName: {
     display: "flex",
@@ -382,19 +249,8 @@ const ls = {
     color: INK.text,
     fontFamily: "var(--font-display)",
   },
-  layerStatus: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 10,
-    letterSpacing: "0.08em",
-    textTransform: "uppercase" as const,
-    fontWeight: 600,
-  },
-  layerDetail: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 11.5,
-    lineHeight: 1.45,
-    marginTop: 3,
-  },
+  layerStatus: { fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" as const, fontWeight: 600 },
+  layerDetail: { fontFamily: "var(--font-mono)", fontSize: 11.5, lineHeight: 1.45, marginTop: 3 },
   curtain: {
     position: "absolute" as const,
     right: 0,
@@ -421,10 +277,5 @@ const ls = {
     gap: 7,
     animation: "layPop 360ms var(--ease-emphasis) both",
   },
-  boundaryBody: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 11.5,
-    color: "rgba(255,180,150,0.85)",
-    lineHeight: 1.55,
-  },
+  boundaryBody: { fontFamily: "var(--font-mono)", fontSize: 11.5, color: "rgba(255,180,150,0.85)", lineHeight: 1.55 },
 };

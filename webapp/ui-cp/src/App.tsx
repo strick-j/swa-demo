@@ -1,6 +1,7 @@
-// App -- wires the CP portal (left) and the inspector (right) to the retrieval
-// engine, pace controls, and view/pace DarkSeg controls. The left pane selects
-// one of four CP use cases; the inspector animates the five-stage flow.
+// App -- wires the portal (left) and the inspector (right) to the retrieval
+// engine and view/pace controls. The provider (CP vs CCP) is chosen from the URL
+// path; both are served by this one SPA. The left pane selects a use case; the
+// inspector animates the provider's staged flow.
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { GitFork, Layers, Terminal } from "lucide-react";
 import { PortalPane } from "./components/PortalPane";
@@ -11,7 +12,7 @@ import { TopologyInspector } from "./visualizations/TopologyInspector";
 import { LayersInspector } from "./visualizations/LayersInspector";
 import { TraceInspector } from "./visualizations/TraceInspector";
 import { useResolveEngine } from "./engine/useResolveEngine";
-import { CP, type ScenarioKey } from "./engine/cp";
+import { providerFromPath, pmeta, type ScenarioKey } from "./engine/providers";
 import * as paceQueue from "./engine/paceQueue";
 
 type ViewMode = "topology" | "layers" | "trace";
@@ -30,11 +31,14 @@ const PACE_OPTIONS: { v: PaceMode; label: string }[] = [
   { v: "slow", label: "Slow" },
 ];
 
+// Provider is fixed per page (chosen by URL); resolve it once.
+const provider = providerFromPath(typeof window !== "undefined" ? window.location.pathname : "/cp");
+
 export function App() {
-  const [scenario, setScenario] = useState<ScenarioKey>("authorized");
+  const [scenario, setScenario] = useState<ScenarioKey>(() => provider.scenarioOrder[0]!);
   const [view, setView] = useState<ViewMode>("topology");
   const [pace, setPace] = useState<PaceMode>("medium");
-  const engine = useResolveEngine();
+  const engine = useResolveEngine(provider);
 
   useEffect(() => {
     paceQueue.setPace(pace);
@@ -67,11 +71,12 @@ export function App() {
   );
 
   const vizProps = {
+    provider,
     status: engine.status,
     stage: engine.stage,
     completed: engine.completed,
     scenario,
-    failStage: CP.scenarios[scenario].failStage,
+    failStage: pmeta(provider, scenario).failStage,
     result: engine.result,
   } as const;
 
@@ -82,12 +87,9 @@ export function App() {
     >
       <AccessibilityHints onReset={handleReset} targetId="main-content" />
 
-      {/* Left pane: CP portal (44%) */}
-      <div
-        id="main-content"
-        style={{ flex: "0 0 44%", minWidth: 440, maxWidth: 640, height: "100%" }}
-      >
+      <div id="main-content" style={{ flex: "0 0 44%", minWidth: 440, maxWidth: 640, height: "100%" }}>
         <PortalPane
+          provider={provider}
           scenario={scenario}
           setScenario={handleScenarioChange}
           status={engine.status}
@@ -97,9 +99,9 @@ export function App() {
         />
       </div>
 
-      {/* Right pane: inspector */}
       <div style={{ flex: 1, minWidth: 0, height: "100%" }}>
         <InspectorChrome
+          provider={provider}
           status={engine.status}
           stage={engine.stage}
           scenario={scenario}

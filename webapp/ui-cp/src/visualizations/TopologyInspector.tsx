@@ -1,12 +1,9 @@
-// TopologyInspector -- the CP trust-path diagram. A vertical chain of four
-// cards: the trusted app, the AIM Credential Provider (application-hash + OS
-// user/path authentication), the Vault (Safe authorization), and the returned
-// credential. Edges carry energy pulses as each of the five stages fires.
+// TopologyInspector -- the provider's trust-path diagram: a vertical chain of
+// node cards (from provider.nodes) that light and pulse as each stage fires, and
+// mark the failing node on a denial. Generic across CP and CCP.
+import { Fragment } from "react";
 import { CircleCheckBig, ShieldOff } from "lucide-react";
-import { INK, Kv, type InspectorProps } from "./common";
-import { CP } from "../engine/cp";
-
-type CVS = "locked" | "active" | "done" | "failed";
+import { INK, type InspectorProps, type CVS } from "./common";
 
 function VLink({ state }: { state: CVS }) {
   const lit = state === "done";
@@ -15,26 +12,16 @@ function VLink({ state }: { state: CVS }) {
       <div
         style={{
           ...ts.vlinkBase,
-          background: lit
-            ? "var(--idira-blue-500)"
-            : state === "failed"
-              ? INK.dangerLine
-              : INK.line,
+          background: lit ? "var(--idira-blue-500)" : state === "failed" ? INK.dangerLine : INK.line,
         }}
       >
-        {state === "active" && (
-          <div className="ic-flow" style={ts.vlinkPulse} />
-        )}
+        {state === "active" && <div className="ic-flow" style={ts.vlinkPulse} />}
       </div>
       {state !== "locked" && (
         <div
           style={{
             ...ts.vArrow,
-            borderTopColor: lit
-              ? "var(--idira-blue-500)"
-              : state === "failed"
-                ? INK.danger
-                : INK.mono,
+            borderTopColor: lit ? "var(--idira-blue-500)" : state === "failed" ? INK.danger : INK.mono,
           }}
         />
       )}
@@ -56,11 +43,7 @@ function NodeCard({
   const isActive = state === "active";
   const isDone = state === "done";
   const isFailed = state === "failed";
-  const border = isFailed
-    ? INK.dangerLine
-    : isDone || isActive
-      ? "var(--idira-blue-500)"
-      : INK.line;
+  const border = isFailed ? INK.dangerLine : isDone || isActive ? "var(--idira-blue-500)" : INK.line;
   const tagColor = isFailed ? INK.danger : isDone ? INK.ok : INK.mono;
 
   return (
@@ -76,19 +59,13 @@ function NodeCard({
             : isDone
               ? "rgba(38,91,255,0.07)"
               : INK.card,
-        boxShadow: isActive
-          ? "0 0 0 1px var(--idira-blue-500), 0 8px 30px rgba(38,91,255,0.25)"
-          : "none",
+        boxShadow: isActive ? "0 0 0 1px var(--idira-blue-500), 0 8px 30px rgba(38,91,255,0.25)" : "none",
         opacity: state === "locked" ? 0.5 : 1,
-        animation: isActive
-          ? "topoPop 360ms var(--ease-emphasis) both"
-          : "none",
+        animation: isActive ? "topoPop 360ms var(--ease-emphasis) both" : "none",
       }}
     >
       <div style={ts.cardHead}>
-        <span
-          style={{ ...ts.cardTitle, color: isFailed ? INK.danger : INK.text }}
-        >
+        <span style={{ ...ts.cardTitle, color: isFailed ? INK.danger : INK.text }}>
           <span
             style={{
               ...ts.cornerTick,
@@ -98,42 +75,23 @@ function NodeCard({
           />
           {title}
         </span>
-        <span style={{ ...ts.cardTag, color: tagColor }}>{tag}</span>
+        {tag && <span style={{ ...ts.cardTag, color: tagColor }}>{tag}</span>}
       </div>
       {children}
     </div>
   );
 }
 
-export function TopologyInspector({
-  status,
-  stage,
-  completed,
-  scenario,
-  failStage,
-  result,
-}: InspectorProps) {
+export function TopologyInspector({ provider, status, stage, completed, scenario, failStage, result }: InspectorProps) {
   const errored = status === "error";
   const done = status === "done";
-  const dual = scenario === "dual";
 
-  // Card state helper. activeStages = stages that light this card; doneAfter =
-  // completed threshold at which it is fully passed; failsAt = fail indices.
-  const stateFor = (
-    activeStages: number[],
-    doneAfter: number,
-    failsAt: number[],
-  ): CVS => {
+  const stateFor = (stages: number[], doneAfter: number, failsAt: number[]): CVS => {
     if (errored && failsAt.includes(failStage)) return "failed";
     if (completed >= doneAfter) return "done";
-    if (activeStages.includes(stage)) return "active";
+    if (stages.includes(stage)) return "active";
     return "locked";
   };
-
-  const appState = stateFor([0], 1, [0]);
-  const provState = stateFor([1, 2], 3, [1, 2]);
-  const vaultState = stateFor([3], 4, [3]);
-  const credState = stateFor([4], 5, []);
 
   const linkState = (into: number): CVS => {
     if (errored && failStage >= 0 && into > failStage) return "locked";
@@ -142,139 +100,43 @@ export function TopologyInspector({
     return "locked";
   };
 
-  const appHash = result?.appHash || "—";
-  const osUser = result?.osUser || CP.ctx.auth;
-  const callerPath = result?.callerPath || "cp-caller.jar";
-  const safe = result?.safe || CP.ctx.safe;
-  const account = result?.account || "—";
+  const boundaryTitle = scenario === "denied" ? "Authorization boundary" : "Authentication boundary";
+  const boundaryBody =
+    scenario === "denied"
+      ? "The caller was authenticated, but the Application is not a member of the requested Safe. Nothing was returned."
+      : scenario === "no-cert"
+        ? "No client certificate was presented. AIMWebService requires mutual TLS — rejected at the door, as designed."
+        : "The calling application's hash is not registered on the Application. Rejected before any Safe was evaluated — as designed.";
 
   return (
     <div style={ts.scroll}>
       <div style={ts.canvas}>
-        {/* App / trusted JAR */}
-        <NodeCard
-          title="App · Trusted JAR"
-          tag={appState === "done" ? "invoked" : "caller"}
-          state={appState}
-        >
-          <Kv k="Calling application" v={callerPath} />
-          <span style={ts.foot}>
-            the workload stores no password or client cert
-          </span>
-        </NodeCard>
-
-        <VLink state={linkState(1)} />
-
-        {/* AIM Credential Provider */}
-        <NodeCard
-          title="AIM Credential Provider"
-          tag={
-            provState === "failed"
-              ? "authn deny"
-              : provState === "done"
-                ? "authenticated"
-                : "measuring"
-          }
-          state={provState}
-        >
-          {provState === "failed" ? (
-            <span style={ts.dangerNote}>
-              {result?.errorCode ? `${result.errorCode} · ` : ""}application
-              hash is not authorized
-            </span>
-          ) : (
-            <div style={ts.grid2}>
-              <Kv
-                k="App fingerprint"
-                v={appHash}
-                vColor={provState === "done" ? INK.ok : INK.mono}
-              />
-              <Kv k="OS user · path" v={osUser} />
-            </div>
-          )}
-          <span style={ts.foot}>
-            authenticates the calling application by its characteristics
-          </span>
-        </NodeCard>
-
-        <VLink state={linkState(3)} />
-
-        {/* Vault -- Safe authorization */}
-        <NodeCard
-          title="Vault · App permission"
-          tag={
-            vaultState === "failed"
-              ? "authz deny"
-              : vaultState === "done"
-                ? "authorized"
-                : ""
-          }
-          state={vaultState}
-        >
-          {vaultState === "failed" ? (
-            <span style={ts.dangerNote}>
-              {result?.errorCode ? `${result.errorCode} · ` : ""}Application not
-              permitted for Safe {safe}
-            </span>
-          ) : (
-            <Kv
-              k="Safe"
-              v={safe}
-              vColor={vaultState === "done" ? INK.ok : INK.mono}
-            />
-          )}
-          <span style={ts.foot}>
-            authorizes the Application for the requested Safe
-          </span>
-        </NodeCard>
-
-        <VLink state={linkState(4)} />
-
-        {/* Credential */}
-        <NodeCard
-          title="Credential"
-          tag={credState === "done" ? "returned" : ""}
-          state={credState}
-        >
-          {credState === "done" ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <Kv
-                k={dual ? "Active account" : "Account"}
-                v={dual ? result?.dualActive || account : account}
-              />
-              <Kv
-                k="Value (masked)"
-                v={result?.masked || "—"}
-                vColor={INK.ok}
-              />
-            </div>
-          ) : (
-            <span style={ts.dimNote}>
-              secret hashed on host · only the preview crosses the bridge
-            </span>
-          )}
-        </NodeCard>
+        {provider.nodes.map((node, i) => {
+          const st = stateFor(node.stages, node.doneAfter, node.failsAt);
+          const next = provider.nodes[i + 1];
+          return (
+            <Fragment key={node.key}>
+              <NodeCard title={node.title} tag={node.tag(st)} state={st}>
+                {node.body({ state: st, result, scenario })}
+              </NodeCard>
+              {next && <VLink state={linkState(next.stages[0] ?? 0)} />}
+            </Fragment>
+          );
+        })}
 
         {errored && (
           <div style={ts.boundary}>
             <span style={{ ...ts.cardTitle, color: INK.danger }}>
-              <ShieldOff style={{ width: 13, height: 13 }} />{" "}
-              {scenario === "denied"
-                ? "Authorization boundary"
-                : "Authentication boundary"}
+              <ShieldOff style={{ width: 13, height: 13 }} /> {boundaryTitle}
             </span>
-            <span style={ts.boundaryBody}>
-              {scenario === "denied"
-                ? "The caller was authenticated, but the Application is not a member of the requested Safe. Nothing was returned."
-                : "The calling application's hash is not registered on the Application. Rejected before any Safe was evaluated — as designed."}
-            </span>
+            <span style={ts.boundaryBody}>{boundaryBody}</span>
           </div>
         )}
 
         {done && (
           <div style={ts.resolved}>
             <CircleCheckBig style={{ width: 14, height: 14 }} />
-            credential returned · full secret never left the host
+            credential returned · full secret never exposed
           </div>
         )}
       </div>
@@ -284,8 +146,7 @@ export function TopologyInspector({
           style={{
             position: "absolute",
             inset: 0,
-            background:
-              "linear-gradient(90deg, transparent, rgba(38,91,255,0.4), transparent)",
+            background: "linear-gradient(90deg, transparent, rgba(38,91,255,0.4), transparent)",
             animation: "topoFlash 280ms cubic-bezier(0.16, 1, 0.3, 1) forwards",
             pointerEvents: "none" as const,
             zIndex: 10,
@@ -297,18 +158,8 @@ export function TopologyInspector({
 }
 
 const ts = {
-  scroll: {
-    position: "relative" as const,
-    height: "100%",
-    overflowY: "auto" as const,
-    padding: "22px 30px 30px",
-  },
-  canvas: {
-    maxWidth: 560,
-    margin: "0 auto",
-    display: "flex",
-    flexDirection: "column" as const,
-  },
+  scroll: { position: "relative" as const, height: "100%", overflowY: "auto" as const, padding: "22px 30px 30px" },
+  canvas: { maxWidth: 560, margin: "0 auto", display: "flex", flexDirection: "column" as const },
   card: {
     display: "flex",
     flexDirection: "column" as const,
@@ -319,12 +170,7 @@ const ts = {
     transition: "all 320ms var(--ease-standard)",
     backdropFilter: "blur(2px)",
   },
-  cardHead: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    justifyContent: "space-between",
-  },
+  cardHead: { display: "flex", alignItems: "center", gap: 8, justifyContent: "space-between" },
   cardTitle: {
     display: "flex",
     alignItems: "center",
@@ -334,13 +180,7 @@ const ts = {
     letterSpacing: "0.08em",
     textTransform: "uppercase" as const,
   },
-  cornerTick: {
-    width: 7,
-    height: 7,
-    borderLeft: "2px solid",
-    borderTop: "2px solid",
-    display: "inline-block",
-  },
+  cornerTick: { width: 7, height: 7, borderLeft: "2px solid", borderTop: "2px solid", display: "inline-block" },
   cardTag: {
     fontFamily: "var(--font-mono)",
     fontSize: 10.5,
@@ -348,31 +188,8 @@ const ts = {
     textTransform: "uppercase" as const,
     fontWeight: 600,
   },
-  grid2: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: "11px 14px",
-  },
-  foot: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 10.5,
-    color: INK.faint,
-    letterSpacing: "0.02em",
-  },
-  vlinkWrap: {
-    position: "relative" as const,
-    height: 30,
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  vlinkBase: {
-    position: "relative" as const,
-    width: 2,
-    height: "100%",
-    overflow: "hidden",
-    transition: "background 300ms",
-  },
+  vlinkWrap: { position: "relative" as const, height: 30, display: "flex", justifyContent: "center", alignItems: "center" },
+  vlinkBase: { position: "relative" as const, width: 2, height: "100%", overflow: "hidden", transition: "background 300ms" },
   vlinkPulse: {
     position: "absolute" as const,
     top: 0,
@@ -391,18 +208,6 @@ const ts = {
     borderRight: "4px solid transparent",
     borderTop: "5px solid",
   },
-  dimNote: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 12,
-    color: INK.faint,
-    fontStyle: "italic" as const,
-  },
-  dangerNote: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 12,
-    color: INK.danger,
-    lineHeight: 1.5,
-  },
   boundary: {
     marginTop: 20,
     padding: "13px 16px",
@@ -414,12 +219,7 @@ const ts = {
     gap: 7,
     animation: "topoPop 360ms var(--ease-emphasis) both",
   },
-  boundaryBody: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 11.5,
-    color: "rgba(255,180,150,0.85)",
-    lineHeight: 1.55,
-  },
+  boundaryBody: { fontFamily: "var(--font-mono)", fontSize: 11.5, color: "rgba(255,180,150,0.85)", lineHeight: 1.55 },
   resolved: {
     marginTop: 18,
     display: "flex",

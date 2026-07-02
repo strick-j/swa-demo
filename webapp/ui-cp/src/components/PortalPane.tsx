@@ -13,17 +13,18 @@ import { Button } from "./Button";
 import { Badge } from "./Badge";
 import { Tag } from "./Tag";
 import { Evidence } from "./Evidence";
-import { CP, type ScenarioKey } from "../engine/cp";
+import { pmeta, type Provider, type ScenarioKey } from "../engine/providers";
 import type { EngineStatus } from "../engine/useResolveEngine";
-import type { CpResult } from "../visualizations/common";
+import type { ProviderResult } from "../visualizations/common";
 
 interface PortalPaneProps {
+  provider: Provider;
   scenario: ScenarioKey;
   setScenario: (v: ScenarioKey) => void;
   status: EngineStatus;
   stageVerb: string;
   onResolve: () => void;
-  result: CpResult | null;
+  result: ProviderResult | null;
 }
 
 const ps = {
@@ -273,6 +274,7 @@ function Row({ k, v, token }: { k: string; v: string; token?: boolean }) {
 }
 
 export function PortalPane({
+  provider,
   scenario,
   setScenario,
   status,
@@ -283,7 +285,7 @@ export function PortalPane({
   const busy = status === "running";
   const done = status === "done";
   const isError = status === "error";
-  const meta = CP.scenarios[scenario];
+  const meta = pmeta(provider, scenario);
   const r = result;
 
   return (
@@ -321,8 +323,8 @@ export function PortalPane({
                 lineHeight: 1.05,
               }}
             >
-              <span style={ps.brandName}>Credential Provider</span>
-              <span style={ps.brandSub}>Local AIM · host bridge</span>
+              <span style={ps.brandName}>{provider.brand.name}</span>
+              <span style={ps.brandSub}>{provider.brand.sub}</span>
             </div>
           </div>
         </div>
@@ -338,13 +340,8 @@ export function PortalPane({
 
       <div style={ps.body}>
         <div style={ps.hero}>
-          <h1 style={ps.h1}>Retrieve a credential.</h1>
-          <p style={ps.lede}>
-            A trusted Java application asks a Credential Provider on the host
-            for a Vault credential at request time. The Provider authenticates
-            the calling application by its <strong>hash</strong> (plus OS user
-            and path) — no stored password, no client certificate.
-          </p>
+          <h1 style={ps.h1}>{provider.heroTitle}</h1>
+          <p style={ps.lede}>{provider.heroLede}</p>
         </div>
 
         {/* use-case selection */}
@@ -356,8 +353,8 @@ export function PortalPane({
             Use case
           </label>
           <div style={ps.ucList}>
-            {CP.scenarioOrder.map((k) => {
-              const s = CP.scenarios[k];
+            {provider.scenarioOrder.map((k) => {
+              const s = pmeta(provider, k);
               const on = k === scenario;
               return (
                 <button
@@ -440,6 +437,7 @@ export function PortalPane({
               </div>
               <div style={ps.manifest}>
                 <Row k="Application" v={r.appId} />
+                <Row k="Client certificate (CN)" v={r.certCn} />
                 <Row k="Caller fingerprint" v={r.appHash} />
                 <Row
                   k="Caller · OS user"

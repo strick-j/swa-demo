@@ -11,9 +11,10 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { INK } from "../visualizations/common";
-import { CP, type ScenarioKey } from "../engine/cp";
+import type { Provider, ScenarioKey } from "../engine/providers";
 
 interface InspectorChromeProps {
+  provider: Provider;
   status: "idle" | "running" | "done" | "error";
   stage: number;
   scenario: ScenarioKey;
@@ -37,7 +38,9 @@ function CtxCell({
   return (
     <div style={{ ...ic.ctxCell, flex: wide ? 1.4 : 1 }}>
       <span style={ic.ctxK}>{k}</span>
-      <span style={{ ...ic.ctxV, color: brand ? INK.mono : INK.text }}>{v}</span>
+      <span style={{ ...ic.ctxV, color: brand ? INK.mono : INK.text }}>
+        {v}
+      </span>
     </div>
   );
 }
@@ -54,7 +57,9 @@ function PhaseIcon({
     case "idle":
       return <CircleDashed style={s} />;
     case "running":
-      return <Loader style={{ ...s, animation: "icSpin 1s linear infinite" }} />;
+      return (
+        <Loader style={{ ...s, animation: "icSpin 1s linear infinite" }} />
+      );
     case "done":
       return <ShieldCheck style={s} />;
     case "error":
@@ -67,6 +72,8 @@ function errorPhrase(scenario: ScenarioKey): string {
   switch (scenario) {
     case "invalid-hash":
       return "Rejected · application hash unauthorized";
+    case "no-cert":
+      return "Rejected · no client certificate";
     case "denied":
       return "Denied · Safe not authorized";
     default:
@@ -75,6 +82,7 @@ function errorPhrase(scenario: ScenarioKey): string {
 }
 
 export function InspectorChrome({
+  provider,
   status,
   stage,
   scenario,
@@ -83,7 +91,14 @@ export function InspectorChrome({
   onReset,
   children,
 }: InspectorChromeProps) {
-  const verb = (stage >= 0 ? CP.stages[stage]?.verb : undefined)?.toLowerCase() ?? "starting";
+  const verb =
+    (stage >= 0 ? provider.stages[stage]?.verb : undefined)?.toLowerCase() ??
+    "starting";
+
+  const doneTxt =
+    provider.id === "cp"
+      ? "Retrieved · secret hashed on host, never stored"
+      : "Retrieved · credential masked at the source";
 
   const phase =
     status === "idle"
@@ -91,10 +106,8 @@ export function InspectorChrome({
       : status === "running"
         ? { txt: `Retrieving · ${verb}`, tone: "#9DB4FF" }
         : status === "done"
-          ? { txt: "Retrieved · secret hashed on host, never stored", tone: INK.ok }
+          ? { txt: doneTxt, tone: INK.ok }
           : { txt: errorPhrase(scenario), tone: INK.danger };
-
-  const t = CP.ctx;
 
   return (
     <div style={ic.root}>
@@ -108,7 +121,13 @@ export function InspectorChrome({
             alt="Idira"
             style={{ height: 24, width: "auto", opacity: 0.95 }}
           />
-          <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              lineHeight: 1.1,
+            }}
+          >
             <span
               style={{
                 fontSize: 13.5,
@@ -127,7 +146,7 @@ export function InspectorChrome({
                 letterSpacing: "0.04em",
               }}
             >
-              credential provider · aim · vault
+              {provider.subtitle}
             </span>
           </div>
         </div>
@@ -135,10 +154,9 @@ export function InspectorChrome({
       </header>
 
       <div style={ic.ctx}>
-        <CtxCell k="Application" v={t.application} wide />
-        <CtxCell k="Provider" v={t.provider} />
-        <CtxCell k="Safe" v={t.safe} />
-        <CtxCell k="Auth" v={t.auth} brand />
+        {provider.ctx.map((c) => (
+          <CtxCell key={c.k} k={c.k} v={c.v} wide={c.wide} brand={c.brand} />
+        ))}
       </div>
 
       <div style={ic.stage}>{children}</div>

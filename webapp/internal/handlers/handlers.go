@@ -119,16 +119,21 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/", s.handleLanding)
 	mux.HandleFunc("/swa", s.handleSWA)
 	mux.HandleFunc("/secrets-manager", s.handleSecretsManager)
-	mux.HandleFunc("/credential-providers", s.handleCredentialProviders)
-	// /cp serves the built React inspector SPA (Vite base=/cp/). /api/cp below is
-	// its data endpoint. Falls back to the legacy template when the SPA is absent.
+	// The one inspector SPA (Vite base=/cp/, assets under /cp/) serves BOTH the
+	// local CP (/cp) and the Central CP (/credential-providers). The React app
+	// picks the provider from the URL path; /api/cp and /api/ccp are its data
+	// endpoints. Falls back to the legacy templates when the SPA is absent.
 	if s.cpApp != nil {
 		mux.Handle("/cp/", http.StripPrefix("/cp/", http.FileServer(http.FS(s.cpApp))))
 		mux.HandleFunc("/cp", func(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/cp/", http.StatusFound)
 		})
+		// CCP shares the same SPA; its assets still load from /cp/ (absolute).
+		mux.HandleFunc("/credential-providers", s.serveInspectorIndex)
+		mux.HandleFunc("/credential-providers/", s.serveInspectorIndex)
 	} else {
 		mux.HandleFunc("/cp", s.handleCredentialProvider)
+		mux.HandleFunc("/credential-providers", s.handleCredentialProviders)
 	}
 	mux.HandleFunc("/api/catalog", s.handleCatalog)
 	mux.HandleFunc("/api/retrieve", s.handleRetrieve)
@@ -231,6 +236,20 @@ func (s *Server) handleCCP(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	writeJSON(w, http.StatusOK, s.ccp.Run(ctx, scenario))
+}
+
+// serveInspectorIndex serves the inspector SPA's index.html for a non-/cp route
+// (e.g. /credential-providers). The SPA's assets are absolute under /cp/, so the
+// same HTML works at any mount point; the React app reads the URL to pick the
+// provider (CP vs CCP).
+func (s *Server) serveInspectorIndex(w http.ResponseWriter, _ *http.Request) {
+	b, err := fs.ReadFile(s.cpApp, "index.html")
+	if err != nil {
+		http.Error(w, "inspector unavailable", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write(b)
 }
 
 // handleCredentialProvider renders the local Credential Provider scenario page.

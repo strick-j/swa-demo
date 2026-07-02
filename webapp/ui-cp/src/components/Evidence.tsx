@@ -1,7 +1,7 @@
 // Evidence -- trust-evidence (success) or trust-boundary (deny) callout. Renders
 // the per-scenario lead/body copy passed in from the CP model.
 import { ShieldCheck, ShieldAlert } from "lucide-react";
-import type { EvidenceItem } from "../engine/cp";
+import type { EvidenceItem } from "../engine/providers";
 
 interface EvidenceProps {
   kind: "success" | "error";
@@ -46,11 +46,19 @@ const styles = {
 
 export function Evidence({ kind, items }: EvidenceProps) {
   const accent = kind === "error" ? "var(--status-danger)" : "var(--brand)";
-  const bg = kind === "error" ? "rgba(200,71,39,0.06)" : "var(--surface-brand-tint)";
+  const bg =
+    kind === "error" ? "rgba(200,71,39,0.06)" : "var(--surface-brand-tint)";
   const Icon = kind === "error" ? ShieldAlert : ShieldCheck;
 
   return (
-    <div style={{ ...styles.evidence, borderColor: accent, background: bg, border: `1px solid ${accent}` }}>
+    <div
+      style={{
+        ...styles.evidence,
+        borderColor: accent,
+        background: bg,
+        border: `1px solid ${accent}`,
+      }}
+    >
       <div style={{ ...styles.evidenceHead, color: accent }}>
         <Icon size={15} />
         <span className="idira-eyebrow" style={{ color: accent }}>

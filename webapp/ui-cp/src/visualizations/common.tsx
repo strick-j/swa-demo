@@ -1,6 +1,6 @@
-// common.tsx -- shared palette, helpers, and small primitives used by the
-// inspector visualizations. Dark-theme ink palette + CP result/prop types.
-import type { ScenarioKey } from "../engine/cp";
+// common.tsx -- shared palette, helpers, small primitives, and the shared
+// result/prop types used by the provider-driven inspector visualizations.
+import type { ScenarioKey, Provider } from "../engine/providers";
 
 export const INK = {
   text: "#E6ECF7",
@@ -16,18 +16,23 @@ export const INK = {
   ok: "#43E08B",
 } as const;
 
-/** Masked-result payload the engine derives from POST /api/cp. Never the full
- *  secret — the `masked` string is a preview + length + SHA-256 summary. */
-export interface CpResult {
+/** Card visual state used by the topology + layers views. */
+export type CVS = "locked" | "active" | "done" | "failed";
+
+/** Masked-result payload the engine derives from the provider's API. Carries
+ *  fields for both the CP (hash/path/os-user) and CCP (cert CN) providers; the
+ *  unused ones are empty. Never the full secret — `masked` is a preview summary. */
+export interface ProviderResult {
   retrieved: boolean;
   simulated: boolean;
   masked: string;
   error: string;
   errorCode: string;
   appId: string;
-  appHash: string;
-  callerPath: string;
-  osUser: string;
+  appHash: string; // CP: caller fingerprint
+  callerPath: string; // CP
+  osUser: string; // CP
+  certCn: string; // CCP: client-cert CN
   safe: string;
   query: string;
   account: string;
@@ -38,18 +43,15 @@ export interface CpResult {
 
 /** Shared props for all inspector visualizations. */
 export interface InspectorProps {
+  provider: Provider;
   status: "idle" | "running" | "done" | "error";
-  /** Currently animating stage index (-1 when idle/settled). */
   stage: number;
-  /** Count of completed stages. */
   completed: number;
   scenario: ScenarioKey;
-  /** Stage index the active scenario fails at (-1 = succeeds). */
   failStage: number;
-  result: CpResult | null;
+  result: ProviderResult | null;
 }
 
-// Thin meter bar -- progress visualization used by the topology cards.
 interface MeterProps {
   pct: number;
   tone?: "brand" | "danger" | "muted";
@@ -58,11 +60,7 @@ interface MeterProps {
 
 export function Meter({ pct, tone = "brand", active = false }: MeterProps) {
   const color =
-    tone === "danger"
-      ? INK.danger
-      : tone === "muted"
-        ? INK.faint
-        : "var(--idira-blue-500)";
+    tone === "danger" ? INK.danger : tone === "muted" ? INK.faint : "var(--idira-blue-500)";
   return (
     <div
       style={{
@@ -88,7 +86,6 @@ export function Meter({ pct, tone = "brand", active = false }: MeterProps) {
   );
 }
 
-// Label + value token row -- used by topology cards.
 interface KvProps {
   k: string;
   v: string;
