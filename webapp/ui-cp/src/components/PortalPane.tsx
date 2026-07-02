@@ -1,7 +1,13 @@
 // PortalPane -- left pane of the CP demo. "Retrieve a credential": pick one of
 // four use cases, run it, and render idle / running / done (masked result) /
 // error (APPAP denial), with the per-scenario evidence copy.
-import { KeyRound, Info, ScanSearch, XOctagon, CheckCircle2 } from "lucide-react";
+import {
+  KeyRound,
+  Info,
+  ScanSearch,
+  XOctagon,
+  CheckCircle2,
+} from "lucide-react";
 import { Button } from "./Button";
 import { Badge } from "./Badge";
 import { Tag } from "./Tag";
@@ -43,7 +49,11 @@ const ps = {
     color: "var(--text-strong)",
     letterSpacing: "-0.01em",
   },
-  brandSub: { fontSize: 11, color: "var(--text-muted)", letterSpacing: "0.01em" },
+  brandSub: {
+    fontSize: 11,
+    color: "var(--text-muted)",
+    letterSpacing: "0.01em",
+  },
   secured: {
     display: "flex",
     alignItems: "center",
@@ -64,7 +74,12 @@ const ps = {
     flexDirection: "column" as const,
     gap: 24,
   },
-  hero: { display: "flex", flexDirection: "column" as const, gap: 12, maxWidth: 470 },
+  hero: {
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 12,
+    maxWidth: 470,
+  },
   h1: {
     fontSize: "clamp(1.9rem, 1.2rem + 2vw, 2.7rem)",
     margin: 0,
@@ -79,7 +94,12 @@ const ps = {
     color: "var(--text-muted)",
     maxWidth: 460,
   },
-  selectWrap: { display: "flex", flexDirection: "column" as const, gap: 10, maxWidth: 470 },
+  selectWrap: {
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 10,
+    maxWidth: 470,
+  },
   ucList: { display: "flex", flexDirection: "column" as const, gap: 8 },
   ucBtn: {
     display: "flex",
@@ -138,7 +158,11 @@ const ps = {
     borderTop: "1px solid var(--border-subtle)",
     animation: "praetorRise 420ms var(--ease-emphasis) both",
   },
-  mfHead: { display: "flex", alignItems: "center", justifyContent: "space-between" },
+  mfHead: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   mfTitle: {
     display: "flex",
     alignItems: "center",
@@ -156,7 +180,12 @@ const ps = {
     padding: "10px 0",
     borderBottom: "1px solid var(--border-subtle)",
   },
-  mfKey: { fontSize: 12.5, color: "var(--text-muted)", letterSpacing: "0.01em", flexShrink: 0 },
+  mfKey: {
+    fontSize: 12.5,
+    color: "var(--text-muted)",
+    letterSpacing: "0.01em",
+    flexShrink: 0,
+  },
   mfVal: {
     fontSize: 13,
     fontWeight: 600,
@@ -177,7 +206,11 @@ const ps = {
     wordBreak: "break-all" as const,
   },
   errAccent: { borderLeft: "3px solid var(--status-danger)", paddingLeft: 12 },
-  errBar: { display: "flex", alignItems: "center", justifyContent: "space-between" },
+  errBar: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   errCode: {
     display: "flex",
     alignItems: "center",
@@ -201,7 +234,14 @@ function Row({ k, v, token }: { k: string; v: string; token?: boolean }) {
   if (!v) return null;
   if (token) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "12px 0 2px" }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+          padding: "12px 0 2px",
+        }}
+      >
         <span style={ps.mfKey}>{k}</span>
         <span style={ps.token}>{v}</span>
       </div>
@@ -233,14 +273,28 @@ export function PortalPane({
     <div style={ps.pane}>
       <header style={ps.appbar}>
         <div style={ps.brand}>
-          <img src="/cp/assets/idira-icon-color.png" alt="" style={{ height: 22, width: "auto" }} />
-          <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.05 }}>
+          <img
+            src="/cp/assets/idira-icon-color.png"
+            alt=""
+            style={{ height: 22, width: "auto" }}
+          />
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              lineHeight: 1.05,
+            }}
+          >
             <span style={ps.brandName}>Credential Provider</span>
             <span style={ps.brandSub}>Local AIM · host bridge</span>
           </div>
         </div>
         <div style={ps.secured}>
-          <img src="/cp/assets/idira-icon-color.png" alt="" style={{ height: 16, width: "auto" }} />
+          <img
+            src="/cp/assets/idira-icon-color.png"
+            alt=""
+            style={{ height: 16, width: "auto" }}
+          />
           <span>Secured by Idira</span>
         </div>
       </header>
@@ -249,16 +303,19 @@ export function PortalPane({
         <div style={ps.hero}>
           <h1 style={ps.h1}>Retrieve a credential.</h1>
           <p style={ps.lede}>
-            A trusted Java application asks a Credential Provider on the host for a Vault
-            credential at request time. The Provider authenticates the calling application by
-            its <strong>hash</strong> (plus OS user and path) — no stored password, no client
-            certificate.
+            A trusted Java application asks a Credential Provider on the host
+            for a Vault credential at request time. The Provider authenticates
+            the calling application by its <strong>hash</strong> (plus OS user
+            and path) — no stored password, no client certificate.
           </p>
         </div>
 
         {/* use-case selection */}
         <div style={ps.selectWrap}>
-          <label className="idira-eyebrow" style={{ color: "var(--text-muted)" }}>
+          <label
+            className="idira-eyebrow"
+            style={{ color: "var(--text-muted)" }}
+          >
             Use case
           </label>
           <div style={ps.ucList}>
@@ -273,7 +330,9 @@ export function PortalPane({
                   style={{
                     ...ps.ucBtn,
                     border: `1px solid ${on ? "var(--border-brand)" : "var(--border-default)"}`,
-                    background: on ? "var(--surface-brand-tint)" : "var(--neutral-0)",
+                    background: on
+                      ? "var(--surface-brand-tint)"
+                      : "var(--neutral-0)",
                     boxShadow: on ? "var(--shadow-xs)" : "none",
                     cursor: busy ? "not-allowed" : "pointer",
                   }}
@@ -292,11 +351,18 @@ export function PortalPane({
             loading={busy}
             iconLeft={!busy ? <KeyRound size={19} /> : undefined}
           >
-            {busy ? stageVerb || "Retrieving…" : done || isError ? "Retrieve again" : "Retrieve credential"}
+            {busy
+              ? stageVerb || "Retrieving…"
+              : done || isError
+                ? "Retrieve again"
+                : "Retrieve credential"}
           </Button>
           <div style={ps.formHint}>
             <Info size={13} style={{ flexShrink: 0, marginTop: 1 }} />
-            <span>Watch the identity exchange unfold in the Idira Inspector on the right.</span>
+            <span>
+              Watch the identity exchange unfold in the Idira Inspector on the
+              right.
+            </span>
           </div>
         </div>
 
@@ -305,14 +371,19 @@ export function PortalPane({
           {status === "idle" && (
             <div style={ps.empty}>
               <ScanSearch size={22} style={{ opacity: 0.5 }} />
-              <span>Run a use case to authenticate the caller and retrieve the credential.</span>
+              <span>
+                Run a use case to authenticate the caller and retrieve the
+                credential.
+              </span>
             </div>
           )}
 
           {busy && (
             <div style={ps.empty}>
               <span style={ps.workingDot} />
-              <span>{stageVerb || "Working"} — this workload stores no credential…</span>
+              <span>
+                {stageVerb || "Working"} — this workload stores no credential…
+              </span>
             </div>
           )}
 
@@ -320,7 +391,10 @@ export function PortalPane({
             <div style={ps.resultIn}>
               <div style={ps.mfHead}>
                 <span style={ps.mfTitle}>
-                  <CheckCircle2 size={18} style={{ color: "var(--status-success)" }} />
+                  <CheckCircle2
+                    size={18}
+                    style={{ color: "var(--status-success)" }}
+                  />
                   Credential retrieved
                 </span>
                 <Badge tone="success" dot>
@@ -329,8 +403,13 @@ export function PortalPane({
               </div>
               <div style={ps.manifest}>
                 <Row k="Application" v={r.appId} />
-                <Row k="Caller hash" v={r.appHash} />
-                <Row k="Caller · OS user" v={[r.callerPath, r.osUser && `(${r.osUser})`].filter(Boolean).join(" ")} />
+                <Row k="Caller fingerprint" v={r.appHash} />
+                <Row
+                  k="Caller · OS user"
+                  v={[r.callerPath, r.osUser && `(${r.osUser})`]
+                    .filter(Boolean)
+                    .join(" ")}
+                />
                 <Row k="Safe" v={r.safe} />
                 <Row k="Object / query" v={r.query} />
                 <Row k="Returned account" v={r.account} />
@@ -351,7 +430,9 @@ export function PortalPane({
                     <XOctagon size={18} />
                     <span>{r?.errorCode || "retrieval failed"}</span>
                   </div>
-                  <Tag tone="danger">{scenario === "denied" ? "authz deny" : "authn deny"}</Tag>
+                  <Tag tone="danger">
+                    {scenario === "denied" ? "authz deny" : "authn deny"}
+                  </Tag>
                 </div>
               </div>
               {r?.error && <p style={ps.errMsg}>{r.error}</p>}

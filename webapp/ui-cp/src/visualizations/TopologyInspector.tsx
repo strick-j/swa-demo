@@ -185,7 +185,7 @@ export function TopologyInspector({
           ) : (
             <div style={ts.grid2}>
               <Kv
-                k="Application hash"
+                k="App fingerprint"
                 v={appHash}
                 vColor={provState === "done" ? INK.ok : INK.mono}
               />
