@@ -79,6 +79,7 @@ type Deps struct {
 	CP       *cp.Client
 	Pages    Pages
 	Static   fs.FS
+	CPApp    fs.FS // built CP inspector SPA (Vite output), served under /cp/
 	Cfg      Config
 }
 
@@ -92,6 +93,7 @@ type Server struct {
 	cp       *cp.Client
 	pages    Pages
 	static   fs.FS
+	cpApp    fs.FS
 	cfg      Config
 }
 
@@ -106,6 +108,7 @@ func New(d Deps) *Server {
 		cp:       d.CP,
 		pages:    d.Pages,
 		static:   d.Static,
+		cpApp:    d.CPApp,
 		cfg:      d.Cfg,
 	}
 }
@@ -117,7 +120,16 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/swa", s.handleSWA)
 	mux.HandleFunc("/secrets-manager", s.handleSecretsManager)
 	mux.HandleFunc("/credential-providers", s.handleCredentialProviders)
-	mux.HandleFunc("/cp", s.handleCredentialProvider)
+	// /cp serves the built React inspector SPA (Vite base=/cp/). /api/cp below is
+	// its data endpoint. Falls back to the legacy template when the SPA is absent.
+	if s.cpApp != nil {
+		mux.Handle("/cp/", http.StripPrefix("/cp/", http.FileServer(http.FS(s.cpApp))))
+		mux.HandleFunc("/cp", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/cp/", http.StatusFound)
+		})
+	} else {
+		mux.HandleFunc("/cp", s.handleCredentialProvider)
+	}
 	mux.HandleFunc("/api/catalog", s.handleCatalog)
 	mux.HandleFunc("/api/retrieve", s.handleRetrieve)
 	mux.HandleFunc("/api/ccp", s.handleCCP)

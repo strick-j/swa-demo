@@ -48,6 +48,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("static fs: %v", err)
 	}
+	cpApp, err := ui.CPApp()
+	if err != nil {
+		log.Printf("CP inspector SPA unavailable (%v); /cp falls back to the legacy page", err)
+		cpApp = nil
+	}
 
 	registry, jwtSimulated, iamSimulated := buildRegistry(cfg, fetcher)
 	ccpClient := buildCCP(cfg)
@@ -64,6 +69,7 @@ func main() {
 		CP:       cpClient,
 		Pages:    pages,
 		Static:   static,
+		CPApp:    cpApp,
 		Cfg: handlers.Config{
 			Audience:           cfg.audience,
 			TrustDomain:        cfg.trustDomain,

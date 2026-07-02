@@ -4,3 +4,5 @@ dist/
 *.out
 .git
 README.md
+ui-cp/node_modules
+ui-cp/dist
