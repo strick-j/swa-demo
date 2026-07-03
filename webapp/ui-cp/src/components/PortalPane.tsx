@@ -87,11 +87,15 @@ const ps = {
   body: {
     flex: 1,
     overflowY: "auto" as const,
-    padding: "36px 36px 72px",
+    padding: "36px 36px 16px",
     display: "flex",
     flexDirection: "column" as const,
     gap: 24,
   },
+  // A non-shrinking flow child guarantees bottom breathing room: a flex-item
+  // scroll container clips its own padding-bottom, but a real child stays in the
+  // scroll range.
+  bottomPad: { height: 56, flexShrink: 0 as const },
   hero: {
     display: "flex",
     flexDirection: "column" as const,
@@ -493,7 +497,7 @@ export function PortalPane({
                 <Row k="Application" v={r.appId} />
                 <Row k="Identity" v={r.identity} />
                 <Row k="Auth method" v={r.authMethod} />
-                <Row k="Conjur host" v={r.conjurHost} />
+                <Row k="Secrets Manager host" v={r.conjurHost} />
                 <Row k="Variable" v={r.secretName} />
                 <Row k="Client certificate (CN)" v={r.certCn} />
                 <Row k="Caller fingerprint" v={r.appHash} />
@@ -586,6 +590,8 @@ export function PortalPane({
             </div>
           )}
         </div>
+
+        <div style={ps.bottomPad} />
       </div>
     </div>
   );

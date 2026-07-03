@@ -136,7 +136,9 @@
     .trust span { font-family: var(--font-mono); font-size: 13px; color: var(--dim); display: inline-flex; align-items: center; gap: 8px; }
     .trust span::before { content: "\2713"; color: var(--ok); }
 
-    footer { padding: 40px 0 96px; }
+    /* footer.wrap (0,1,1) must out-specify .wrap's `padding: 0 32px` (0,1,0),
+       otherwise the vertical padding is reset to 0 and the footer sits flush. */
+    footer.wrap { padding: 44px 32px 96px; }
     footer .frow { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; color: var(--faint); font-size: 13px; }
     footer .frow img { height: 22px; opacity: 0.85; }
     footer code { font-family: var(--font-mono); color: var(--mono); }
