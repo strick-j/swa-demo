@@ -1,0 +1,142 @@
+---
+# Proactive SPIFFE trust-chain resync — supersedes the old pg-gateway-recycler.
+#
+# Two related SWA v1.0.2 rotation wedges hit this demo (see docs/RUNBOOK.md):
+#   1. pg-gateway's X.509-SVID subscriber wedges on its stable hostPID and the
+#      leaf EXPIRES ("subscriber already exists for: id=<pid>").
+#   2. When the Firefly issuer rotates its CA, pg-gateway's server SVID stops
+#      chaining to the "firefly root" in the webapp's bundle, so the "Trusted
+#      workload" read fails with `x509: ... certificate signed by unknown
+#      authority ("firefly root")`. A gateway-only bounce does NOT fix this —
+#      the issuer (swa-server) must be restarted first, then the gateway and
+#      webapp re-fetch.
+#
+# This CronJob rolls the full chain in order — swa-server -> pg-gateway ->
+# swa-demo-webapp — a few times across the workday, well inside the 8h
+# x509_workload_ttl, so the chain is refreshed before either wedge can form.
+#
+# The target host is only powered on ~09:00-17:00 America/New_York, so the
+# schedule is pinned to that TZ and fires only inside the on-window (a UTC-
+# default schedule would mostly fire while the host is off). Obsolete once
+# Idira's persistent SaaS CA ships (~July 2026); remove this file then.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: swa-svid-resync
+  namespace: swa-system
+  labels:
+    app: swa-svid-resync
+---
+# Least privilege: get + patch ONLY the three named deployments (rollout restart
+# is a GET then a strategic-merge PATCH of the restartedAt annotation). A
+# ClusterRole with resourceNames keeps it to those exact deployments; the
+# RoleBindings below scope it per-namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: swa-svid-resync
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["swa-server", "pg-gateway", "swa-demo-webapp"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: swa-svid-resync
+  namespace: swa-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: swa-svid-resync
+subjects:
+  - kind: ServiceAccount
+    name: swa-svid-resync
+    namespace: swa-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: swa-svid-resync
+  namespace: swa-data
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: swa-svid-resync
+subjects:
+  - kind: ServiceAccount
+    name: swa-svid-resync
+    namespace: swa-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: swa-svid-resync
+  namespace: swa-demo
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: swa-svid-resync
+subjects:
+  - kind: ServiceAccount
+    name: swa-svid-resync
+    namespace: swa-system
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: swa-svid-resync
+  namespace: swa-system
+  labels:
+    app: swa-svid-resync
+spec:
+  # 10:00, 12:00, 14:00, 16:00 Eastern — every 2h across the 9-5 on-window, all
+  # safely inside 8h TTL. America/New_York tracks DST (EST/EDT) automatically.
+  schedule: "0 10-16/2 * * *"
+  timeZone: "America/New_York"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 300
+      template:
+        metadata:
+          labels:
+            app: swa-svid-resync
+        spec:
+          serviceAccountName: swa-svid-resync
+          restartPolicy: Never
+          containers:
+            - name: kubectl
+              # Any small kubectl image works; swap if this one can't be pulled
+              # (e.g. rancher/kubectl:<ver>, alpine/k8s:<ver>).
+              image: bitnami/kubectl:latest
+              imagePullPolicy: IfNotPresent
+              # Order matters: issuer first (fresh Firefly CA), then the gateway
+              # re-attests under it, then the webapp re-fetches the bundle. Sleeps
+              # let each settle before the next depends on it.
+              command:
+                - /bin/sh
+                - -c
+                - >
+                  set -e;
+                  echo "resync: restart issuer swa-server";
+                  kubectl -n swa-system rollout restart deployment/swa-server;
+                  sleep 60;
+                  echo "resync: restart gateway pg-gateway";
+                  kubectl -n swa-data rollout restart deployment/pg-gateway;
+                  sleep 30;
+                  echo "resync: restart client swa-demo-webapp";
+                  kubectl -n swa-demo rollout restart deployment/swa-demo-webapp;
+                  echo "resync: done"
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  cpu: 100m
+                  memory: 64Mi

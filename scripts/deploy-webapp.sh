@@ -50,8 +50,11 @@ deploy_data() {
   log "Applying data plane + scenario workloads (postgres, gateway, untrusted, rogue)"
   kubectl apply -f "${ROOT}/k8s/postgres.yaml"
   kubectl apply -f "${ROOT}/k8s/pg-gateway.yaml"
-  # Recycle pg-gateway on a schedule to dodge the SWA v1.0.2 SVID-rotation wedge.
-  kubectl apply -f "${ROOT}/k8s/pg-gateway-recycler.yaml"
+  # Proactively resync the SPIFFE chain on a schedule to prevent the SWA v1.0.2
+  # SVID/CA-rotation wedges (supersedes the old pg-gateway-recycler).
+  kubectl apply -f "${ROOT}/k8s/swa-svid-resync.yaml"
+  # One-time cleanup of the superseded recycler (no-op once it's gone).
+  kubectl -n swa-data delete cronjob,rolebinding,role,serviceaccount pg-gateway-recycler --ignore-not-found
   kubectl apply -f "${ROOT}/k8s/untrusted-app.yaml"
   kubectl apply -f "${ROOT}/k8s/rogue-app.yaml"
   kubectl apply -f "${ROOT}/k8s/foreign-carrier.yaml"
