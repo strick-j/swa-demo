@@ -3,6 +3,29 @@
 // gate is marked rejected on a denial. Generic across CP and CCP.
 import { Check, X, ShieldOff } from "lucide-react";
 import { INK, type InspectorProps } from "./common";
+import type { ScenarioKey } from "../engine/providers";
+
+// Body copy for the "Boundary held" panel, keyed by the rejecting scenario.
+// SWA (SPIFFE) scenarios describe identity/trust-domain rejections; the
+// Credential Providers scenarios describe Application-hash/Safe rejections.
+function boundaryBody(scenario: ScenarioKey): string {
+  switch (scenario) {
+    case "untrusted":
+      return "The workload holds a valid SVID, but its SPIFFE ID is not allow-listed at the gateway. The mTLS connection was refused before Postgres was reached.";
+    case "unknown":
+      return "No registration policy matched this workload, so the trust domain refused to issue an SVID. With no identity, it never reached the gateway.";
+    case "foreign":
+      return "The peer's SVID comes from a different trust domain; its trust root does not anchor here. Rejected at the trust boundary.";
+    case "trusted":
+      return "The workload's identity checks out, but the database read through the SPIFFE gateway did not complete. Check the SWA agent, gateway, and Postgres.";
+    case "denied":
+      return "The caller was authenticated, but the Application is not a member of the requested Safe. No credential was returned.";
+    case "no-cert":
+      return "No client certificate was presented; AIMWebService requires mutual TLS. Rejected before any Safe was evaluated.";
+    default:
+      return "The calling application's hash is not registered. Rejected before any Safe was evaluated — as designed.";
+  }
+}
 
 type LayerState = "locked" | "active" | "passed" | "rejected";
 
@@ -232,13 +255,7 @@ export function LayersInspector({
             >
               <ShieldOff style={{ width: 13, height: 13 }} /> Boundary held
             </span>
-            <span style={ls.boundaryBody}>
-              {scenario === "denied"
-                ? "The caller was authenticated, but the Application is not a member of the requested Safe. No credential was returned."
-                : scenario === "no-cert"
-                  ? "No client certificate was presented; AIMWebService requires mutual TLS. Rejected before any Safe was evaluated."
-                  : "The calling application's hash is not registered. Rejected before any Safe was evaluated — as designed."}
-            </span>
+            <span style={ls.boundaryBody}>{boundaryBody(scenario)}</span>
           </div>
         )}
       </div>
