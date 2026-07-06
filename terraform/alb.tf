@@ -54,9 +54,9 @@ resource "aws_security_group" "alb" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "alb_https" {
-  for_each          = local.alb_enabled ? toset(var.admin_cidrs) : toset([])
+  for_each          = local.alb_enabled ? toset(var.http_cidrs) : toset([])
   security_group_id = aws_security_group.alb[0].id
-  description       = "HTTPS from admin"
+  description       = "HTTPS from http_cidrs"
   cidr_ipv4         = each.value
   ip_protocol       = "tcp"
   from_port         = 443
@@ -64,9 +64,9 @@ resource "aws_vpc_security_group_ingress_rule" "alb_https" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "alb_http" {
-  for_each          = local.alb_enabled ? toset(var.admin_cidrs) : toset([])
+  for_each          = local.alb_enabled ? toset(var.http_cidrs) : toset([])
   security_group_id = aws_security_group.alb[0].id
-  description       = "HTTP from admin (redirected to HTTPS)"
+  description       = "HTTP from http_cidrs (redirected to HTTPS)"
   cidr_ipv4         = each.value
   ip_protocol       = "tcp"
   from_port         = 80

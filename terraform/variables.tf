@@ -48,14 +48,25 @@ variable "key_pair_name" {
   default     = ""
 }
 
-variable "admin_cidrs" {
-  description = "CIDRs allowed to reach SSH (22), the demo NodePort, and the ALB (80/443). Use your /32(s)."
+variable "ssh_cidrs" {
+  description = "CIDRs allowed to reach SSH (22). Keep this tight — your admin /32(s) only, typically 2-3 entries."
   type        = list(string)
   default     = ["0.0.0.0/0"]
 
   validation {
-    condition     = alltrue([for c in var.admin_cidrs : can(cidrhost(c, 0))])
-    error_message = "every entry in admin_cidrs must be a valid CIDR block."
+    condition     = alltrue([for c in var.ssh_cidrs : can(cidrhost(c, 0))])
+    error_message = "every entry in ssh_cidrs must be a valid CIDR block."
+  }
+}
+
+variable "http_cidrs" {
+  description = "CIDRs allowed to reach the web demo: the NodePort and the ALB (80/443). Broaden this for viewers/audiences."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+
+  validation {
+    condition     = alltrue([for c in var.http_cidrs : can(cidrhost(c, 0))])
+    error_message = "every entry in http_cidrs must be a valid CIDR block."
   }
 }
 

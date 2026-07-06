@@ -1,8 +1,8 @@
-# Security group: SSH + demo NodePort from admin CIDR only; full egress (tenant/registry over 443).
+# Security group: SSH from ssh_cidrs, demo NodePort from http_cidrs; full egress (tenant/registry over 443).
 
 resource "aws_security_group" "host" {
   name        = "${var.project}-host-sg"
-  description = "swa-demo host: SSH + demo NodePort inbound from admin CIDR"
+  description = "swa-demo host: SSH (ssh_cidrs) + demo NodePort (http_cidrs) inbound"
   vpc_id      = aws_vpc.main.id
 
   tags = {
@@ -11,7 +11,7 @@ resource "aws_security_group" "host" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "ssh" {
-  for_each          = toset(var.admin_cidrs)
+  for_each          = toset(var.ssh_cidrs)
   security_group_id = aws_security_group.host.id
   description       = "SSH from admin"
   cidr_ipv4         = each.value
@@ -21,9 +21,9 @@ resource "aws_vpc_security_group_ingress_rule" "ssh" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "nodeport" {
-  for_each          = toset(var.admin_cidrs)
+  for_each          = toset(var.http_cidrs)
   security_group_id = aws_security_group.host.id
-  description       = "Demo webapp NodePort from admin"
+  description       = "Demo webapp NodePort from http_cidrs"
   cidr_ipv4         = each.value
   ip_protocol       = "tcp"
   from_port         = var.webapp_nodeport

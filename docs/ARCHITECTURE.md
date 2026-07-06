@@ -173,7 +173,7 @@ The webapp image is likewise built straight into minikube's docker. See
 - The **cp-bridge** binds a host-only interface (`host.minikube.internal:8890`) and
   runs the caller as the OS user registered on the CP Application; it holds the
   Safe/Object coordinates on the host, not in the cluster.
-- The Security Group restricts SSH, the NodePort, and the ALB (80/443) to `admin_cidrs`.
+- The Security Group restricts SSH (22) to `ssh_cidrs`, and the NodePort + ALB (80/443) to `http_cidrs`.
 - Optional HTTPS: set `domain_name` and Terraform requests a DNS-validated,
   auto-renewing **ACM** cert for an ALB that terminates TLS. Add the
   `acm_validation_records` at your DNS host (ACM then issues the cert), then CNAME

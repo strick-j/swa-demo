@@ -6,7 +6,8 @@ instance_type   = "m5.xlarge"
 root_volume_gb  = 60
 
 # Lock these down for anything beyond a throwaway demo:
-admin_cidrs     = ["0.0.0.0/0"] # set to YOUR.IP/32 (add more for other locations)
+ssh_cidrs       = ["0.0.0.0/0"] # SSH (22) — set to YOUR.IP/32, keep tight (2-3 admin hosts)
+http_cidrs      = ["0.0.0.0/0"] # web demo (NodePort + ALB 80/443) — broaden for your audience
 key_pair_name   = ""            # empty => Terraform generates swa-demo-key.pem
 webapp_nodeport = 30080
 
