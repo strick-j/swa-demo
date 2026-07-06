@@ -4,6 +4,52 @@
 import { Fragment } from "react";
 import { CircleCheckBig, ShieldOff } from "lucide-react";
 import { INK, type InspectorProps, type CVS } from "./common";
+import type { ScenarioKey } from "../engine/providers";
+
+// Boundary panel copy for the error state, keyed by the rejecting scenario.
+// SWA (SPIFFE) scenarios speak identity/trust-domain, not the Credential
+// Providers' Application-hash/Safe vocabulary — each family owns its own copy.
+function boundaryCopy(scenario: ScenarioKey): { title: string; body: string } {
+  switch (scenario) {
+    // SWA · SPIFFE
+    case "untrusted":
+      return {
+        title: "Authorization boundary",
+        body: "The workload holds a valid SVID, but its SPIFFE ID is not allow-listed at the gateway. ghostunnel refused the mTLS connection before Postgres was ever reached.",
+      };
+    case "unknown":
+      return {
+        title: "Identity boundary",
+        body: "No registration policy matched this workload, so the trust domain declined to mint an SVID. With no identity, it could not even attempt the gateway — as designed.",
+      };
+    case "foreign":
+      return {
+        title: "Trust boundary",
+        body: "The peer presented an SVID from a different trust domain. Its trust root does not anchor to this domain, so the connection was rejected at the boundary.",
+      };
+    case "trusted":
+      return {
+        title: "Retrieval failed",
+        body: "The workload's identity checks out, but the database read through the SPIFFE gateway did not complete — check the SWA agent, the ghostunnel gateway, and Postgres reachability.",
+      };
+    // Credential Providers · CCP
+    case "denied":
+      return {
+        title: "Authorization boundary",
+        body: "The caller was authenticated, but the Application is not a member of the requested Safe. Nothing was returned.",
+      };
+    case "no-cert":
+      return {
+        title: "Authentication boundary",
+        body: "No client certificate was presented. AIMWebService requires mutual TLS — rejected at the door, as designed.",
+      };
+    default:
+      return {
+        title: "Authentication boundary",
+        body: "The calling application's hash is not registered on the Application. Rejected before any Safe was evaluated — as designed.",
+      };
+  }
+}
 
 function VLink({ state }: { state: CVS }) {
   const lit = state === "done";
@@ -132,16 +178,7 @@ export function TopologyInspector({
     return "locked";
   };
 
-  const boundaryTitle =
-    scenario === "denied"
-      ? "Authorization boundary"
-      : "Authentication boundary";
-  const boundaryBody =
-    scenario === "denied"
-      ? "The caller was authenticated, but the Application is not a member of the requested Safe. Nothing was returned."
-      : scenario === "no-cert"
-        ? "No client certificate was presented. AIMWebService requires mutual TLS — rejected at the door, as designed."
-        : "The calling application's hash is not registered on the Application. Rejected before any Safe was evaluated — as designed.";
+  const { title: boundaryTitle, body: boundaryBody } = boundaryCopy(scenario);
 
   return (
     <div style={ts.scroll}>
