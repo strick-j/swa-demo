@@ -33,6 +33,7 @@ spec:
       labels:
         app: foreign-carrier
     spec:
+      automountServiceAccountToken: false # never calls the k8s API
       containers:
         - name: foreign-carrier
           image: swa-demo-webapp:dev

@@ -33,6 +33,7 @@ spec:
         app: pg-gateway
     spec:
       serviceAccountName: pg-gateway
+      automountServiceAccountToken: false # ghostunnel uses the SPIFFE socket, not the k8s API
       containers:
         - name: ghostunnel
           image: ghostunnel/ghostunnel:v1.10.0

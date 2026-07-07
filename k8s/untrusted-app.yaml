@@ -37,6 +37,7 @@ spec:
         app: untrusted-app
     spec:
       serviceAccountName: untrusted-app
+      automountServiceAccountToken: false # SPIFFE socket auth, not the k8s API
       containers:
         - name: webapp
           image: swa-demo-webapp:dev

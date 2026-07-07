@@ -17,7 +17,8 @@
     - scripts
     - webapp
     - hostbridge
-    - .env
+  # NOTE: .env is intentionally NOT synced — secrets stay on the control host.
+  # (The --exclude=.env above is kept as belt-and-suspenders.)
   become: true
   become_user: "{{ minikube_user }}"
 

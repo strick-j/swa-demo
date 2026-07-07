@@ -166,7 +166,22 @@ func (s *Server) Routes() http.Handler {
 	if s.static != nil {
 		mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(s.static))))
 	}
-	return mux
+	return securityHeaders(mux)
+}
+
+// securityHeaders adds conservative response headers to every response. It stops
+// short of a strict Content-Security-Policy on purpose: the Vite/React inspector
+// SPA relies on inline styles/scripts that a strict CSP would break, so headers
+// here are the ones that are safe without per-asset nonces.
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "SAMEORIGIN")
+		h.Set("Referrer-Policy", "no-referrer")
+		h.Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+		next.ServeHTTP(w, r)
+	})
 }
 
 type indexData struct {
