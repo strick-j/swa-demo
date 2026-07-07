@@ -58,6 +58,10 @@ spec:
               value: "unix:///tmp/swa-agent/public/api.sock"
             - name: DEMO_MODE
               value: "false"
+            # Internal probe pod: expose /probe + /probe-svid so the main webapp
+            # can relay its DB/SVID outcome. NEVER set on the main webapp.
+            - name: EXPOSE_PROBE_ENDPOINTS
+              value: "true"
           volumeMounts:
             - name: swa-agent-socket
               mountPath: /tmp/swa-agent
@@ -68,6 +72,13 @@ spec:
               port: 8080
             initialDelaySeconds: 3
             periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 65532 # distroless nonroot; pin numeric UID for the kubelet
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
           resources:
             requests:
               cpu: 25m

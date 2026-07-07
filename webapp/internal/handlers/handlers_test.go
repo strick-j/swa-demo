@@ -77,7 +77,9 @@ func TestHandleSVID_Success(t *testing.T) {
 	}
 }
 
-func TestHandleSVID_AudienceOverride(t *testing.T) {
+// A caller-supplied audience other than the configured one is rejected (no
+// token-minting oracle) and the fetcher is never invoked.
+func TestHandleSVID_AudienceRejected(t *testing.T) {
 	stub := &stubFetcher{result: &svid.Result{SPIFFEID: "x"}}
 	srv := newTestServer(stub)
 
@@ -85,8 +87,28 @@ func TestHandleSVID_AudienceOverride(t *testing.T) {
 	rec := httptest.NewRecorder()
 	srv.Routes().ServeHTTP(rec, req)
 
-	if stub.gotAud != "custom" {
-		t.Errorf("audience = %q, want custom", stub.gotAud)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403 for a non-default audience", rec.Code)
+	}
+	if stub.gotAud != "" {
+		t.Errorf("fetcher should not be called for a rejected audience; gotAud = %q", stub.gotAud)
+	}
+}
+
+// The configured audience passed explicitly is allowed (parity with the default).
+func TestHandleSVID_AudienceMatchAllowed(t *testing.T) {
+	stub := &stubFetcher{result: &svid.Result{SPIFFEID: "x"}}
+	srv := newTestServer(stub)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/svid?audience=default-aud", nil)
+	rec := httptest.NewRecorder()
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", rec.Code)
+	}
+	if stub.gotAud != "default-aud" {
+		t.Errorf("audience = %q, want default-aud", stub.gotAud)
 	}
 }
 
@@ -162,6 +184,19 @@ func TestHandleScenarios_DemoSynthesis(t *testing.T) {
 	}
 }
 
+// The probe endpoints must NOT be registered by default (main webapp) — they'd
+// leak this pod's DB rows / JWT-SVID on the internet-facing service.
+func TestProbeEndpointsGatedOffByDefault(t *testing.T) {
+	srv := newScenarioServer(&stubFetcher{result: &svid.Result{}}, Config{Audience: "a"})
+	for _, path := range []string{"/probe", "/probe-svid"} {
+		rec := httptest.NewRecorder()
+		srv.Routes().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("%s status = %d, want 404 when ExposeProbe is false", path, rec.Code)
+		}
+	}
+}
+
 func TestHandleScenarios_MethodNotAllowed(t *testing.T) {
 	srv := newScenarioServer(&stubFetcher{result: &svid.Result{}}, Config{Demo: true})
 	req := httptest.NewRequest(http.MethodGet, "/api/scenarios", nil)
@@ -173,8 +208,9 @@ func TestHandleScenarios_MethodNotAllowed(t *testing.T) {
 }
 
 // /probe-svid reports this pod's own outcome: a refusal surfaces as Issued=false.
+// It's only registered when ExposeProbe is set (i.e. on the internal probe pods).
 func TestHandleProbeSVID_Refused(t *testing.T) {
-	srv := newScenarioServer(&stubFetcher{err: errors.New("no identity issued")}, Config{Audience: "a"})
+	srv := newScenarioServer(&stubFetcher{err: errors.New("no identity issued")}, Config{Audience: "a", ExposeProbe: true})
 	req := httptest.NewRequest(http.MethodGet, "/probe-svid", nil)
 	rec := httptest.NewRecorder()
 	srv.Routes().ServeHTTP(rec, req)
