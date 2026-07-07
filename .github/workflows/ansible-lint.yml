@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "ansible/**"
+      - ".ansible-lint"
       - ".github/workflows/ansible-lint.yml"
   workflow_dispatch:
 

@@ -23,7 +23,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: webapp/go.mod
+          # Latest 1.25 patch (NOT the exact go.mod directive 1.25.0, whose
+          # stdlib has open crypto/tls+x509 CVEs). Matches the Docker `golang:1.25`
+          # floating tag, so govulncheck sees the patched standard library.
+          go-version: "1.25.x"
           cache-dependency-path: webapp/go.sum
 
       - name: gofmt

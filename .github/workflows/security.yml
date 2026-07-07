@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # Dependency + secret scan. BLOCKS on HIGH/CRITICAL fixable findings.
-      - uses: aquasecurity/trivy-action@0.28.0
+      - uses: aquasecurity/trivy-action@v0.30.0
         with:
           scan-type: fs
           scan-ref: .
@@ -34,7 +34,7 @@ jobs:
       # several k8s findings are deliberately deferred (see docs/CI.md and the
       # security-review phases). Flip exit-code to "1" once the baseline is
       # triaged into .trivyignore.
-      - uses: aquasecurity/trivy-action@0.28.0
+      - uses: aquasecurity/trivy-action@v0.30.0
         with:
           scan-type: config
           scan-ref: .

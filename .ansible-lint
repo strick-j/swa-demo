@@ -1,0 +1,9 @@
+# ansible-lint config (advisory CI job). These rules are accepted for this demo's
+# role structure; revisit if the roles are ever published/generalized.
+skip_list:
+  - var-naming[no-role-prefix] # roles use short local var names (kubectl_version, etc.)
+  - risky-shell-pipe # a few shell tasks pipe without pipefail — accepted here
+  - command-instead-of-shell
+  - name[casing]
+exclude_paths:
+  - ansible/inventory.ini
