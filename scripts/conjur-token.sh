@@ -57,6 +57,14 @@ fi
 : "${CONJUR_ACCOUNT:=conjur}"
 : "${CONJUR_OIDC_SERVICE_ID:=cyberark}"
 
+# Keep secrets out of argv (visible via `ps auxww` to any local user): hand them
+# to curl from 0600 temp files with --data-urlencode name@file, never name=VALUE
+# on the command line. Cleaned up on exit.
+umask 077
+SECRETS_DIR="$(mktemp -d)"
+trap 'rm -rf "${SECRETS_DIR}"' EXIT
+printf '%s' "${CONJUR_OIDC_CLIENT_SECRET}" > "${SECRETS_DIR}/client_secret"
+
 PLATFORM_URL="https://${IDENTITY_TENANT_ID}.id.cyberark.cloud/oauth2/platformtoken"
 log "Requesting Identity platform token (client_credentials) from ${PLATFORM_URL}"
 PLATFORM_RESP="$(curl -fsS -X POST "${PLATFORM_URL}" \
@@ -64,7 +72,7 @@ PLATFORM_RESP="$(curl -fsS -X POST "${PLATFORM_URL}" \
   -H 'Content-Type: application/x-www-form-urlencoded' \
   --data-urlencode 'grant_type=client_credentials' \
   --data-urlencode "client_id=${CONJUR_OIDC_CLIENT_ID}" \
-  --data-urlencode "client_secret=${CONJUR_OIDC_CLIENT_SECRET}")" \
+  --data-urlencode "client_secret@${SECRETS_DIR}/client_secret")" \
   || { log "platform token request failed (check IDENTITY_TENANT_ID + client id/secret)"; exit 1; }
 
 PLATFORM_TOKEN="$(PLATFORM_RESP="${PLATFORM_RESP}" "${PYBIN}" - <<'PY'
@@ -82,6 +90,7 @@ print(token)
 PY
 )"
 
+printf '%s' "${PLATFORM_TOKEN}" > "${SECRETS_DIR}/id_token" # keep the bearer token out of argv
 AUTHN_URL="${CONJUR_APPLIANCE_URL%/}/authn-oidc/${CONJUR_OIDC_SERVICE_ID}/${CONJUR_ACCOUNT}/authenticate"
 log "Exchanging platform token for a Conjur access token at ${AUTHN_URL}"
 # Request the base64-encoded token (Accept-Encoding: base64): the swa provider's
@@ -93,7 +102,7 @@ log "Exchanging platform token for a Conjur access token at ${AUTHN_URL}"
 AUTHN_RESP="$(curl -sS -w $'\n%{http_code}' -X POST "${AUTHN_URL}" \
   -H 'Accept-Encoding: base64' \
   -H 'Content-Type: application/x-www-form-urlencoded' \
-  --data-urlencode "id_token=${PLATFORM_TOKEN}")" \
+  --data-urlencode "id_token@${SECRETS_DIR}/id_token")" \
   || { log "Conjur authn-oidc authenticate request failed (network/TLS)"; exit 1; }
 AUTHN_CODE="${AUTHN_RESP##*$'\n'}"
 CONJUR_TOKEN="${AUTHN_RESP%$'\n'*}"

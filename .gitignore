@@ -18,7 +18,8 @@ terraform-swa/cluster-jwks.auto.tfvars.json
 *.tfstate.*
 crash.log
 crash.*.log
-.terraform.lock.hcl
+# NOTE: .terraform.lock.hcl is intentionally COMMITTED (provider hash pinning) —
+# after `terraform init`, run `git add **/.terraform.lock.hcl`.
 
 # --- Ansible ---
 *.retry
