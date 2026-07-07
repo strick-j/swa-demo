@@ -92,6 +92,13 @@ func main() {
 		Addr:              ":" + cfg.port,
 		Handler:           srv.Routes(),
 		ReadHeaderTimeout: 5 * time.Second,
+		// Bound every phase of a connection so a slow/hung client can't hold a
+		// worker open. WriteTimeout must exceed the slowest handler's own
+		// context (handleAPISWA/handleConjur use 20s), so 30s leaves margin.
+		ReadTimeout:    15 * time.Second,
+		WriteTimeout:   30 * time.Second,
+		IdleTimeout:    60 * time.Second,
+		MaxHeaderBytes: 1 << 20, // 1 MiB cap on request headers
 	}
 	log.Printf("swa-demo webapp listening on :%s (svid source: %s)", cfg.port, fetcher.Source())
 	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {

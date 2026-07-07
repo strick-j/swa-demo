@@ -1,0 +1,34 @@
+---
+# Network-enforce the demo's core claim: ONLY the SPIFFE mTLS gateway (pg-gateway)
+# may reach Postgres. Without this, Postgres uses `trust` auth (no password) on a
+# normal ClusterIP, so ANY pod — including the untrusted-app / rogue-app cast as
+# adversaries — can dial postgres.swa-data:5432 directly and skip the SVID check
+# entirely. This policy makes the gateway the only ingress path, so identity is
+# actually the authorization (and the `trust` auth becomes defensible).
+#
+# ENFORCEMENT REQUIRES A NETWORKPOLICY-CAPABLE CNI. minikube's default CNI does
+# NOT enforce NetworkPolicy — start the cluster with `minikube start --cni=calico`
+# (or cilium) for this to take effect. Applied but un-enforced, it's inert (not
+# harmful). See docs/RUNBOOK.md.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-gateway-only
+  namespace: swa-data
+  labels:
+    app: postgres
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    # Only the ghostunnel SPIFFE gateway may connect to Postgres :5432.
+    - from:
+        - podSelector:
+            matchLabels:
+              app: pg-gateway
+      ports:
+        - protocol: TCP
+          port: 5432

@@ -5,6 +5,10 @@
 - name: Install minikube binary
   ansible.builtin.get_url:
     url: "https://storage.googleapis.com/minikube/releases/{{ minikube_version }}/minikube-linux-amd64"
+    # Verify against the release's published SHA-256 (fetched at run time, so no
+    # hash to maintain here). TLS authenticates the host; this authenticates the
+    # artifact.
+    checksum: "sha256:https://storage.googleapis.com/minikube/releases/{{ minikube_version }}/minikube-linux-amd64.sha256"
     dest: /usr/local/bin/minikube
     mode: "0755"
     owner: root
