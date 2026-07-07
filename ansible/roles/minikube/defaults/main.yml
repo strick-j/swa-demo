@@ -1,5 +1,7 @@
 ---
-minikube_version: "latest"
+# Pin to an exact release (never "latest") so builds are reproducible and the
+# binary is verified against the matching published .sha256 (see tasks/main.yml).
+minikube_version: "v1.34.0"
 minikube_k8s_version: "v1.34.0"
 minikube_cpus: "4"
 minikube_memory: "12288" # MB

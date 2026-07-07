@@ -4,6 +4,8 @@
 - name: Install kubectl
   ansible.builtin.get_url:
     url: "https://dl.k8s.io/release/{{ kubectl_version }}/bin/linux/amd64/kubectl"
+    # Verify against Kubernetes' published SHA-256 for this exact release.
+    checksum: "sha256:https://dl.k8s.io/release/{{ kubectl_version }}/bin/linux/amd64/kubectl.sha256"
     dest: /usr/local/bin/kubectl
     mode: "0755"
     owner: root
@@ -19,9 +21,20 @@
   failed_when: false
   changed_when: false
 
-- name: Download and extract helm
+# Fetch the tarball with checksum verification FIRST (unarchive can't verify a
+# remote source), then extract the local, verified file. dest basename matches
+# the name listed in helm's .sha256sum so get_url can match the right line.
+- name: Download helm tarball (verified)
+  ansible.builtin.get_url:
+    url: "https://get.helm.sh/helm-{{ helm_version }}-linux-amd64.tar.gz"
+    checksum: "sha256:https://get.helm.sh/helm-{{ helm_version }}-linux-amd64.tar.gz.sha256sum"
+    dest: "/tmp/helm-{{ helm_version }}-linux-amd64.tar.gz"
+    mode: "0644"
+  when: helm_check.rc != 0
+
+- name: Extract helm
   ansible.builtin.unarchive:
-    src: "https://get.helm.sh/helm-{{ helm_version }}-linux-amd64.tar.gz"
+    src: "/tmp/helm-{{ helm_version }}-linux-amd64.tar.gz"
     dest: /tmp
     remote_src: true
   when: helm_check.rc != 0

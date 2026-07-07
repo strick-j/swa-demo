@@ -365,3 +365,8 @@ These are centralized so you only edit them in one place:
   confirm whether you are seeing a **live** or **demo** SVID.
 - All host-side steps run over SSH via `scripts/host-exec.sh`, which reads the
   host IP/key from Terraform outputs.
+- The `postgres-gateway-only` NetworkPolicy (`k8s/postgres-netpol.yaml`) enforces
+  that only `pg-gateway` may reach Postgres — but **only under a NetworkPolicy-
+  capable CNI**. minikube's default CNI does not enforce it; start the cluster
+  with `minikube start --cni=calico` (cluster recreate) to make it effective.
+  Applied without such a CNI it is inert (harmless), not enforcing.

@@ -49,13 +49,14 @@ variable "key_pair_name" {
 }
 
 variable "ssh_cidrs" {
-  description = "CIDRs allowed to reach SSH (22). Keep this tight — your admin /32(s) only, typically 2-3 entries."
+  description = "CIDRs allowed to reach SSH (22). Keep this tight — your admin /32(s) only, typically 2-3 entries. REQUIRED (no default): SSH must never default to the whole internet; set TF_VAR_ssh_cidrs (e.g. [\"YOUR.IP/32\"])."
   type        = list(string)
-  default     = ["0.0.0.0/0"]
+  # No default on purpose: force an explicit choice so open SSH can't be shipped
+  # by omission. Set it in .env / terraform.tfvars.
 
   validation {
-    condition     = alltrue([for c in var.ssh_cidrs : can(cidrhost(c, 0))])
-    error_message = "every entry in ssh_cidrs must be a valid CIDR block."
+    condition     = length(var.ssh_cidrs) > 0 && alltrue([for c in var.ssh_cidrs : can(cidrhost(c, 0))])
+    error_message = "ssh_cidrs must be a non-empty list of valid CIDR blocks (e.g. [\"203.0.113.4/32\"])."
   }
 }
 

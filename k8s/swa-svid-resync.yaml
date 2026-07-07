@@ -112,9 +112,12 @@ spec:
           restartPolicy: Never
           containers:
             - name: kubectl
-              # Any small kubectl image works; swap if this one can't be pulled
-              # (e.g. rancher/kubectl:<ver>, alpine/k8s:<ver>).
-              image: bitnami/kubectl:latest
+              # Pinned to an exact kubectl release matching the cluster (k8s
+              # 1.33-1.35), on a maintained image — NOT bitnami/:latest (mutable,
+              # and Bitnami moved free images to a legacy catalog in 2025).
+              # Follow-up (Phase 2): pin by @sha256 digest once verified against
+              # what the host can pull.
+              image: rancher/kubectl:v1.34.0
               imagePullPolicy: IfNotPresent
               # Order matters: issuer first (fresh Firefly CA), then the gateway
               # re-attests under it, then the webapp re-fetches the bundle. Sleeps

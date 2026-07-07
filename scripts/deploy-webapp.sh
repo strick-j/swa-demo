@@ -49,6 +49,9 @@ build() {
 deploy_data() {
   log "Applying data plane + scenario workloads (postgres, gateway, untrusted, rogue)"
   kubectl apply -f "${ROOT}/k8s/postgres.yaml"
+  # Gateway-only NetworkPolicy for Postgres (needs a NetworkPolicy-capable CNI,
+  # e.g. minikube --cni=calico, to actually enforce; inert otherwise).
+  kubectl apply -f "${ROOT}/k8s/postgres-netpol.yaml"
   kubectl apply -f "${ROOT}/k8s/pg-gateway.yaml"
   # Proactively resync the SPIFFE chain on a schedule to prevent the SWA v1.0.2
   # SVID/CA-rotation wedges (supersedes the old pg-gateway-recycler).
