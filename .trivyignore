@@ -1,0 +1,17 @@
+# Trivy ignore list. Used by the trivy-fs (blocking) and trivy-config (advisory)
+# jobs. The config/misconfig findings below are DELIBERATELY DEFERRED items from
+# the security review — accepted for this demo, revisit per the deferred backlog.
+# NOTE: confirm the exact IDs against the first `trivy config` run and refine.
+
+# Postgres & ghostunnel run as root (postgres chown/su-exec + ghostunnel image
+# ship no USER). Forcing non-root needs a live smoke test — deferred.
+AVD-KSV-0012  # runAsNonRoot not set
+AVD-KSV-0014  # readOnlyRootFilesystem not set
+
+# SWA agent Workload API socket mounted via hostPath (/tmp/swa-agent, readOnly).
+# Relocating off /tmp must be coordinated with the agent DaemonSet — deferred.
+AVD-KSV-0023  # hostPath volume
+
+# Locally-built webapp image uses the mutable :dev tag (loaded into minikube; no
+# registry). Digest pinning is a deferred supply-chain item.
+AVD-KSV-0013  # image tag should be fixed/digest

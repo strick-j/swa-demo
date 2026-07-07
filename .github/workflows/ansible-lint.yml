@@ -1,0 +1,27 @@
+name: Ansible Lint
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "ansible/**"
+      - ".github/workflows/ansible-lint.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ansible-lint:
+    name: ansible-lint
+    runs-on: ubuntu-latest
+    continue-on-error: true # advisory
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ansible-lint ansible
+      - name: install collections
+        run: ansible-galaxy collection install -r ansible/requirements.yml
+      - run: ansible-lint ansible/

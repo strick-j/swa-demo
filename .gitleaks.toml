@@ -1,0 +1,21 @@
+title = "swa-demo gitleaks config"
+
+# Start from gitleaks' built-in ruleset, then allowlist known-safe placeholders
+# so example templates don't trip the secret scanner.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Example templates and documented placeholders — no real secrets"
+paths = [
+  '''\.env\.example$''',
+  '''.*\.example$''',
+  '''terraform/backend\.tf$''',
+  '''terraform-swa/backend\.tf$''',
+  '''docs/.*\.md$''',
+]
+regexes = [
+  '''CHANGEME[-_A-Za-z0-9]*''',
+  '''203\.0\.113\.4/32''',       # RFC 5737 documentation IP used in examples
+  '''YOUR\.IP/32''',
+]

@@ -1,0 +1,6 @@
+# hadolint config for webapp/Dockerfile. This job is advisory (continue-on-error)
+# in CI. Rules below are accepted for this repo.
+ignored:
+  - DL3007 # base image pinned to a tag, not a digest (deferred: digest pinning)
+  - DL3059 # multiple consecutive RUN — build stages are intentionally staged
+failure-threshold: error
