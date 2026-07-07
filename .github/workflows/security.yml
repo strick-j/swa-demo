@@ -20,7 +20,7 @@ jobs:
         run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/v0.72.0/contrib/install.sh | sh -s -- -b /usr/local/bin v0.72.0
       # Dependency + secret scan. BLOCKS on HIGH/CRITICAL fixable findings.
       - name: Trivy fs (vuln + secret)
-        run: trivy fs --scanners vuln,secret --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --ignorefile .trivyignore --no-progress .
+        run: trivy fs --scanners vuln,secret --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --ignorefile .trivyignore .
 
   trivy-config:
     name: trivy-config
@@ -34,7 +34,7 @@ jobs:
       # security-review phases). Flip --exit-code to 1 once the baseline is
       # triaged into .trivyignore.
       - name: Trivy config (misconfig, advisory)
-        run: trivy config --severity HIGH,CRITICAL --exit-code 0 --ignorefile .trivyignore --no-progress .
+        run: trivy config --severity HIGH,CRITICAL --exit-code 0 --ignorefile .trivyignore .
 
   gitleaks:
     name: gitleaks
