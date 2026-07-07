@@ -17,6 +17,9 @@ spec:
         app: swa-demo-webapp
     spec:
       serviceAccountName: swa-demo-webapp
+      # Authenticates via the SPIFFE socket, not the k8s API — don't mount a SA
+      # token into this internet-facing pod.
+      automountServiceAccountToken: false
       containers:
         - name: webapp
           image: swa-demo-webapp:dev

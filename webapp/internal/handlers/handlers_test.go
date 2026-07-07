@@ -197,6 +197,23 @@ func TestProbeEndpointsGatedOffByDefault(t *testing.T) {
 	}
 }
 
+// Security headers are applied to every response (here: the health endpoint).
+func TestSecurityHeaders(t *testing.T) {
+	srv := newScenarioServer(&stubFetcher{result: &svid.Result{}}, Config{Audience: "a"})
+	rec := httptest.NewRecorder()
+	srv.Routes().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	want := map[string]string{
+		"X-Content-Type-Options": "nosniff",
+		"X-Frame-Options":        "SAMEORIGIN",
+		"Referrer-Policy":        "no-referrer",
+	}
+	for k, v := range want {
+		if got := rec.Header().Get(k); got != v {
+			t.Errorf("header %s = %q, want %q", k, got, v)
+		}
+	}
+}
+
 func TestHandleScenarios_MethodNotAllowed(t *testing.T) {
 	srv := newScenarioServer(&stubFetcher{result: &svid.Result{}}, Config{Demo: true})
 	req := httptest.NewRequest(http.MethodGet, "/api/scenarios", nil)
