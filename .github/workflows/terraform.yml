@@ -1,0 +1,60 @@
+name: Terraform
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "terraform/**"
+      - "terraform-swa/**"
+      - ".github/workflows/terraform.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  TF_VERSION: 1.15.7
+
+jobs:
+  fmt:
+    name: fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: terraform fmt -check (all modules)
+        run: terraform fmt -check -recursive -diff
+
+  validate:
+    name: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      # Only the terraform/ module can init in CI. terraform-swa/ requires the
+      # cyberark/swa provider, which is installed locally from the SWA release
+      # bundle (not on any registry) — so it is fmt-only above.
+      # -backend=false skips the S3 backend, so no AWS creds are needed.
+      - name: init + validate (terraform/)
+        working-directory: terraform
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate -no-color
+
+  tflint:
+    name: tflint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: v0.55.1
+      - name: tflint (terraform/)
+        working-directory: terraform
+        run: |
+          tflint --init
+          tflint --format compact

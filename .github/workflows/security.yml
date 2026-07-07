@@ -1,0 +1,60 @@
+name: Security
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Install Trivy directly (pinned to the release tag) — the trivy-action wrapper
+  # pins a since-deleted setup-trivy tag, and installing by tag avoids curl|main.
+  trivy-fs:
+    name: trivy-fs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Trivy
+        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/v0.72.0/contrib/install.sh | sh -s -- -b /usr/local/bin v0.72.0
+      # Dependency + secret scan. BLOCKS on HIGH/CRITICAL fixable findings.
+      - name: Trivy fs (vuln + secret)
+        run: trivy fs --scanners vuln,secret --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --ignorefile .trivyignore .
+
+  trivy-config:
+    name: trivy-config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Trivy
+        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/v0.72.0/contrib/install.sh | sh -s -- -b /usr/local/bin v0.72.0
+      # IaC / Dockerfile / k8s misconfig scan. ADVISORY for now (exit-code 0) —
+      # several k8s findings are deliberately deferred (see docs/CI.md and the
+      # security-review phases). Flip --exit-code to 1 once the baseline is
+      # triaged into .trivyignore.
+      - name: Trivy config (misconfig, advisory)
+        run: trivy config --severity HIGH,CRITICAL --exit-code 0 --ignorefile .trivyignore .
+
+  gitleaks:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+
+  hadolint:
+    name: hadolint
+    runs-on: ubuntu-latest
+    continue-on-error: true # advisory
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: webapp/Dockerfile
+          config: .hadolint.yaml

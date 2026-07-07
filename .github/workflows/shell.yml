@@ -1,0 +1,26 @@
+name: Shell
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "**/*.sh"
+      - ".github/workflows/shell.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # BLOCKS on errors; warnings are advisory. SC1091 is disabled globally
+      # because scripts `source` .env / generated files not present at lint time.
+      - uses: ludeeus/action-shellcheck@master
+        with:
+          severity: error
+        env:
+          SHELLCHECK_OPTS: -e SC1091

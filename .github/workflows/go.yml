@@ -1,0 +1,46 @@
+name: Go
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "webapp/**"
+      - ".github/workflows/go.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: webapp
+
+jobs:
+  go:
+    name: go
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          # Latest 1.25 patch (NOT the exact go.mod directive 1.25.0, whose
+          # stdlib has open crypto/tls+x509 CVEs). Matches the Docker `golang:1.25`
+          # floating tag, so govulncheck sees the patched standard library.
+          go-version: "1.25.x"
+          cache-dependency-path: webapp/go.sum
+
+      - name: gofmt
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then
+            echo "::error::gofmt found unformatted files:"; echo "$out"; exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test (race + cover)
+        run: go test ./... -race -cover
+
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...

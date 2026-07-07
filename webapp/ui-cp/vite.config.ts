@@ -1,4 +1,5 @@
-import { defineConfig } from "vite";
+/// <reference types="vitest/config" />
+import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import { resolve } from "path";
 
@@ -9,6 +10,14 @@ export default defineConfig({
   plugins: [react()],
   base: "/cp/",
   root: resolve(__dirname),
+  // Unit tests (vitest). jsdom for the component smoke test; engine tests are
+  // pure. Run with `pnpm test`.
+  test: {
+    environment: "jsdom",
+    setupFiles: ["./vitest.setup.ts"],
+    include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    css: false,
+  },
   build: {
     outDir: resolve(__dirname, "../internal/ui/cpapp"),
     emptyOutDir: true,
