@@ -48,6 +48,11 @@ type Config struct {
 	// synthesizes illustrative untrusted/unknown outcomes so the switcher is
 	// fully demo-able without a cluster.
 	Demo bool
+	// ExposeProbe registers the /probe and /probe-svid endpoints. They exist so
+	// the untrusted/unknown probe pods can surface their own DB/SVID outcome to
+	// the main webapp — set it ONLY on those pods. The internet-facing main
+	// webapp leaves it false so it never exposes its own DB rows / JWT-SVID.
+	ExposeProbe bool
 	// Conjur* drive the Secrets Manager page display (authn-jwt tab).
 	ConjurServiceID  string
 	ConjurSecretPath string
@@ -151,8 +156,12 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/swa", s.handleAPISWA)
 	mux.HandleFunc("/api/conjur", s.handleConjur)
 	mux.HandleFunc("/api/db", s.handleDB)
-	mux.HandleFunc("/probe", s.handleProbe)
-	mux.HandleFunc("/probe-svid", s.handleProbeSVID)
+	// Probe endpoints leak this pod's own DB rows / JWT-SVID; only the internal
+	// probe pods expose them (EXPOSE_PROBE_ENDPOINTS=true), never the main webapp.
+	if s.cfg.ExposeProbe {
+		mux.HandleFunc("/probe", s.handleProbe)
+		mux.HandleFunc("/probe-svid", s.handleProbeSVID)
+	}
 	mux.HandleFunc("/healthz", s.handleHealth)
 	if s.static != nil {
 		mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(s.static))))
@@ -327,9 +336,16 @@ func (s *Server) handleSVID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Mint ONLY for the configured demo audience. Honoring an attacker-chosen
+	// ?audience= would make this a token-minting oracle: request audience=conjur
+	// and replay the returned JWT-SVID to Conjur as this workload. Reject any
+	// audience other than the configured one.
 	audience := s.cfg.Audience
-	if a := r.URL.Query().Get("audience"); a != "" {
-		audience = a
+	if a := r.URL.Query().Get("audience"); a != "" && a != s.cfg.Audience {
+		writeJSON(w, http.StatusForbidden, map[string]string{
+			"error": "requested audience is not permitted",
+		})
+		return
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)

@@ -78,6 +78,7 @@ func main() {
 			UntrustedSVIDURL:   cfg.untrustedSVIDURL,
 			UnknownSVIDURL:     cfg.unknownSVIDURL,
 			Demo:               cfg.demoMode || cfg.socketAddr == "",
+			ExposeProbe:        strings.EqualFold(env("EXPOSE_PROBE_ENDPOINTS", "false"), "true"),
 			ConjurServiceID:    cfg.conjurJWTServiceID,
 			ConjurSecretPath:   cfg.conjurJWTSecretPath,
 			ConjurSimulated:    jwtSimulated,
