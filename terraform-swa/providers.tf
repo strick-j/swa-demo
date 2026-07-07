@@ -21,8 +21,10 @@ terraform {
     }
     # Runs scripts/conjur-token.sh to mint the SWA access token (see conjur-auth.tf).
     external = {
-      source  = "hashicorp/external"
-      version = "~> 2.3"
+      source = "hashicorp/external"
+      # Pin to the 2.3.x patch line (not >=2.3,<3.0) so a minor bump can't land
+      # unreviewed; exact hashes are locked in the committed .terraform.lock.hcl.
+      version = "~> 2.3.0"
     }
   }
 }

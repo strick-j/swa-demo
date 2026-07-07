@@ -370,3 +370,49 @@ These are centralized so you only edit them in one place:
   capable CNI**. minikube's default CNI does not enforce it; start the cluster
   with `minikube start --cni=calico` (cluster recreate) to make it effective.
   Applied without such a CNI it is inert (harmless), not enforcing.
+
+## Encrypted remote state (S3)
+
+By default both Terraform modules use **local** state — which stores the
+generated SSH private key (`terraform/`) and the Conjur SCA client secret + a
+live Conjur access token (`terraform-swa/`) in cleartext on disk. Move them to an
+encrypted, versioned S3 backend. One-time setup:
+
+**1. Create the bucket (once), with SSE + versioning + public access blocked:**
+```bash
+export TF_STATE_BUCKET="CHANGEME-swa-demo-tfstate"   # globally unique
+export AWS_REGION="us-east-2"                         # match your deploy region
+aws s3api create-bucket --bucket "$TF_STATE_BUCKET" --region "$AWS_REGION" \
+  --create-bucket-configuration LocationConstraint="$AWS_REGION"
+aws s3api put-bucket-versioning --bucket "$TF_STATE_BUCKET" \
+  --versioning-configuration Status=Enabled
+aws s3api put-bucket-encryption --bucket "$TF_STATE_BUCKET" \
+  --server-side-encryption-configuration \
+  '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"aws:kms"}}]}'
+aws s3api put-public-access-block --bucket "$TF_STATE_BUCKET" \
+  --public-access-block-configuration \
+  BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+# Locking: `use_lockfile = true` (in backend.hcl) needs Terraform >= 1.10 and no
+# extra infra. For older Terraform, create a DynamoDB lock table instead:
+#   aws dynamodb create-table --table-name swa-demo-tf-locks \
+#     --attribute-definitions AttributeName=LockID,AttributeType=S \
+#     --key-schema AttributeName=LockID,KeyType=HASH --billing-mode PAY_PER_REQUEST
+```
+
+**2. Point the backend at your bucket + migrate — for EACH module:**
+Edit the committed `backend.tf` in `terraform/` and `terraform-swa/`, replacing
+the `CHANGEME-swa-demo-tfstate` bucket with `$TF_STATE_BUCKET` (both use the same
+bucket; the `key` differs per module). Then migrate:
+```bash
+cd terraform            # then repeat in terraform-swa
+terraform init -migrate-state    # answer "yes" to copy local state up to S3
+rm -f terraform.tfstate terraform.tfstate.backup
+```
+Backend blocks can't use variables, so the bucket is inline — that's why you edit
+it directly rather than via a var.
+
+**3. Commit the provider lock files** (now un-gitignored) so provider hashes are
+pinned in VCS: `git add terraform/.terraform.lock.hcl terraform-swa/.terraform.lock.hcl`.
+
+After migration, `make tf-init` / `make tenant-tf` work unchanged — plain
+`terraform init` reads the committed `backend.tf`.
