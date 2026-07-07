@@ -9,38 +9,32 @@ permissions:
   contents: read
 
 jobs:
+  # Install Trivy directly (pinned to the release tag) — the trivy-action wrapper
+  # pins a since-deleted setup-trivy tag, and installing by tag avoids curl|main.
   trivy-fs:
     name: trivy-fs
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install Trivy
+        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/v0.72.0/contrib/install.sh | sh -s -- -b /usr/local/bin v0.72.0
       # Dependency + secret scan. BLOCKS on HIGH/CRITICAL fixable findings.
-      - uses: aquasecurity/trivy-action@v0.30.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          scanners: vuln,secret
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "1"
-          trivyignores: .trivyignore
+      - name: Trivy fs (vuln + secret)
+        run: trivy fs --scanners vuln,secret --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --ignorefile .trivyignore --no-progress .
 
   trivy-config:
     name: trivy-config
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install Trivy
+        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/v0.72.0/contrib/install.sh | sh -s -- -b /usr/local/bin v0.72.0
       # IaC / Dockerfile / k8s misconfig scan. ADVISORY for now (exit-code 0) —
       # several k8s findings are deliberately deferred (see docs/CI.md and the
-      # security-review phases). Flip exit-code to "1" once the baseline is
+      # security-review phases). Flip --exit-code to 1 once the baseline is
       # triaged into .trivyignore.
-      - uses: aquasecurity/trivy-action@v0.30.0
-        with:
-          scan-type: config
-          scan-ref: .
-          severity: HIGH,CRITICAL
-          exit-code: "0"
-          trivyignores: .trivyignore
+      - name: Trivy config (misconfig, advisory)
+        run: trivy config --severity HIGH,CRITICAL --exit-code 0 --ignorefile .trivyignore --no-progress .
 
   gitleaks:
     name: gitleaks
