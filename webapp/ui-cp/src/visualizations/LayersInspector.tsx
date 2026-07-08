@@ -22,6 +22,8 @@ function boundaryBody(scenario: ScenarioKey): string {
       return "The caller was authenticated, but the Application is not a member of the requested Safe. No credential was returned.";
     case "no-cert":
       return "No client certificate was presented; AIMWebService requires mutual TLS. Rejected before any Safe was evaluated.";
+    case "invalid":
+      return "The workload's signed identity was not accepted by the authenticator. Authentication failed before any variable was read — no scoped token was issued.";
     default:
       return "The calling application's hash is not registered. Rejected before any Safe was evaluated — as designed.";
   }

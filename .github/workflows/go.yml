@@ -1,11 +1,10 @@
 name: Go
 
 on:
+  # No paths filter: this is a REQUIRED status check, so it must report on every
+  # PR to main (a path-filtered required check that doesn't run blocks the merge).
   pull_request:
     branches: [main]
-    paths:
-      - "webapp/**"
-      - ".github/workflows/go.yml"
   workflow_dispatch:
 
 permissions:

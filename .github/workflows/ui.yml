@@ -1,11 +1,9 @@
 name: UI
 
 on:
+  # No paths filter: REQUIRED status check — must report on every PR to main.
   pull_request:
     branches: [main]
-    paths:
-      - "webapp/ui-cp/**"
-      - ".github/workflows/ui.yml"
   workflow_dispatch:
 
 permissions:

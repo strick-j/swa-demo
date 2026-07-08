@@ -1,11 +1,10 @@
 name: Shell
 
 on:
+  # No paths filter: shellcheck is a REQUIRED status check — must report on every
+  # PR to main.
   pull_request:
     branches: [main]
-    paths:
-      - "**/*.sh"
-      - ".github/workflows/shell.yml"
   workflow_dispatch:
 
 permissions:

@@ -20,6 +20,12 @@ spec:
       # Authenticates via the SPIFFE socket, not the k8s API — don't mount a SA
       # token into this internet-facing pod.
       automountServiceAccountToken: false
+      # readOnlyRootFilesystem (container securityContext below) blocks the
+      # conjur-api-go authn-iam/jwt client from writing ~/.netrc. fsGroup makes
+      # the writable `home` emptyDir below group-writable by the non-root user
+      # (fsGroup is ignored for the hostPath socket mount, so it's safe).
+      securityContext:
+        fsGroup: 65532
       containers:
         - name: webapp
           image: swa-demo-webapp:dev
@@ -109,6 +115,10 @@ spec:
             - name: ccp-client-tls
               mountPath: /etc/ccp
               readOnly: true
+            # Writable home so the Conjur authn-iam/jwt client can create
+            # ~/.netrc under readOnlyRootFilesystem.
+            - name: home
+              mountPath: /home/nonroot
           readinessProbe:
             httpGet:
               path: /healthz
@@ -148,3 +158,6 @@ spec:
           secret:
             secretName: ccp-client-tls
             optional: true
+        # Writable home for ~/.netrc (Conjur authn-iam/jwt) — root fs is read-only.
+        - name: home
+          emptyDir: {}
