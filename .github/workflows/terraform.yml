@@ -1,12 +1,10 @@
 name: Terraform
 
 on:
+  # No paths filter: fmt/validate/tflint are REQUIRED status checks — must report
+  # on every PR to main (else a non-terraform PR blocks on checks that never run).
   pull_request:
     branches: [main]
-    paths:
-      - "terraform/**"
-      - "terraform-swa/**"
-      - ".github/workflows/terraform.yml"
   workflow_dispatch:
 
 permissions:
