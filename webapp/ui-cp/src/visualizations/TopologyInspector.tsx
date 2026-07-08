@@ -43,6 +43,12 @@ function boundaryCopy(scenario: ScenarioKey): { title: string; body: string } {
         title: "Authentication boundary",
         body: "No client certificate was presented. AIMWebService requires mutual TLS — rejected at the door, as designed.",
       };
+    // Secrets Manager · Conjur (authn-jwt / authn-iam)
+    case "invalid":
+      return {
+        title: "Authentication boundary",
+        body: "The workload's signed identity was not accepted by the authenticator. Authentication failed before any variable was read — no scoped token was issued.",
+      };
     default:
       return {
         title: "Authentication boundary",
