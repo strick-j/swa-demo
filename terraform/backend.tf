@@ -9,8 +9,8 @@
 # Terraform >= 1.10 — for older TF, swap it for `dynamodb_table = "..."`).
 terraform {
   backend "s3" {
-    bucket       = "CHANGEME-swa-demo-tfstate" # <-- your globally-unique bucket
-    key          = "swa-demo/terraform.tfstate"
+    bucket       = "pineapple.dev" # <-- your globally-unique bucket
+    key          = "terraform/swa-demo/main/terraform.tfstate"
     region       = "us-east-2"
     encrypt      = true
     use_lockfile = true

@@ -5,8 +5,8 @@
 # then migrate once:  terraform init -migrate-state
 terraform {
   backend "s3" {
-    bucket       = "CHANGEME-swa-demo-tfstate" # <-- same bucket as terraform/
-    key          = "swa-demo/terraform-swa.tfstate"
+    bucket       = "pineapple.dev" # <-- same bucket as terraform/
+    key          = "terraform/swa-demo/swa/terraform.tfstate"
     region       = "us-east-2"
     encrypt      = true
     use_lockfile = true
