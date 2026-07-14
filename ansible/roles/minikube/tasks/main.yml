@@ -2,13 +2,22 @@
 # Install minikube and start a single-node cluster as the (non-root) login user.
 # The docker driver must NOT run as root, so cluster tasks use become_user.
 
+# minikube publishes a bare digest (no filename) in its .sha256, so get_url's
+# checksum-URL mode can't match it to the binary. Fetch the digest first and
+# pass it inline instead — still verified, still version-driven.
+- name: Fetch minikube SHA-256 digest
+  ansible.builtin.uri:
+    url: "https://storage.googleapis.com/minikube/releases/{{ minikube_version }}/minikube-linux-amd64.sha256"
+    return_content: true
+  register: minikube_sha
+
 - name: Install minikube binary
   ansible.builtin.get_url:
     url: "https://storage.googleapis.com/minikube/releases/{{ minikube_version }}/minikube-linux-amd64"
     # Verify against the release's published SHA-256 (fetched at run time, so no
     # hash to maintain here). TLS authenticates the host; this authenticates the
     # artifact.
-    checksum: "sha256:https://storage.googleapis.com/minikube/releases/{{ minikube_version }}/minikube-linux-amd64.sha256"
+    checksum: "sha256:{{ minikube_sha.content | trim }}"
     dest: /usr/local/bin/minikube
     mode: "0755"
     owner: root
