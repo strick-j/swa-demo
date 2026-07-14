@@ -1,11 +1,20 @@
 ---
 # Install kubectl and helm system-wide.
 
+# Kubernetes publishes a bare digest (no filename) in kubectl.sha256, so
+# get_url's checksum-URL mode can't match it to the "kubectl" file. Fetch the
+# digest first and pass it inline instead (still verified, still version-driven).
+- name: Fetch kubectl SHA-256 digest
+  ansible.builtin.uri:
+    url: "https://dl.k8s.io/release/{{ kubectl_version }}/bin/linux/amd64/kubectl.sha256"
+    return_content: true
+  register: kubectl_sha
+
 - name: Install kubectl
   ansible.builtin.get_url:
     url: "https://dl.k8s.io/release/{{ kubectl_version }}/bin/linux/amd64/kubectl"
     # Verify against Kubernetes' published SHA-256 for this exact release.
-    checksum: "sha256:https://dl.k8s.io/release/{{ kubectl_version }}/bin/linux/amd64/kubectl.sha256"
+    checksum: "sha256:{{ kubectl_sha.content | trim }}"
     dest: /usr/local/bin/kubectl
     mode: "0755"
     owner: root
