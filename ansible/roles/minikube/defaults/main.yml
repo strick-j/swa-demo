@@ -1,7 +1,10 @@
 ---
 # Pin to an exact release (never "latest") so builds are reproducible and the
 # binary is verified against the matching published .sha256 (see tasks/main.yml).
-minikube_version: "v1.34.0"
+# minikube (the launcher) versions independently of Kubernetes. Pin a minikube
+# release new enough to run minikube_k8s_version — v1.34.0 only supports k8s up
+# to ~1.31, so it cannot start a 1.34 cluster. v1.38.1 matches base image v0.0.45.
+minikube_version: "v1.38.1"
 minikube_k8s_version: "v1.34.0"
 minikube_cpus: "4"
 minikube_memory: "12288" # MB
