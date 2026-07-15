@@ -316,6 +316,24 @@ scripts/host-exec.sh "kubectl -n swa-demo exec deploy/swa-demo-webapp -- sh -c '
 scripts/host-exec.sh "journalctl -u cp-bridge --no-pager -n 50"
 ```
 
+## Restricting inbound web access (large IP allow-lists)
+
+`http_cidrs` gates the web demo (NodePort in no-ALB mode; ALB 80/443 in ALB mode)
+and is fine for a handful of viewer CIDRs. For **big** allow-lists, pick by mode:
+
+| Situation | Use | Why |
+| --- | --- | --- |
+| **ALB mode**, many exact IPs you can't aggregate | **WAF IPSet** — `TF_VAR_web_waf_allow_cidrs` (`terraform/waf.tf`) | Holds up to **10,000 CIDRs**, **does not touch the SG rules-per-SG quota**, default-blocks the rest at L7. This is the recommended path for 60+ `/32`s. Keep `http_cidrs='["0.0.0.0/0"]'` so the SG doesn't block before WAF filters; don't also set `http_prefix_list_cidrs`. |
+| **NodePort mode** (no ALB), many IPs | **Managed prefix list** — `TF_VAR_http_prefix_list_cidrs` (`terraform/prefix_lists.tf`) | One SG rule for the whole list. But a referenced prefix list consumes its **`max_entries` ceiling** (not its live count) against the **default 60 rules-per-SG quota** — so 60+ entries need a Service Quota increase (VPC → *Inbound or outbound rules per security group*). Set `http_cidrs='[]'` to restrict to the list only. |
+
+Key facts that trip people up:
+- **Don't `/24`-aggregate to save rules** if the block contains hosts you don't
+  control — that authorizes them. Keep exact `/32`s and use WAF (ALB) instead.
+- **Prefix lists count `max_entries`, not current entries**, against the SG quota,
+  and in ALB mode the list is referenced twice (80 + 443) = 2× — which is exactly
+  why WAF (no SG-quota impact) is preferred whenever an ALB is in front.
+- WAF adds a small cost (~$5/mo per WebACL + ~$1/mo per rule + request charges).
+
 ## 4. Tear down
 
 ```bash
