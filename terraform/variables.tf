@@ -93,6 +93,17 @@ variable "http_prefix_list_max_entries" {
   }
 }
 
+variable "web_waf_allow_cidrs" {
+  description = "Source CIDRs allowed to reach the ALB, enforced by an AWS WAF IPSet + WebACL (ALB mode only). Purpose-built for LARGE exact-IP allow-lists: an IPSet holds up to 10,000 CIDRs and does NOT consume the security-group rules-per-SG quota (unlike http_prefix_list_cidrs). Each entry MUST be CIDR notation — a single host is x.x.x.x/32. Empty => no WAF is created. When set, keep http_cidrs open ('[\"0.0.0.0/0\"]') so the ALB security group does not block before WAF filters, and do NOT also set http_prefix_list_cidrs."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for c in var.web_waf_allow_cidrs : can(cidrhost(c, 0))])
+    error_message = "every entry in web_waf_allow_cidrs must be CIDR notation (e.g. \"203.0.113.4/32\")."
+  }
+}
+
 # --- HTTPS via ALB (optional) ----------------------------------------------
 # Mirrors the lab-visualizer convention: import your (e.g. Squarespace-issued)
 # cert into ACM out-of-band and pass its ARN. The ALB + HTTPS listener are

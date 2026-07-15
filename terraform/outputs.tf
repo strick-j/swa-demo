@@ -52,6 +52,11 @@ output "web_prefix_list_id" {
   value       = local.http_prefix_list_enabled ? aws_ec2_managed_prefix_list.web[0].id : ""
 }
 
+output "web_waf_web_acl_arn" {
+  description = "ARN of the ALB WAF WebACL (empty when web_waf_allow_cidrs is unset or no ALB)."
+  value       = local.waf_enabled ? aws_wafv2_web_acl.web[0].arn : ""
+}
+
 output "host_role_arn" {
   description = "ARN of the target host IAM role (used for S3 read by the minikube host)."
   value       = aws_iam_role.host.arn
