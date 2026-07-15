@@ -47,6 +47,11 @@ output "host_role_name" {
   value       = aws_iam_role.host.name
 }
 
+output "web_prefix_list_id" {
+  description = "ID of the web-demo managed prefix list (empty when http_prefix_list_cidrs is unset)."
+  value       = local.http_prefix_list_enabled ? aws_ec2_managed_prefix_list.web[0].id : ""
+}
+
 output "host_role_arn" {
   description = "ARN of the target host IAM role (used for S3 read by the minikube host)."
   value       = aws_iam_role.host.arn

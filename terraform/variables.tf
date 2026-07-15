@@ -61,13 +61,35 @@ variable "ssh_cidrs" {
 }
 
 variable "http_cidrs" {
-  description = "CIDRs allowed to reach the web demo: the NodePort and the ALB (80/443). Broaden this for viewers/audiences."
+  description = "CIDRs allowed to reach the web demo: the NodePort and the ALB (80/443). Broaden this for viewers/audiences. Set to [] to serve the demo ONLY via http_prefix_list_cidrs."
   type        = list(string)
   default     = ["0.0.0.0/0"]
 
   validation {
     condition     = alltrue([for c in var.http_cidrs : can(cidrhost(c, 0))])
     error_message = "every entry in http_cidrs must be a valid CIDR block."
+  }
+}
+
+variable "http_prefix_list_cidrs" {
+  description = "CIDRs to place in a customer-managed prefix list for web-demo access (NodePort in no-ALB mode; ALB 80/443 in ALB mode). Use this instead of listing many CIDRs in http_cidrs — a single SG rule references the list, avoiding the rules-per-SG quota. Empty => no prefix list is created. To restrict the demo to ONLY these CIDRs, also set http_cidrs = []."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for c in var.http_prefix_list_cidrs : can(cidrhost(c, 0))])
+    error_message = "every entry in http_prefix_list_cidrs must be a valid CIDR block (e.g. \"203.0.113.0/24\")."
+  }
+}
+
+variable "http_prefix_list_max_entries" {
+  description = "Ceiling on the web-demo managed prefix list size. AWS counts this ceiling (NOT the current entry count) against the security group's rules-per-SG quota, so keep it close to your real list size. The value actually used is max(this, number of entries in http_prefix_list_cidrs), so it never drops below the live count."
+  type        = number
+  default     = 50
+
+  validation {
+    condition     = var.http_prefix_list_max_entries >= 1
+    error_message = "http_prefix_list_max_entries must be at least 1."
   }
 }
 
