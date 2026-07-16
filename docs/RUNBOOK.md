@@ -280,6 +280,30 @@ setting it**, exactly like the per-version `swa-images` prefix. Then the
 `/home/ec2-user/cp-installer/`; the install itself stays manual (run it from
 there). Leave `CP_INSTALLER_S3_URI` empty to skip both the grant and the sync.
 
+**Installing the CP (manual — follow the CyberArk docs).** The automation only
+*stages* the zip; installation is not automated. Follow the official CyberArk
+**Credential Provider install guide** for Linux (docs.cyberark.com →
+*Credential Providers* → *Install the Credential Provider* — match the guide to
+your installed version, e.g. v14.2.6), which walks through roughly:
+
+1. **Unzip** the installer on the host and `cd` into it:
+   ```bash
+   cd /home/ec2-user/cp-installer && unzip -o AAM-RHELinux-Intel64-Rls-v14.2.6.zip
+   ```
+2. **Create the parameters file** — copy the sample `aimparms` and edit it
+   (`AcceptCyberArkEULA=Yes`, `LicensedProducts`, install location, etc.), then
+   place it where the RPM expects it (typically `/var/tmp/aimparms`).
+3. **Install the RPM**: `sudo rpm -ihv CARKaim-*.rpm` (it reads `aimparms`).
+4. **Provision the provider to the Vault** — create the provider user's
+   credential file / run the provisioning per the docs, then confirm the
+   `aimprv` service is enabled and running (`systemctl status aimprv`).
+5. Confirm the SDK artifacts exist (default `/opt/CARKaim/sdk/` —
+   `javapasswordsdk.jar` + `libjavapasswordsdk.so`) so `make cp-bridge-install`
+   can find them.
+
+Exact filenames, parameter keys, and provisioning steps are version-specific —
+**the CyberArk docs are authoritative**; the above is only an orientation.
+
 **Step 1 — `.env`.** Set the host build vars and the CP object coordinates. The
 Safe/Object values **default to the CCP demo's** — leave them empty to reuse the
 same objects, or set them to point the CP elsewhere:
