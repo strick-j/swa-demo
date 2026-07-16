@@ -148,7 +148,10 @@ swa: ## Bridge authn_id to the target + Helm-install SWA server + agent there
 # ---------------------------------------------------------------------------
 # Phase 4 — Demo webapp
 # ---------------------------------------------------------------------------
-.PHONY: stage ccp-cert cp-installer-fetch cp-bridge-install cp-bridge-status cp-app-hash webapp-build webapp-test webapp-deploy
+.PHONY: stage ccp-cert cp-installer-fetch cp-bridge-install cp-bridge-status cp-cache-refresh cp-app-hash webapp-build webapp-test webapp-deploy
+
+cp-cache-refresh: ## (Target) force the CP to refresh its cache — restart aimprv + show status
+	bash scripts/host-exec.sh "sudo systemctl restart aimprv && systemctl --no-pager --lines=8 status aimprv"
 
 cp-installer-fetch: ## (Target) sync ONLY the CP (AAM) installer from S3 to the host — no full configure
 	$(ENVSH); $(PICK_ANSIBLE); "$$AP" -i $(INVENTORY) $(ANSIBLE_DIR)/site.yml --tags cp-installer \

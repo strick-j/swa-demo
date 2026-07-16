@@ -354,6 +354,9 @@ scripts/host-exec.sh "systemctl --no-pager status cp-bridge | head; curl -s loca
 scripts/host-exec.sh "kubectl -n swa-demo exec deploy/swa-demo-webapp -- sh -c 'wget -qO- --post-data= http://host.minikube.internal:8890/healthz'"
 # tail the caller/CP errors
 scripts/host-exec.sh "journalctl -u cp-bridge --no-pager -n 50"
+# force the CP to refresh its cache (after changing app hash/path/Safe perms in
+# PVWA, or a Vault password rotation) — restarts the provider so it refetches now
+make cp-cache-refresh
 ```
 
 ## Restricting inbound web access (large IP allow-lists)
