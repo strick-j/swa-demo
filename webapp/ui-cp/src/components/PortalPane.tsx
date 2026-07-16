@@ -102,6 +102,7 @@ const ps = {
     flexDirection: "column" as const,
     gap: 12,
     maxWidth: 470,
+    flexShrink: 0 as const,
   },
   h1: {
     fontSize: "clamp(1.9rem, 1.2rem + 2vw, 2.7rem)",
@@ -122,6 +123,7 @@ const ps = {
     flexDirection: "column" as const,
     gap: 10,
     maxWidth: 470,
+    flexShrink: 0 as const,
   },
   ucList: { display: "flex", flexDirection: "column" as const, gap: 8 },
   ucBtn: {
@@ -155,7 +157,12 @@ const ps = {
     marginTop: -2,
     maxWidth: 470,
   },
-  result: { minHeight: 60, maxWidth: 470 },
+  // flexShrink:0 is essential: the body is a flex-column scroll container, and
+  // when a run's result overflows, the flex algorithm would otherwise compress
+  // this box below its content height — the manifest + evidence card then spill
+  // past the trailing spacer and land flush against the pane bottom. Keeping the
+  // content children at natural height makes the container scroll instead.
+  result: { minHeight: 60, maxWidth: 470, flexShrink: 0 as const },
   empty: {
     display: "flex",
     alignItems: "center",
