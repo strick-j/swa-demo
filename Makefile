@@ -148,12 +148,15 @@ swa: ## Bridge authn_id to the target + Helm-install SWA server + agent there
 # ---------------------------------------------------------------------------
 # Phase 4 — Demo webapp
 # ---------------------------------------------------------------------------
-.PHONY: stage ccp-cert cp-installer-fetch cp-bridge-install cp-app-hash webapp-build webapp-test webapp-deploy
+.PHONY: stage ccp-cert cp-installer-fetch cp-bridge-install cp-bridge-status cp-app-hash webapp-build webapp-test webapp-deploy
 
 cp-installer-fetch: ## (Target) sync ONLY the CP (AAM) installer from S3 to the host — no full configure
 	$(ENVSH); $(PICK_ANSIBLE); "$$AP" -i $(INVENTORY) $(ANSIBLE_DIR)/site.yml --tags cp-installer \
 	  -e cp_installer_s3_uri="$$CP_INSTALLER_S3_URI" \
 	  -e aws_region="$$AWS_REGION"
+
+cp-bridge-status: ## (Target) show the cp-bridge systemd status + /healthz
+	bash scripts/host-exec.sh "systemctl --no-pager --lines=8 status cp-bridge || true; echo; curl -s localhost:8890/healthz && echo"
 
 stage: ## (Target host) rsync the project source to ~/swa-demo (no image/chart sync)
 	$(ENVSH); $(PICK_ANSIBLE); "$$AP" -i $(INVENTORY) $(ANSIBLE_DIR)/site.yml --tags swa \
