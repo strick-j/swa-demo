@@ -1,0 +1,60 @@
+---
+# Sync the CyberArk Credential Provider (AAM) installer zip from S3 to the host so
+# a host rebuild doesn't lose it (that is exactly how it went missing). The
+# install is run manually from cp_installer_local_dir — this role only stages the
+# artifact. Relies on AWS CLI v2 already installed by the swa_images role, which
+# runs earlier in site.yml. Skipped entirely when cp_installer_s3_uri is not set.
+
+- name: Skip CP installer sync when no S3 URI is configured
+  ansible.builtin.debug:
+    msg: "cp_installer_s3_uri not set; skipping CP installer sync (configure CP_INSTALLER_S3_URI)."
+  when: cp_installer_s3_uri | default('') | length == 0
+
+- name: Sync CyberArk Credential Provider (AAM) installer from S3
+  when: cp_installer_s3_uri | default('') | length > 0
+  block:
+    - name: Ensure the AWS CLI is present (installed by the swa_images role)
+      ansible.builtin.stat:
+        path: /usr/local/bin/aws
+      register: cp_aws_cli
+
+    - name: Fail if the AWS CLI is missing
+      ansible.builtin.fail:
+        msg: >-
+          aws CLI not found at /usr/local/bin/aws — run the full site.yml
+          (the swa_images role installs it) before running the cp-installer tag
+          on its own.
+      when: not cp_aws_cli.stat.exists
+
+    - name: Ensure the CP installer directory exists
+      ansible.builtin.file:
+        path: "{{ cp_installer_local_dir }}"
+        state: directory
+        owner: "{{ minikube_user }}"
+        group: "{{ minikube_user }}"
+        mode: "0755"
+
+    - name: Sync CP installer from S3 (instance-profile auth)
+      ansible.builtin.command: >-
+        /usr/local/bin/aws s3 sync {{ cp_installer_s3_uri }} {{ cp_installer_local_dir }}
+        --exclude "*" --include "*.zip"
+      environment:
+        AWS_DEFAULT_REGION: "{{ aws_region }}"
+      become_user: "{{ minikube_user }}"
+      register: cp_sync
+      changed_when: "'download:' in cp_sync.stdout"
+
+    - name: Find the synced installer zip(s)
+      ansible.builtin.find:
+        paths: "{{ cp_installer_local_dir }}"
+        patterns: "*.zip"
+      register: cp_zips
+
+    - name: Fail if no installer zip was synced
+      ansible.builtin.fail:
+        msg: "No *.zip found under {{ cp_installer_s3_uri }} — upload the AAM installer (e.g. AAM-RHELinux-Intel64-Rls-vX.Y.Z.zip) there."
+      when: cp_zips.matched | int == 0
+
+    - name: Report the CP installer(s) present on the host
+      ansible.builtin.debug:
+        msg: "CP installer(s) in {{ cp_installer_local_dir }}: {{ cp_zips.files | map(attribute='path') | map('basename') | list }}"

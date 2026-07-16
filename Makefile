@@ -96,6 +96,7 @@ tf-destroy: ## Tear down all AWS infra
 configure: ## Run Ansible on the TARGET: minikube + load images (S3) + vendor charts
 	$(ENVSH); $(PICK_ANSIBLE); "$$AP" -i $(INVENTORY) $(ANSIBLE_DIR)/site.yml \
 	  -e images_s3_uri="$$SWA_IMAGES_S3_URI" \
+	  -e cp_installer_s3_uri="$$CP_INSTALLER_S3_URI" \
 	  -e aws_region="$$AWS_REGION"
 
 # ---------------------------------------------------------------------------
@@ -151,6 +152,7 @@ swa: ## Bridge authn_id to the target + Helm-install SWA server + agent there
 stage: ## (Target host) rsync the project source to ~/swa-demo (no image/chart sync)
 	$(ENVSH); $(PICK_ANSIBLE); "$$AP" -i $(INVENTORY) $(ANSIBLE_DIR)/site.yml --tags swa \
 	  -e images_s3_uri="$$SWA_IMAGES_S3_URI" \
+	  -e cp_installer_s3_uri="$$CP_INSTALLER_S3_URI" \
 	  -e aws_region="$$AWS_REGION"
 
 ccp-cert: stage ## (Target) generate the CCP client cert + store Secret ccp-client-tls

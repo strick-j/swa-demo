@@ -164,3 +164,20 @@ variable "images_s3_uri" {
     error_message = "images_s3_uri must be empty or start with s3://."
   }
 }
+
+variable "cp_installer_s3_uri" {
+  description = <<-EOT
+    S3 URI prefix holding the CyberArk Credential Provider (AAM) installer zip,
+    e.g. s3://my-bucket/cp-installer. May be the SAME bucket as images_s3_uri with
+    a different prefix. The host role gets read-only access (GetObject + scoped
+    ListBucket) to this prefix, and the cp_installer ansible role syncs it to the
+    host. Leave empty to skip both the grant and the sync.
+  EOT
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.cp_installer_s3_uri == "" || startswith(var.cp_installer_s3_uri, "s3://")
+    error_message = "cp_installer_s3_uri must be empty or start with s3://."
+  }
+}

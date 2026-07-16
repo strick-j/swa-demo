@@ -27,3 +27,5 @@
       tags: [swa]
     - role: swa_tooling
       tags: [tooling]
+    - role: cp_installer
+      tags: [cp, cp-installer]

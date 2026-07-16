@@ -264,6 +264,22 @@ with the CyberArk `cyberark.aam` Ansible collection
 (<https://github.com/cyberark/ansible-security-automation-collection/blob/master/docs/aimprovider.md>);
 automation is optional for a one-off.
 
+**Staging the CP installer from S3.** A host rebuild wipes a manually-installed CP,
+so keep the AAM installer in S3 and let Ansible re-stage it on every `make configure`.
+Upload the installer to a **distinct prefix in the same bucket** as the images
+(`cp-installer/`, not `swa-images/`):
+```bash
+aws s3 cp AAM-RHELinux-Intel64-Rls-v14.2.6.zip s3://my-bucket/cp-installer/
+```
+Set `CP_INSTALLER_S3_URI` (+ `TF_VAR_cp_installer_s3_uri`) in `.env` to that prefix.
+Because it is a **new prefix**, the host role needs an S3 read grant for it —
+Terraform adds a scoped `${project}-cp-installer-s3-read` policy from
+`cp_installer_s3_uri`, so **re-run `terraform apply` (or `make tf-apply`) after
+setting it**, exactly like the per-version `swa-images` prefix. Then the
+`cp_installer` role (`make configure`) syncs the zip to
+`/home/ec2-user/cp-installer/`; the install itself stays manual (run it from
+there). Leave `CP_INSTALLER_S3_URI` empty to skip both the grant and the sync.
+
 **Step 1 — `.env`.** Set the host build vars and the CP object coordinates. The
 Safe/Object values **default to the CCP demo's** — leave them empty to reuse the
 same objects, or set them to point the CP elsewhere:
