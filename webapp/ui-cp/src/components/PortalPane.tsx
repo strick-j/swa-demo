@@ -93,9 +93,10 @@ const ps = {
     gap: 24,
   },
   // A non-shrinking flow child guarantees bottom breathing room: a flex-item
-  // scroll container clips its own padding-bottom, but a real child stays in the
-  // scroll range.
-  bottomPad: { height: 56, flexShrink: 0 as const },
+  // scroll container clips its own padding-bottom (in Chrome), so the spacer is
+  // the only reliable bottom margin once a run overflows the pane. 80px (grid
+  // --space-10) keeps the last evidence card off the bottom edge.
+  bottomPad: { height: 80, flexShrink: 0 as const },
   hero: {
     display: "flex",
     flexDirection: "column" as const,
