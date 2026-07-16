@@ -33,7 +33,7 @@ resource "aws_wafv2_ip_set" "web_allow" {
 resource "aws_wafv2_web_acl" "web" {
   count       = local.waf_enabled ? 1 : 0
   name        = "${var.project}-web-acl"
-  description = "Default-block; allow only source IPs in the web-allow IPSet"
+  description = "Default-block, allow only source IPs in the web-allow IPSet"
   scope       = "REGIONAL"
 
   default_action {
