@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { INK } from "../visualizations/common";
 import type { Provider, ScenarioKey } from "../engine/providers";
+import { LangSwitcher } from "./LangSwitcher";
 
 interface InspectorChromeProps {
   provider: Provider;
@@ -162,7 +163,10 @@ export function InspectorChrome({
             </span>
           </div>
         </div>
-        {controls}
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <LangSwitcher />
+          {controls}
+        </div>
       </header>
 
       <div style={ic.ctx}>
