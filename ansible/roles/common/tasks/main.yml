@@ -13,6 +13,26 @@
       - firewalld
     state: present
 
+# firewalld ships installed but unconfigured, and RHEL's systemd preset enables
+# it — so after a reboot it comes up with the default zone allowing ssh but NOT
+# the webapp NodePort. Loopback stays open (localhost:30080 works) while the ALB
+# hitting the host's private interface is dropped, so health checks fail and the
+# site 502s. Manage firewalld's state explicitly and open the NodePort so the AWS
+# security group is the single source of truth for who may reach it. Done before
+# Docker so Docker installs its iptables rules after firewalld is up.
+- name: Ensure firewalld is enabled and running
+  ansible.builtin.systemd:
+    name: firewalld
+    enabled: true
+    state: started
+
+- name: Open the webapp NodePort in firewalld
+  ansible.posix.firewalld:
+    port: "{{ webapp_nodeport | default(30080) }}/tcp"
+    permanent: true
+    immediate: true
+    state: enabled
+
 - name: Add Docker CE repository
   ansible.builtin.get_url:
     url: https://download.docker.com/linux/rhel/docker-ce.repo
