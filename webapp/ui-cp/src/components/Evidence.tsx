@@ -2,6 +2,7 @@
 // the per-scenario lead/body copy passed in from the CP model.
 import { ShieldCheck, ShieldAlert } from "lucide-react";
 import type { EvidenceItem } from "../engine/providers";
+import { t } from "../i18n";
 
 interface EvidenceProps {
   kind: "success" | "error";
@@ -62,7 +63,9 @@ export function Evidence({ kind, items }: EvidenceProps) {
       <div style={{ ...styles.evidenceHead, color: accent }}>
         <Icon size={15} />
         <span className="idira-eyebrow" style={{ color: accent }}>
-          {kind === "error" ? "Trust boundary" : "Trust evidence"}
+          {kind === "error"
+            ? t("chrome.evidence.title.error")
+            : t("chrome.evidence.title.success")}
         </span>
       </div>
       <div style={styles.evidenceList}>
