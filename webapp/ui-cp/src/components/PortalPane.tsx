@@ -16,6 +16,7 @@ import { Evidence } from "./Evidence";
 import { pmeta, type Provider, type ScenarioKey } from "../engine/providers";
 import type { EngineStatus } from "../engine/useResolveEngine";
 import type { DbRow, ProviderResult } from "../visualizations/common";
+import { t } from "../i18n";
 
 interface PortalPaneProps {
   provider: Provider;
@@ -361,7 +362,7 @@ export function PortalPane({
           <a
             href="/"
             style={ps.homeBtn}
-            title="Back to all demos"
+            title={t("chrome.portal.backToDemos")}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = "var(--surface-brand-tint)";
               e.currentTarget.style.color = "var(--idira-blue-750)";
@@ -374,7 +375,7 @@ export function PortalPane({
             }}
           >
             <ChevronLeft size={16} />
-            <span>All demos</span>
+            <span>{t("chrome.portal.allDemos")}</span>
           </a>
           <div style={ps.brand}>
             <img
@@ -400,7 +401,7 @@ export function PortalPane({
             alt=""
             style={{ height: 16, width: "auto" }}
           />
-          <span>Secured by Idira</span>
+          <span>{t("chrome.portal.securedBy")}</span>
         </div>
       </header>
 
@@ -416,7 +417,7 @@ export function PortalPane({
             className="idira-eyebrow"
             style={{ color: "var(--text-muted)" }}
           >
-            Use case
+            {t("chrome.portal.useCase")}
           </label>
           <div style={ps.ucList}>
             {provider.scenarioOrder.map((k) => {
@@ -452,17 +453,14 @@ export function PortalPane({
             iconLeft={!busy ? <KeyRound size={19} /> : undefined}
           >
             {busy
-              ? stageVerb || "Retrieving…"
+              ? stageVerb || t("chrome.portal.retrieving")
               : done || isError
-                ? "Retrieve again"
-                : "Retrieve credential"}
+                ? t("chrome.portal.retrieveAgain")
+                : t("chrome.portal.retrieve")}
           </Button>
           <div style={ps.formHint}>
             <Info size={13} style={{ flexShrink: 0, marginTop: 1 }} />
-            <span>
-              Watch the identity exchange unfold in the Idira Inspector on the
-              right.
-            </span>
+            <span>{t("chrome.portal.hint")}</span>
           </div>
         </div>
 
@@ -471,10 +469,7 @@ export function PortalPane({
           {status === "idle" && (
             <div style={ps.empty}>
               <ScanSearch size={22} style={{ opacity: 0.5 }} />
-              <span>
-                Run a use case to authenticate the caller and retrieve the
-                credential.
-              </span>
+              <span>{t("chrome.portal.idleHint")}</span>
             </div>
           )}
 
@@ -482,7 +477,8 @@ export function PortalPane({
             <div style={ps.empty}>
               <span style={ps.workingDot} />
               <span>
-                {stageVerb || "Working"} — this workload stores no credential…
+                {stageVerb || t("chrome.portal.working")}{" "}
+                {t("chrome.portal.workingTail")}
               </span>
             </div>
           )}
@@ -495,34 +491,36 @@ export function PortalPane({
                     size={18}
                     style={{ color: "var(--status-success)" }}
                   />
-                  Credential retrieved
+                  {t("chrome.portal.credentialRetrieved")}
                 </span>
                 <Badge tone="success" dot>
-                  {r.simulated ? "Simulated" : "Live"}
+                  {r.simulated
+                    ? t("chrome.portal.simulated")
+                    : t("chrome.portal.live")}
                 </Badge>
               </div>
               <div style={ps.manifest}>
-                <Row k="Application" v={r.appId} />
-                <Row k="Identity" v={r.identity} />
-                <Row k="Auth method" v={r.authMethod} />
-                <Row k="Secrets Manager host" v={r.conjurHost} />
-                <Row k="Variable" v={r.secretName} />
-                <Row k="Client certificate (CN)" v={r.certCn} />
-                <Row k="Caller fingerprint" v={r.appHash} />
+                <Row k={t("chrome.row.application")} v={r.appId} />
+                <Row k={t("chrome.row.identity")} v={r.identity} />
+                <Row k={t("chrome.row.authMethod")} v={r.authMethod} />
+                <Row k={t("chrome.row.secretsManagerHost")} v={r.conjurHost} />
+                <Row k={t("chrome.row.variable")} v={r.secretName} />
+                <Row k={t("chrome.row.clientCert")} v={r.certCn} />
+                <Row k={t("chrome.row.callerFingerprint")} v={r.appHash} />
                 <Row
-                  k="Caller · OS user"
+                  k={t("chrome.row.callerOsUser")}
                   v={[r.callerPath, r.osUser && `(${r.osUser})`]
                     .filter(Boolean)
                     .join(" ")}
                 />
-                <Row k="Safe" v={r.safe} />
-                <Row k="Object / query" v={r.query} />
-                <Row k="Returned account" v={r.account} />
-                <Row k="Address" v={r.address} />
-                <Row k="Virtual username" v={r.virtualUsername} />
-                <Row k="Active account" v={r.dualActive} />
+                <Row k={t("chrome.row.safe")} v={r.safe} />
+                <Row k={t("chrome.row.objectQuery")} v={r.query} />
+                <Row k={t("chrome.row.returnedAccount")} v={r.account} />
+                <Row k={t("chrome.row.address")} v={r.address} />
+                <Row k={t("chrome.row.virtualUsername")} v={r.virtualUsername} />
+                <Row k={t("chrome.row.activeAccount")} v={r.dualActive} />
               </div>
-              <Row k="Value (masked)" v={r.masked} token />
+              <Row k={t("chrome.row.valueMasked")} v={r.masked} token />
               <Evidence kind="success" items={meta.evidence} />
             </div>
           )}
@@ -535,16 +533,18 @@ export function PortalPane({
                     size={18}
                     style={{ color: "var(--status-success)" }}
                   />
-                  Identity verified · resource reached
+                  {t("chrome.portal.identityVerified")}
                 </span>
                 <Badge tone="success" dot>
-                  {r.simulated ? "Simulated" : "Live"}
+                  {r.simulated
+                    ? t("chrome.portal.simulated")
+                    : t("chrome.portal.live")}
                 </Badge>
               </div>
               <div style={ps.manifest}>
-                <Row k="SPIFFE ID" v={r.spiffeId} />
+                <Row k={t("chrome.row.spiffeId")} v={r.spiffeId} />
                 <Row
-                  k="SVID"
+                  k={t("chrome.row.svid")}
                   v={[r.jwtAlg, r.audience && `aud=${r.audience}`]
                     .filter(Boolean)
                     .join(" · ")}
@@ -564,7 +564,9 @@ export function PortalPane({
                     <span>{r?.errorCode || meta.label}</span>
                   </div>
                   <Tag tone="danger">
-                    {scenario === "denied" ? "authz deny" : "authn deny"}
+                    {scenario === "denied"
+                      ? t("chrome.tag.authzDeny")
+                      : t("chrome.tag.authnDeny")}
                   </Tag>
                 </div>
               </div>
@@ -587,10 +589,14 @@ export function PortalPane({
               {r?.spiffeId && (
                 <div style={ps.manifest}>
                   <Row
-                    k={scenario === "foreign" ? "Peer identity" : "SPIFFE ID"}
+                    k={
+                      scenario === "foreign"
+                        ? t("chrome.row.peerIdentity")
+                        : t("chrome.row.spiffeId")
+                    }
                     v={r.spiffeId}
                   />
-                  {r.issuer && <Row k="Issuer" v={r.issuer} />}
+                  {r.issuer && <Row k={t("chrome.row.issuer")} v={r.issuer} />}
                 </div>
               )}
               {r?.error && <p style={ps.errMsg}>{r.error}</p>}

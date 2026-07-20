@@ -1,6 +1,7 @@
 // AccessibilityHints -- skip-to-content link and global ESC-to-reset handler.
 // purpose: keyboard-first accessibility layer for the portal UI.
 import { useEffect, useCallback } from "react";
+import { t } from "../i18n";
 
 interface AccessibilityHintsProps {
   onReset: () => void;
@@ -29,7 +30,7 @@ export function AccessibilityHints({
 
   return (
     <a href={`#${targetId}`} style={styles.skipLink}>
-      Skip to content
+      {t("chrome.skipToContent")}
     </a>
   );
 }

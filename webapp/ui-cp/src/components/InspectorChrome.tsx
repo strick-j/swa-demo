@@ -13,6 +13,7 @@ import {
 import { INK } from "../visualizations/common";
 import type { Provider, ScenarioKey } from "../engine/providers";
 import { LangSwitcher } from "./LangSwitcher";
+import { t } from "../i18n";
 
 interface InspectorChromeProps {
   provider: Provider;
@@ -72,21 +73,21 @@ function PhaseIcon({
 function errorPhrase(scenario: ScenarioKey): string {
   switch (scenario) {
     case "invalid-hash":
-      return "Rejected · application hash unauthorized";
+      return t("chrome.error.invalid-hash");
     case "no-cert":
-      return "Rejected · no client certificate";
+      return t("chrome.error.no-cert");
     case "invalid":
-      return "Rejected · authentication failed";
+      return t("chrome.error.invalid");
     case "denied":
-      return "Denied · not authorized";
+      return t("chrome.error.denied");
     case "untrusted":
-      return "Denied · SPIFFE ID not allow-listed";
+      return t("chrome.error.untrusted");
     case "unknown":
-      return "Refused · no identity issued";
+      return t("chrome.error.unknown");
     case "foreign":
-      return "Rejected · foreign trust domain";
+      return t("chrome.error.foreign");
     default:
-      return "Rejected · retrieval failed";
+      return t("chrome.error.default");
   }
 }
 
@@ -106,18 +107,18 @@ export function InspectorChrome({
 
   const doneTxt =
     provider.id === "cp"
-      ? "Retrieved · secret hashed on host, never stored"
+      ? t("chrome.done.cp")
       : provider.id === "swa"
-        ? "Reached the database · authorized by SPIFFE ID"
+        ? t("chrome.done.swa")
         : provider.id === "conjur-jwt" || provider.id === "conjur-iam"
-          ? "Retrieved · scoped token, secret masked at the source"
-          : "Retrieved · credential masked at the source";
+          ? t("chrome.done.conjur")
+          : t("chrome.done.default");
 
   const phase =
     status === "idle"
-      ? { txt: "Click resolve to begin", tone: INK.dim }
+      ? { txt: t("chrome.status.idle"), tone: INK.dim }
       : status === "running"
-        ? { txt: `Retrieving · ${verb}`, tone: "#9DB4FF" }
+        ? { txt: t("chrome.status.running", { verb }), tone: "#9DB4FF" }
         : status === "done"
           ? { txt: doneTxt, tone: INK.ok }
           : { txt: errorPhrase(scenario), tone: INK.danger };
@@ -195,7 +196,7 @@ export function InspectorChrome({
               e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)";
             }}
           >
-            <RotateCcw style={{ width: 12, height: 12 }} /> Reset
+            <RotateCcw style={{ width: 12, height: 12 }} /> {t("chrome.reset")}
           </button>
         )}
       </footer>

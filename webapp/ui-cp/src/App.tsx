@@ -14,6 +14,7 @@ import { TraceInspector } from "./visualizations/TraceInspector";
 import { useResolveEngine } from "./engine/useResolveEngine";
 import { providerFromPath, pmeta, type ScenarioKey } from "./engine/providers";
 import * as paceQueue from "./engine/paceQueue";
+import { t } from "./i18n";
 
 type ViewMode = "topology" | "layers" | "trace";
 type PaceMode = "off" | "fast" | "medium" | "slow";
@@ -21,26 +22,26 @@ type PaceMode = "off" | "fast" | "medium" | "slow";
 const VIEW_OPTIONS: { v: ViewMode; label: string; icon: React.ReactNode }[] = [
   {
     v: "topology",
-    label: "Topo",
+    label: t("chrome.view.topology"),
     icon: <GitFork style={{ width: 13, height: 13 }} />,
   },
   {
     v: "layers",
-    label: "Layers",
+    label: t("chrome.view.layers"),
     icon: <Layers style={{ width: 13, height: 13 }} />,
   },
   {
     v: "trace",
-    label: "Trace",
+    label: t("chrome.view.trace"),
     icon: <Terminal style={{ width: 13, height: 13 }} />,
   },
 ];
 
 const PACE_OPTIONS: { v: PaceMode; label: string }[] = [
-  { v: "off", label: "Off" },
-  { v: "fast", label: "Fast" },
-  { v: "medium", label: "Med" },
-  { v: "slow", label: "Slow" },
+  { v: "off", label: t("chrome.pace.off") },
+  { v: "fast", label: t("chrome.pace.fast") },
+  { v: "medium", label: t("chrome.pace.medium") },
+  { v: "slow", label: t("chrome.pace.slow") },
 ];
 
 // Provider is fixed per page (chosen by URL + hash); resolve it once.
@@ -89,7 +90,7 @@ export function App() {
           value={pace}
           onChange={setPace}
           options={PACE_OPTIONS}
-          label="Pace"
+          label={t("chrome.pace.label")}
         />
       </div>
     ),

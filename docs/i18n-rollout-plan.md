@@ -13,8 +13,9 @@ patterns already in `internal/i18n` (server) and `ui-cp/src/i18n` (SPA); see
 - ✅ **Phase 2** — in-SPA EN/ES/PT switcher (`components/LangSwitcher.tsx`) wired into the inspector chrome header; writes the shared `lang` cookie + reloads. The committed SPA bundle (`internal/ui/cpapp/`) was rebuilt via `pnpm build` (frozen lockfile) and re-embedded. Confirmed the pnpm artifact hash is reproducible.
 - ✅ **Phase 3** — all **PortalPane** provider content localized across the 4 provider definitions (CP, CCP, SWA, Conjur jwt+iam): `brand.sub`, `heroTitle`, `heroLede`, and every scenario's `label`/`tag`/`desc`/`evidence` (14 scenarios). SPA catalogs grew 12 → **159 keys**, exact parity across en/es-419/pt-BR (drafted via parallel subagents, validated: 0 missing/extra, placeholder + `**bold**` integrity OK). A new `emph()` helper renders `**bold**` from translated strings into `<strong>` so hero ledes keep emphasis without per-locale JSX.
   - **Scope note**: Phase 3 covers the PortalPane (the "brief" users read). The InspectorChrome + visualization content in `providers.tsx` — `subtitle`, `ctx` labels, `stages`, `nodes[]`, `layers[]`, and the remaining `buildTrace` `comment` lines (CP's trace is already localized from the PoC) — moves to **Phase 4**, localized together with `components/` + `visualizations/`.
-- ⬜ **Phase 4** — inspector chrome + visualizations (subtitle, ctx, stages, nodes, layers, trace comments) + shared `components/`.
-- ⬜ **Phases 5–6** — translation sweep close-out + final verification.
+- ✅ **Phase 4** — fixed component/App chrome under a `chrome.*` namespace: App view/pace toggles, InspectorChrome status/error/reset, Evidence headers, AccessibilityHints skip link, and all PortalPane buttons/labels/result-rows (incl. the Retrieve / Retrieve-again button). SPA catalogs grew 159 → **221 keys**, exact parity. Bundle rebuilt + re-embedded.
+- 🟡 **Phase 5 (in progress)** — the topology/layers/trace **view contents**: `providers.tsx` internals (`subtitle`, `ctx`, `stages`, `nodes[]`, `layers[]`, remaining `buildTrace` comments) + the visualization components' boundary prose (`TopologyInspector`, `LayersInspector`). This is the diagram narrative the views render.
+- ⬜ **Phase 6** — final verification sweep.
 
 ## Decisions (locked)
 
