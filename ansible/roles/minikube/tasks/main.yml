@@ -100,13 +100,30 @@
       [Install]
       WantedBy=multi-user.target
 
+# The bridge command lives in a wrapper script rather than inline in ExecStart:
+# systemd would otherwise try to expand $MK / $(...) itself before the shell runs,
+# and the one-liner exceeds the yaml line-length limit. The script re-resolves the
+# minikube IP (which can change across restarts) on every start; PORT comes from
+# the unit's Environment.
+- name: Install webapp NodePort bridge script
+  ansible.builtin.copy:
+    dest: /usr/local/bin/swa-webapp-forward
+    mode: "0755"
+    content: |
+      #!/bin/sh
+      # Forward host:PORT -> minikube:PORT (docker-driver NodePort lives on the
+      # minikube container IP, not the host interface). PORT is set by the unit.
+      set -eu
+      MK="$(/usr/local/bin/minikube ip)"
+      exec /usr/bin/socat "TCP-LISTEN:${PORT},fork,reuseaddr" "TCP:${MK}:${PORT}"
+
 - name: Install webapp NodePort bridge unit
   ansible.builtin.copy:
     dest: /etc/systemd/system/swa-webapp-forward.service
     mode: "0644"
     content: |
       [Unit]
-      Description=Forward host:{{ webapp_nodeport | default(30080) }} -> minikube NodePort (webapp bridge)
+      Description=Forward host NodePort to minikube (webapp bridge)
       After=swa-minikube.service
       Requires=swa-minikube.service
 
@@ -114,7 +131,8 @@
       User={{ minikube_user }}
       Environment=HOME=/home/{{ minikube_user }}
       Environment=MINIKUBE_HOME=/home/{{ minikube_user }}/.minikube
-      ExecStart=/bin/sh -c 'MK="$(/usr/local/bin/minikube ip)"; exec /usr/bin/socat TCP-LISTEN:{{ webapp_nodeport | default(30080) }},fork,reuseaddr TCP:"$MK":{{ webapp_nodeport | default(30080) }}'
+      Environment=PORT={{ webapp_nodeport | default(30080) }}
+      ExecStart=/usr/local/bin/swa-webapp-forward
       Restart=always
       RestartSec=5
 
