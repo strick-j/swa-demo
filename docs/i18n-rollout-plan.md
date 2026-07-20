@@ -10,7 +10,8 @@ patterns already in `internal/i18n` (server) and `ui-cp/src/i18n` (SPA); see
 - ✅ **Phase 0** — parity guardrails landed (`internal/i18n/i18n_test.go`, `ui-cp/src/i18n/parity.test.ts`). Both made **active** (not skipped): server catalog reaches parity within Phase 1, and the SPA catalog was already at parity.
 - ✅ **Phase 1** — full landing page localized (en/es-419/pt-BR). 74 server keys, exact parity; `go build`, `go test ./...`, `go vet`, and `npm test` (16 tests) all green.
 - **Deviation**: no registry change was needed — `retrieve.FamilyInfo.Family` and `ModeInfo.Mode` are already stable identifiers, so the template keys off `.Family`/`.Mode` via `printf` directly. es-419/pt-BR copy drafted in this pass (Phase 5 now covers only the SPA strings from Phases 3–4), pending owner review.
-- ⬜ **Phases 2–6** — not started.
+- ✅ **Phase 2** — in-SPA EN/ES/PT switcher (`components/LangSwitcher.tsx`) wired into the inspector chrome header; writes the shared `lang` cookie + reloads. The committed SPA bundle (`internal/ui/cpapp/`) was rebuilt via `pnpm build` (frozen lockfile) and re-embedded. Confirmed the pnpm artifact hash is reproducible.
+- ⬜ **Phases 3–6** — not started.
 
 ## Decisions (locked)
 
