@@ -188,25 +188,23 @@
     </div>
 
     <div class="strip">
-      <div class="step"><span class="num">01</span><h4>Prove identity</h4><p>App hash, client cert, SPIFFE SVID, JWT, a native cloud identity (AWS / Azure / GCP), and more — the workload proves who it is.</p></div>
-      <div class="step"><span class="num">02</span><h4>Get a scoped token</h4><p>A short-lived access token, limited to exactly the secrets this identity is allowed to read.</p></div>
-      <div class="step"><span class="num">03</span><h4>Retrieve, never store</h4><p>The secret is masked at the source and used in memory for one request — nothing lands on disk.</p></div>
+      <div class="step"><span class="num">01</span><h4>{{ t .Locale "landing.strip.step1.title" }}</h4><p>{{ t .Locale "landing.strip.step1.body" }}</p></div>
+      <div class="step"><span class="num">02</span><h4>{{ t .Locale "landing.strip.step2.title" }}</h4><p>{{ t .Locale "landing.strip.step2.body" }}</p></div>
+      <div class="step"><span class="num">03</span><h4>{{ t .Locale "landing.strip.step3.title" }}</h4><p>{{ t .Locale "landing.strip.step3.body" }}</p></div>
     </div>
   </header>
 
   <!-- THE PROBLEM -->
   <section class="block wrap" id="problem">
-    <p class="eyebrow">The problem</p>
-    <h2>Secrets sprawl faster than you can rotate them.</h2>
+    <p class="eyebrow">{{ t .Locale "landing.problem.eyebrow" }}</p>
+    <h2>{{ t .Locale "landing.problem.title" }}</h2>
     <p class="intro">
-      API keys in config, passwords in environment variables, tokens copied into CI and baked into images.
-      Every one is a standing target, every rotation risks an outage, and every kind of application solves it
-      a little differently. The result is credential sprawl with no consistent notion of <em>who</em> is asking.
+      {{ tHTML .Locale "landing.problem.intro_html" }}
     </p>
     <div class="cols-3">
-      <div class="pcard"><div class="k">Static</div><h3>Keys everywhere</h3><p>Long-lived credentials scattered across services, files, and pipelines — each a copy that can leak and never expires on its own.</p></div>
-      <div class="pcard"><div class="k">Fragile</div><h3>Rotation = downtime</h3><p>Rotating a shared secret means coordinating every consumer. So it doesn't happen, and the blast radius grows.</p></div>
-      <div class="pcard"><div class="k">Inconsistent</div><h3>No shared identity</h3><p>A VM app, a container, and a lambda each authenticate differently. Without a common identity, policy is guesswork.</p></div>
+      <div class="pcard"><div class="k">{{ t .Locale "landing.problem.card1.k" }}</div><h3>{{ t .Locale "landing.problem.card1.title" }}</h3><p>{{ t .Locale "landing.problem.card1.body" }}</p></div>
+      <div class="pcard"><div class="k">{{ t .Locale "landing.problem.card2.k" }}</div><h3>{{ t .Locale "landing.problem.card2.title" }}</h3><p>{{ t .Locale "landing.problem.card2.body" }}</p></div>
+      <div class="pcard"><div class="k">{{ t .Locale "landing.problem.card3.k" }}</div><h3>{{ t .Locale "landing.problem.card3.title" }}</h3><p>{{ t .Locale "landing.problem.card3.body" }}</p></div>
     </div>
   </section>
 
@@ -214,30 +212,29 @@
 
   <!-- THE VARIETY -->
   <section class="block wrap" id="variety">
-    <p class="eyebrow">The variety</p>
-    <h2>Every workload is different. The answer has to fit each one.</h2>
+    <p class="eyebrow">{{ t .Locale "landing.variety.eyebrow" }}</p>
+    <h2>{{ t .Locale "landing.variety.title" }}</h2>
     <p class="intro">
-      There is no single integration point across a real estate that spans decades. Idira meets each workload
-      where it lives — from a WebSphere app on a VM to a serverless function with no host to install anything on.
+      {{ t .Locale "landing.variety.intro" }}
     </p>
     <div class="cols-3 variety">
       <div class="vcard">
-        <span class="tag">Traditional</span>
-        <h3>Established apps</h3>
-        <span class="who">Java &middot; .NET &middot; WebSphere &middot; on VMs &amp; app servers</span>
-        <p>No rewrite required. An agent on the host serves cached, rotated credentials locally, or the app makes a mutually-authenticated REST call to a central provider.</p>
+        <span class="tag">{{ t .Locale "landing.variety.card1.tag" }}</span>
+        <h3>{{ t .Locale "landing.variety.card1.title" }}</h3>
+        <span class="who">{{ t .Locale "landing.variety.card1.who" }}</span>
+        <p>{{ t .Locale "landing.variety.card1.body" }}</p>
       </div>
       <div class="vcard">
-        <span class="tag">Modern</span>
-        <h3>Cloud-native</h3>
-        <span class="who">Containers &middot; Kubernetes &middot; microservices</span>
-        <p>The platform vouches for the pod. A cryptographic SPIFFE identity is attested and issued automatically, and the gateway authorizes by identity — no stored credential at all.</p>
+        <span class="tag">{{ t .Locale "landing.variety.card2.tag" }}</span>
+        <h3>{{ t .Locale "landing.variety.card2.title" }}</h3>
+        <span class="who">{{ t .Locale "landing.variety.card2.who" }}</span>
+        <p>{{ t .Locale "landing.variety.card2.body" }}</p>
       </div>
       <div class="vcard">
-        <span class="tag">Agentless</span>
-        <h3>Ephemeral &amp; serverless</h3>
-        <span class="who">Functions &middot; serverless &middot; cloud VMs</span>
-        <p>Nothing to install. Use the identity the platform already issues — an open-standard JWT, or a native cloud identity (AWS STS, Azure, GCP, Kubernetes) — and exchange it for a short-lived, scoped secret.</p>
+        <span class="tag">{{ t .Locale "landing.variety.card3.tag" }}</span>
+        <h3>{{ t .Locale "landing.variety.card3.title" }}</h3>
+        <span class="who">{{ t .Locale "landing.variety.card3.who" }}</span>
+        <p>{{ t .Locale "landing.variety.card3.body" }}</p>
       </div>
     </div>
   </section>
@@ -246,35 +243,32 @@
 
   <!-- THE SOLUTIONS -->
   <section class="block wrap" id="solutions">
-    <p class="eyebrow">Choose your adventure</p>
-    <h2>Four paths. One principle: identity, not secrets.</h2>
+    <p class="eyebrow">{{ t .Locale "landing.solutions.eyebrow" }}</p>
+    <h2>{{ t .Locale "landing.solutions.title" }}</h2>
     <p class="intro">
-      Each demo runs the real flow end to end and shows it in the Idira Inspector — topology, layers of defense,
-      and a live trace of every call. New here? Start with <a href="/swa" style="color:var(--blue-0);font-weight:600;">Secure Workload Access</a>.
-      These are a few of the paths — the platform also authenticates via OIDC, Azure, GCP, Kubernetes, LDAP, API keys,
-      mTLS, and combinations of them.
+      {{ tHTML .Locale "landing.solutions.intro_html" }}
     </p>
 
     {{range .Families}}
     <div class="family">
       <div class="fh">
-        <h3>{{.Title}}</h3>
-        <span class="ftag">{{.Tagline}}</span>
+        <h3>{{ t $.Locale (printf "landing.family.%s.title" .Family) }}</h3>
+        <span class="ftag">{{ t $.Locale (printf "landing.family.%s.tagline" .Family) }}</span>
       </div>
       <div class="modes">
         {{range .Modes}}
         {{if .Available}}
         <a class="mcard" href="{{.Href}}">
-          <div class="mtop"><span class="mlabel">{{.Label}}</span><span class="chip live">live</span></div>
-          <div class="mauth">{{.Auth}}</div>
-          <p class="mdetail">{{.Summary}}</p>
-          <span class="explore">Explore &rarr;</span>
+          <div class="mtop"><span class="mlabel">{{ t $.Locale (printf "landing.mode.%s.label" .Mode) }}</span><span class="chip live">{{ t $.Locale "landing.mode.chip.live" }}</span></div>
+          <div class="mauth">{{ t $.Locale (printf "landing.mode.%s.auth" .Mode) }}</div>
+          <p class="mdetail">{{ t $.Locale (printf "landing.mode.%s.summary" .Mode) }}</p>
+          <span class="explore">{{ t $.Locale "landing.mode.explore" }}</span>
         </a>
         {{else}}
         <div class="mcard">
-          <div class="mtop"><span class="mlabel">{{.Label}}</span><span class="chip soon">soon</span></div>
-          <div class="mauth">{{.Auth}}</div>
-          <p class="mdetail">{{.Summary}}</p>
+          <div class="mtop"><span class="mlabel">{{ t $.Locale (printf "landing.mode.%s.label" .Mode) }}</span><span class="chip soon">{{ t $.Locale "landing.mode.chip.soon" }}</span></div>
+          <div class="mauth">{{ t $.Locale (printf "landing.mode.%s.auth" .Mode) }}</div>
+          <p class="mdetail">{{ t $.Locale (printf "landing.mode.%s.summary" .Mode) }}</p>
         </div>
         {{end}}
         {{end}}
@@ -286,10 +280,10 @@
   <!-- TRUST -->
   <section class="block wrap" style="padding-top: 0;">
     <div class="trust">
-      <span>No stored secrets</span>
-      <span>Short-lived identity</span>
-      <span>Least privilege by policy</span>
-      <span>Masked at the source</span>
+      <span>{{ t .Locale "landing.trust.item1" }}</span>
+      <span>{{ t .Locale "landing.trust.item2" }}</span>
+      <span>{{ t .Locale "landing.trust.item3" }}</span>
+      <span>{{ t .Locale "landing.trust.item4" }}</span>
     </div>
   </section>
 
@@ -298,7 +292,7 @@
     <div class="frow">
       <div style="display:flex;align-items:center;gap:12px;">
         <img src="/cp/assets/idira-lockup-white.png" alt="Idira" />
-        <span>Secured by Idira &middot; Palo Alto Networks</span>
+        <span>{{ t .Locale "landing.footer.secured" }}</span>
       </div>
       <div>swa-demo &middot; <code>/api/catalog</code> &middot; <code>/healthz</code></div>
     </div>
