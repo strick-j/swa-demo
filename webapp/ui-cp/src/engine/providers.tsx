@@ -148,22 +148,24 @@ function emph(s: string): ReactNode {
 
 function CredentialBody({ state, result, scenario }: NodeArgs) {
   if (state !== "done") {
-    return (
-      <span style={dimNote}>secret masked at the source · never on disk</span>
-    );
+    return <span style={dimNote}>{t("chrome.cred.dimNote")}</span>;
   }
   const dual = scenario === "dual";
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <Kv
-        k={dual ? "Active account" : "Account"}
+        k={dual ? t("chrome.cred.activeAccount") : t("chrome.cred.account")}
         v={
           (dual ? result?.dualActive : result?.account) ||
           result?.account ||
           "—"
         }
       />
-      <Kv k="Value (masked)" v={result?.masked || "—"} vColor={INK.ok} />
+      <Kv
+        k={t("chrome.row.valueMasked")}
+        v={result?.masked || "—"}
+        vColor={INK.ok}
+      />
     </div>
   );
 }
@@ -315,16 +317,15 @@ const cpProvider: Provider = {
       stages: [0],
       doneAfter: 1,
       failsAt: [0],
-      tag: (s) => (s === "done" ? "invoked" : "caller"),
+      tag: (s) =>
+        s === "done" ? t("chrome.state.invoked") : t("chrome.state.caller"),
       body: ({ result }) => (
         <>
           <Kv
-            k="Calling application"
+            k={t("cp.node.app.kv")}
             v={result?.callerPath || "cp-caller.jar"}
           />
-          <span style={foot}>
-            the workload stores no password or client cert
-          </span>
+          <span style={foot}>{t("cp.node.app.foot")}</span>
         </>
       ),
     },
@@ -336,32 +337,31 @@ const cpProvider: Provider = {
       failsAt: [1, 2],
       tag: (s) =>
         s === "failed"
-          ? "authn deny"
+          ? t("chrome.tag.authnDeny")
           : s === "done"
-            ? "authenticated"
-            : "measuring",
+            ? t("chrome.state.authenticated")
+            : t("chrome.state.measuring"),
       body: ({ state, result }) =>
         state === "failed" ? (
           <span style={dangerNote}>
-            {result?.errorCode ? `${result.errorCode} · ` : ""}application hash
-            is not authorized
+            {t("cp.node.provider.danger", {
+              code: result?.errorCode ? `${result.errorCode} · ` : "",
+            })}
           </span>
         ) : (
           <>
             <div style={grid2}>
               <Kv
-                k="App fingerprint"
+                k={t("cp.node.provider.kvFingerprint")}
                 v={result?.appHash || "—"}
                 vColor={state === "done" ? INK.ok : INK.mono}
               />
               <Kv
-                k="OS user · path"
+                k={t("cp.node.provider.kvOsUser")}
                 v={result?.osUser || "hash · os-user · path"}
               />
             </div>
-            <span style={foot}>
-              authenticates the calling application by its characteristics
-            </span>
+            <span style={foot}>{t("cp.node.provider.foot")}</span>
           </>
         ),
     },
@@ -372,16 +372,22 @@ const cpProvider: Provider = {
       doneAfter: 4,
       failsAt: [3],
       tag: (s) =>
-        s === "failed" ? "authz deny" : s === "done" ? "authorized" : "",
+        s === "failed"
+          ? t("chrome.tag.authzDeny")
+          : s === "done"
+            ? t("chrome.state.authorized")
+            : "",
       body: ({ state, result }) =>
         state === "failed" ? (
           <span style={dangerNote}>
-            {result?.errorCode ? `${result.errorCode} · ` : ""}Application not
-            permitted for Safe {result?.safe || CP_CTX.safe}
+            {t("cp.node.vault.danger", {
+              code: result?.errorCode ? `${result.errorCode} · ` : "",
+              safe: result?.safe || CP_CTX.safe,
+            })}
           </span>
         ) : (
           <Kv
-            k="Safe"
+            k={t("cp.node.vault.kvSafe")}
             v={result?.safe || CP_CTX.safe}
             vColor={state === "done" ? INK.ok : INK.mono}
           />
@@ -393,7 +399,7 @@ const cpProvider: Provider = {
       stages: [4],
       doneAfter: 5,
       failsAt: [],
-      tag: (s) => (s === "done" ? "returned" : ""),
+      tag: (s) => (s === "done" ? t("chrome.state.returned") : ""),
       body: CredentialBody,
     },
   ],
@@ -401,43 +407,46 @@ const cpProvider: Provider = {
     {
       name: t("cp.layer.invoke.name"),
       Icon: Terminal,
-      pass: () => "host cp-bridge ran the registered Java caller",
-      reject: () => "cp-bridge could not run the caller",
-      idle: "run cp-caller.jar via the host bridge",
+      pass: () => t("cp.layer.invoke.pass"),
+      reject: () => t("cp.layer.invoke.reject"),
+      idle: t("cp.layer.invoke.idle"),
     },
     {
       name: t("cp.layer.hash.name"),
       Icon: Fingerprint,
       pass: ({ result }) =>
-        `fingerprint ${result?.appHash || "—"} · matched a registered Application`,
+        t("cp.layer.hash.pass", { appHash: result?.appHash || "—" }),
       reject: ({ result }) =>
-        `${result?.errorCode || "APPAP133E"} · application hash is not authorized`,
-      idle: "measure the calling application's hash",
+        t("cp.layer.hash.reject", { code: result?.errorCode || "APPAP133E" }),
+      idle: t("cp.layer.hash.idle"),
     },
     {
       name: t("cp.layer.osuser.name"),
       Icon: BadgeCheck,
       pass: ({ result }) =>
-        `os-user ${result?.osUser || "—"} + executable path matched`,
-      reject: () => "OS user / path did not match the Application",
-      idle: "verify OS user and executable path",
+        t("cp.layer.osuser.pass", { osUser: result?.osUser || "—" }),
+      reject: () => t("cp.layer.osuser.reject"),
+      idle: t("cp.layer.osuser.idle"),
     },
     {
       name: t("cp.layer.authz.name"),
       Icon: Lock,
       pass: ({ result }) =>
-        `Application authorized for Safe ${result?.safe || CP_CTX.safe}`,
+        t("cp.layer.authz.pass", { safe: result?.safe || CP_CTX.safe }),
       reject: ({ result }) =>
-        `${result?.errorCode || "APPAP"} · not permitted for Safe ${result?.safe || CP_CTX.safe}`,
-      idle: "authorize the Application for the Safe",
+        t("cp.layer.authz.reject", {
+          code: result?.errorCode || "APPAP",
+          safe: result?.safe || CP_CTX.safe,
+        }),
+      idle: t("cp.layer.authz.idle"),
     },
     {
       name: t("cp.layer.credential.name"),
       Icon: KeyRound,
       pass: ({ result }) =>
-        `${result?.masked || "returned"} · hashed on host · never on disk`,
-      reject: () => "no credential returned",
-      idle: "return the account, masked on the host",
+        t("cp.layer.credential.pass", { masked: result?.masked || "returned" }),
+      reject: () => t("cp.layer.credential.reject"),
+      idle: t("cp.layer.credential.idle"),
     },
   ],
   buildTrace: (scenario, r) => {
@@ -457,7 +466,7 @@ const cpProvider: Provider = {
       {
         s: 0,
         kind: "comment",
-        text: "webapp pod → host cp-bridge (host.minikube.internal:8890)",
+        text: t("cp.trace.pod"),
       },
       {
         s: 0,
@@ -467,7 +476,7 @@ const cpProvider: Provider = {
       {
         s: 1,
         kind: "comment",
-        text: "cp-bridge dispatch → java caller (subprocess)",
+        text: t("cp.trace.dispatch"),
       },
       {
         s: 1,
@@ -655,21 +664,20 @@ const ccpProvider: Provider = {
       stages: [0],
       doneAfter: 1,
       failsAt: [],
-      tag: (s) => (s === "done" ? "presented" : "client"),
+      tag: (s) =>
+        s === "done" ? t("chrome.state.presented") : t("chrome.state.client"),
       body: ({ result, scenario }) => (
         <>
           <Kv
-            k="Client certificate (CN)"
+            k={t("chrome.row.clientCert")}
             v={
               scenario === "no-cert"
-                ? "(none presented)"
+                ? t("ccp.node.app.none")
                 : result?.certCn || "swa-demo-webapp"
             }
             vColor={scenario === "no-cert" ? INK.danger : undefined}
           />
-          <span style={foot}>
-            mTLS to AIMWebService · no stored password or API key
-          </span>
+          <span style={foot}>{t("ccp.node.app.foot")}</span>
         </>
       ),
     },
@@ -681,31 +689,32 @@ const ccpProvider: Provider = {
       failsAt: [1],
       tag: (s) =>
         s === "failed"
-          ? "authn deny"
+          ? t("chrome.tag.authnDeny")
           : s === "done"
-            ? "authenticated"
-            : "verifying",
+            ? t("chrome.state.authenticated")
+            : t("chrome.state.verifying"),
       body: ({ state, result, scenario }) =>
         state === "failed" ? (
           <span style={dangerNote}>
-            {result?.errorCode ? `${result.errorCode} · ` : "APPAP227E · "}
-            {scenario === "no-cert"
-              ? "no client certificate presented"
-              : "certificate not authorized"}
+            {(result?.errorCode ? `${result.errorCode} · ` : "APPAP227E · ") +
+              (scenario === "no-cert"
+                ? t("ccp.node.aimws.dangerNoCert")
+                : t("ccp.node.aimws.dangerNotAuthz"))}
           </span>
         ) : (
           <>
             <div style={grid2}>
               <Kv
-                k="Application"
+                k={t("chrome.row.application")}
                 v={result?.appId || CCP_CTX.application}
                 vColor={state === "done" ? INK.ok : INK.mono}
               />
-              <Kv k="Certificate CN" v={result?.certCn || "swa-demo-webapp"} />
+              <Kv
+                k={t("ccp.node.aimws.kvCertCn")}
+                v={result?.certCn || "swa-demo-webapp"}
+              />
             </div>
-            <span style={foot}>
-              authenticates the client certificate to a registered Application
-            </span>
+            <span style={foot}>{t("ccp.node.aimws.foot")}</span>
           </>
         ),
     },
@@ -716,16 +725,22 @@ const ccpProvider: Provider = {
       doneAfter: 3,
       failsAt: [2],
       tag: (s) =>
-        s === "failed" ? "authz deny" : s === "done" ? "authorized" : "",
+        s === "failed"
+          ? t("chrome.tag.authzDeny")
+          : s === "done"
+            ? t("chrome.state.authorized")
+            : "",
       body: ({ state, result }) =>
         state === "failed" ? (
           <span style={dangerNote}>
-            {result?.errorCode ? `${result.errorCode} · ` : "APPAP004E · "}not
-            permitted for Safe {result?.safe || CCP_CTX.safe}
+            {t("ccp.node.vault.danger", {
+              code: result?.errorCode ? `${result.errorCode} · ` : "APPAP004E · ",
+              safe: result?.safe || CCP_CTX.safe,
+            })}
           </span>
         ) : (
           <Kv
-            k="Safe"
+            k={t("chrome.row.safe")}
             v={result?.safe || CCP_CTX.safe}
             vColor={state === "done" ? INK.ok : INK.mono}
           />
@@ -737,7 +752,7 @@ const ccpProvider: Provider = {
       stages: [3],
       doneAfter: 4,
       failsAt: [],
-      tag: (s) => (s === "done" ? "returned" : ""),
+      tag: (s) => (s === "done" ? t("chrome.state.returned") : ""),
       body: CredentialBody,
     },
   ],
@@ -745,35 +760,42 @@ const ccpProvider: Provider = {
     {
       name: t("ccp.layer.present.name"),
       Icon: FileCheck,
-      pass: () => "mTLS handshake opened · client certificate presented",
-      reject: () => "no client certificate presented",
-      idle: "open mTLS and present the client certificate",
+      pass: () => t("ccp.layer.present.pass"),
+      reject: () => t("ccp.layer.present.reject"),
+      idle: t("ccp.layer.present.idle"),
     },
     {
       name: t("ccp.layer.authn.name"),
       Icon: BadgeCheck,
       pass: ({ result }) =>
-        `cert CN ${result?.certCn || "swa-demo-webapp"} matched a registered Application`,
+        t("ccp.layer.authn.pass", {
+          certCn: result?.certCn || "swa-demo-webapp",
+        }),
       reject: ({ result }) =>
-        `${result?.errorCode || "APPAP227E"} · certificate not authorized`,
-      idle: "authenticate the certificate to an Application",
+        t("ccp.layer.authn.reject", { code: result?.errorCode || "APPAP227E" }),
+      idle: t("ccp.layer.authn.idle"),
     },
     {
       name: t("ccp.layer.authz.name"),
       Icon: Lock,
       pass: ({ result }) =>
-        `Application authorized for Safe ${result?.safe || CCP_CTX.safe}`,
+        t("ccp.layer.authz.pass", { safe: result?.safe || CCP_CTX.safe }),
       reject: ({ result }) =>
-        `${result?.errorCode || "APPAP004E"} · not permitted for Safe ${result?.safe || CCP_CTX.safe}`,
-      idle: "authorize the Application for the Safe",
+        t("ccp.layer.authz.reject", {
+          code: result?.errorCode || "APPAP004E",
+          safe: result?.safe || CCP_CTX.safe,
+        }),
+      idle: t("ccp.layer.authz.idle"),
     },
     {
       name: t("ccp.layer.credential.name"),
       Icon: KeyRound,
       pass: ({ result }) =>
-        `${result?.masked || "returned"} · masked at the source · never on disk`,
-      reject: () => "no credential returned",
-      idle: "return the account, masked",
+        t("ccp.layer.credential.pass", {
+          masked: result?.masked || "returned",
+        }),
+      reject: () => t("ccp.layer.credential.reject"),
+      idle: t("ccp.layer.credential.idle"),
     },
   ],
   buildTrace: (scenario, r) => {
@@ -790,7 +812,7 @@ const ccpProvider: Provider = {
       {
         s: 0,
         kind: "comment",
-        text: `webapp pod → ${CCP_HOST} (AIMWebService, mTLS)`,
+        text: t("ccp.trace.0", { host: CCP_HOST }),
       },
       {
         s: 0,
@@ -807,14 +829,12 @@ const ccpProvider: Provider = {
       {
         s: 1,
         kind: "comment",
-        text: noCert
-          ? "no client certificate presented — AIMWebService requires mTLS"
-          : "AIMWebService authenticates the client certificate → Application",
+        text: noCert ? t("ccp.trace.1.noCert") : t("ccp.trace.1.auth"),
       },
       {
         s: 2,
         kind: "comment",
-        text: `authorizes Application '${appId}' for Safe ${safe}`,
+        text: t("ccp.trace.2", { appId, safe }),
       },
     ];
     appendOutcome(lines, scenario, r, {
@@ -1089,13 +1109,14 @@ const swaProvider: Provider = {
       stages: [0],
       doneAfter: 1,
       failsAt: [],
-      tag: (s) => (s === "done" ? "requested" : "workload"),
+      tag: (s) =>
+        s === "done"
+          ? t("chrome.state.requested")
+          : t("chrome.state.workload"),
       body: ({ result }) => (
         <>
-          <Kv k="Workload" v={result?.spiffeId || SWA_WORKLOAD} />
-          <span style={foot}>
-            holds no stored credential — asks the Workload API for an SVID
-          </span>
+          <Kv k={t("swa.node.workload.kv")} v={result?.spiffeId || SWA_WORKLOAD} />
+          <span style={foot}>{t("swa.node.workload.foot")}</span>
         </>
       ),
     },
@@ -1105,21 +1126,21 @@ const swaProvider: Provider = {
       stages: [1],
       doneAfter: 2,
       failsAt: [],
-      tag: (s) => (s === "done" ? "node attested" : "attesting"),
+      tag: (s) =>
+        s === "done"
+          ? t("chrome.state.nodeAttested")
+          : t("chrome.state.attesting"),
       body: ({ state }) => (
         <>
           <div style={grid2}>
             <Kv
-              k="Attestor"
+              k={t("chrome.ctx.attestor")}
               v="k8s_psat"
               vColor={state === "done" ? INK.ok : INK.mono}
             />
-            <Kv k="Node group" v={SWA_CTX.nodeGroup} />
+            <Kv k={t("chrome.ctx.nodeGroup")} v={SWA_CTX.nodeGroup} />
           </div>
-          <span style={foot}>
-            agent proves the node to the SWA server (projected SA token ·
-            TokenReview)
-          </span>
+          <span style={foot}>{t("swa.node.attest.foot")}</span>
         </>
       ),
     },
@@ -1131,36 +1152,29 @@ const swaProvider: Provider = {
       failsAt: [2],
       tag: (s) =>
         s === "failed"
-          ? "no identity"
+          ? t("chrome.state.noIdentity")
           : s === "done"
-            ? "SVID issued"
-            : "issuing",
+            ? t("chrome.state.svidIssued")
+            : t("chrome.state.issuing"),
       body: ({ state, result }) =>
         state === "failed" ? (
-          <span style={dangerNote}>
-            no identity issued — workload attestation found no matching policy
-          </span>
+          <span style={dangerNote}>{t("swa.node.identity.danger")}</span>
         ) : (
           <>
             <div style={grid2}>
               <Kv
-                k="SPIFFE ID"
+                k={t("chrome.row.spiffeId")}
                 v={result?.spiffeId || SWA_WORKLOAD}
                 vColor={state === "done" ? INK.ok : INK.mono}
               />
               <Kv
-                k="SVID"
-                v={
-                  result?.jwtAlg
-                    ? `${result.jwtAlg} · short-lived`
-                    : "jwt-svid · short-lived"
-                }
+                k={t("chrome.row.svid")}
+                v={t("swa.node.identity.svidVal", {
+                  alg: result?.jwtAlg || "jwt-svid",
+                })}
               />
             </div>
-            <span style={foot}>
-              server attests the workload (ns/sa) · SVID minted by the trust
-              domain
-            </span>
+            <span style={foot}>{t("swa.node.identity.foot")}</span>
           </>
         ),
     },
@@ -1171,26 +1185,26 @@ const swaProvider: Provider = {
       doneAfter: 5,
       failsAt: [3, 4],
       tag: (s) =>
-        s === "failed" ? "rejected" : s === "done" ? "authorized" : "verifying",
-      body: ({ state, scenario, result }) =>
+        s === "failed"
+          ? t("chrome.state.rejected")
+          : s === "done"
+            ? t("chrome.state.authorized")
+            : t("chrome.state.verifying"),
+      body: ({ state, scenario }) =>
         state === "failed" ? (
           <span style={dangerNote}>
             {scenario === "foreign"
-              ? "foreign trust domain — trust roots do not anchor it"
-              : "SPIFFE ID not allow-listed at the gateway"}
+              ? t("swa.node.gateway.dangerForeign")
+              : t("swa.node.gateway.dangerNotListed")}
           </span>
         ) : (
           <>
             <Kv
-              k="mTLS"
-              v="peer verified by SPIFFE ID"
+              k={t("swa.node.gateway.kvMtls")}
+              v={t("swa.node.gateway.mtlsVal")}
               vColor={state === "done" ? INK.ok : INK.mono}
             />
-            <span style={foot}>
-              ghostunnel authorizes{" "}
-              {result?.spiffeId ? "the SPIFFE ID" : "by SPIFFE ID"} before
-              Postgres
-            </span>
+            <span style={foot}>{t("swa.node.gateway.foot")}</span>
           </>
         ),
     },
@@ -1200,18 +1214,18 @@ const swaProvider: Provider = {
       stages: [5],
       doneAfter: 6,
       failsAt: [],
-      tag: (s) => (s === "done" ? "rows returned" : ""),
+      tag: (s) => (s === "done" ? t("chrome.state.rowsReturned") : ""),
       body: ({ state, result }) =>
         state === "done" ? (
           <Kv
-            k="Result"
-            v={`${result?.dbRows.length ?? 0} shipment rows · via the SPIFFE gateway`}
+            k={t("swa.node.resource.kvResult")}
+            v={t("swa.node.resource.resultVal", {
+              n: result?.dbRows.length ?? 0,
+            })}
             vColor={INK.ok}
           />
         ) : (
-          <span style={dimNote}>
-            authorized by SPIFFE ID before the query runs
-          </span>
+          <span style={dimNote}>{t("swa.node.resource.dimNote")}</span>
         ),
     },
   ],
@@ -1219,46 +1233,48 @@ const swaProvider: Provider = {
     {
       name: t("swa.layer.request.name"),
       Icon: Send,
-      pass: () => "workload called the Workload API for an SVID",
-      reject: () => "could not reach the Workload API",
-      idle: "call the SWA Agent Workload API",
+      pass: () => t("swa.layer.request.pass"),
+      reject: () => t("swa.layer.request.reject"),
+      idle: t("swa.layer.request.idle"),
     },
     {
       name: t("swa.layer.attest.name"),
       Icon: Fingerprint,
-      pass: () => "node attested · k8s_psat (projected SA token · TokenReview)",
-      reject: () => "node attestation failed",
-      idle: "attest the node identity (k8s_psat)",
+      pass: () => t("swa.layer.attest.pass"),
+      reject: () => t("swa.layer.attest.reject"),
+      idle: t("swa.layer.attest.idle"),
     },
     {
       name: t("swa.layer.svid.name"),
       Icon: BadgeCheck,
       pass: ({ result }) =>
-        `SVID minted${result?.jwtAlg ? ` · ${result.jwtAlg}` : ""} · workload attested (ns/sa)`,
-      reject: () => "no identity issued — no matching workload policy",
-      idle: "attest the workload and mint a short-lived SVID",
+        t("swa.layer.svid.pass", {
+          alg: result?.jwtAlg ? ` · ${result.jwtAlg}` : "",
+        }),
+      reject: () => t("swa.layer.svid.reject"),
+      idle: t("swa.layer.svid.idle"),
     },
     {
       name: t("swa.layer.mtls.name"),
       Icon: Lock,
-      pass: () => "peer verified by SPIFFE ID · same trust domain",
-      reject: () => "foreign trust domain — trust roots do not anchor it",
-      idle: "verify the presented SVID at the gateway",
+      pass: () => t("swa.layer.mtls.pass"),
+      reject: () => t("swa.layer.mtls.reject"),
+      idle: t("swa.layer.mtls.idle"),
     },
     {
       name: t("swa.layer.authz.name"),
       Icon: ShieldCheck,
-      pass: () => `SPIFFE ID allow-listed at ${SWA_CTX.gateway}`,
-      reject: () => "SPIFFE ID not allow-listed at the gateway",
-      idle: "authorize the connection by SPIFFE ID",
+      pass: () => t("swa.layer.authz.pass", { gateway: SWA_CTX.gateway }),
+      reject: () => t("swa.layer.authz.reject"),
+      idle: t("swa.layer.authz.idle"),
     },
     {
       name: t("swa.layer.resource.name"),
       Icon: Database,
       pass: ({ result }) =>
-        `${result?.dbRows.length ?? 0} rows · Postgres via the SPIFFE gateway`,
-      reject: () => "no resource access",
-      idle: "read the shipments database",
+        t("swa.layer.resource.pass", { n: result?.dbRows.length ?? 0 }),
+      reject: () => t("swa.layer.resource.reject"),
+      idle: t("swa.layer.resource.idle"),
     },
   ],
   buildTrace: (scenario, r) => {
@@ -1267,28 +1283,28 @@ const swaProvider: Provider = {
       {
         s: 0,
         kind: "comment",
-        text: "workload → SWA Agent Workload API (unix:///run/swa-agent/api.sock)",
+        text: t("swa.trace.0"),
       },
       { s: 0, kind: "cmd", text: "FetchJWTSVID(audience=swa-demo-audience)" },
       {
         s: 1,
         kind: "comment",
-        text: "SWA Agent attests the node to the server · k8s_psat (projected SA token · TokenReview)",
+        text: t("swa.trace.1"),
       },
       {
         s: 2,
         kind: "comment",
-        text: "server attests the workload (ns/sa selectors) and mints the SVID",
+        text: t("swa.trace.2"),
       },
       {
         s: 3,
         kind: "comment",
-        text: `present SVID to ${SWA_CTX.gateway}.swa-data.svc · mutual TLS`,
+        text: t("swa.trace.3", { gateway: SWA_CTX.gateway }),
       },
       {
         s: 4,
         kind: "comment",
-        text: "ghostunnel authorizes by SPIFFE ID (allow-uri)",
+        text: t("swa.trace.4"),
       },
       {
         s: 5,
@@ -1376,8 +1392,8 @@ function makeConjur(jwt: boolean): Provider {
   const authnFail = jwt ? 2 : 3; // index of the stage where authentication fails
   const arn = "arn:aws:sts::123456789012:assumed-role/swa-demo-host/i-0abc123";
   const authnDenyNote = jwt
-    ? "401 · authn-jwt rejected — the JWT failed validation"
-    : "401 · authn-iam rejected — AWS did not verify the signed request";
+    ? t("conjur.authnDeny.jwt")
+    : t("conjur.authnDeny.iam");
 
   return {
     id: jwt ? "conjur-jwt" : "conjur-iam",
@@ -1551,16 +1567,17 @@ function makeConjur(jwt: boolean): Provider {
             stages: [0],
             doneAfter: 1,
             failsAt: [],
-            tag: (s) => (s === "done" ? "identity" : "workload"),
+            tag: (s) =>
+              s === "done"
+                ? t("chrome.state.identity")
+                : t("chrome.state.workload"),
             body: ({ result }) => (
               <>
                 <Kv
-                  k="SPIFFE ID (sub)"
+                  k={t("conjur.node.workloadJwt.kv")}
                   v={result?.identity || result?.spiffeId || CONJUR_WORKLOAD}
                 />
-                <span style={foot}>
-                  fetches a JWT-SVID from the SWA Workload API · aud=idira
-                </span>
+                <span style={foot}>{t("conjur.node.workloadJwt.foot")}</span>
               </>
             ),
           },
@@ -1572,23 +1589,21 @@ function makeConjur(jwt: boolean): Provider {
             failsAt: [1, 2],
             tag: (s) =>
               s === "failed"
-                ? "authn deny"
+                ? t("chrome.tag.authnDeny")
                 : s === "done"
-                  ? "authenticated"
-                  : "validating",
+                  ? t("chrome.state.authenticated")
+                  : t("chrome.state.validating"),
             body: ({ state }) =>
               state === "failed" ? (
                 <span style={dangerNote}>{authnDenyNote}</span>
               ) : (
                 <>
                   <Kv
-                    k="Validated"
-                    v="trust-domain JWKS + claims"
+                    k={t("conjur.node.authnJwt.kv")}
+                    v={t("conjur.node.authnJwt.val")}
                     vColor={state === "done" ? INK.ok : INK.mono}
                   />
-                  <span style={foot}>
-                    Secrets Manager checks the JWT signature, issuer, and audience
-                  </span>
+                  <span style={foot}>{t("conjur.node.authnJwt.foot")}</span>
                 </>
               ),
           },
@@ -1598,17 +1613,15 @@ function makeConjur(jwt: boolean): Provider {
             stages: [3],
             doneAfter: 4,
             failsAt: [],
-            tag: (s) => (s === "done" ? "granted" : ""),
+            tag: (s) => (s === "done" ? t("chrome.state.granted") : ""),
             body: ({ state, result }) => (
               <>
                 <Kv
-                  k="Scope"
+                  k={t("conjur.node.token.kv")}
                   v={result?.tokenScope || CONJUR_SECRET}
                   vColor={state === "done" ? INK.ok : INK.mono}
                 />
-                <span style={foot}>
-                  short-lived · limited to specific variables by policy
-                </span>
+                <span style={foot}>{t("conjur.node.token.foot")}</span>
               </>
             ),
           },
@@ -1619,28 +1632,35 @@ function makeConjur(jwt: boolean): Provider {
             doneAfter: 5,
             failsAt: [4],
             tag: (s) =>
-              s === "failed" ? "authz deny" : s === "done" ? "returned" : "",
+              s === "failed"
+                ? t("chrome.tag.authzDeny")
+                : s === "done"
+                  ? t("chrome.state.returned")
+                  : "",
             body: ({ state, result }) =>
               state === "failed" ? (
                 <span style={dangerNote}>
-                  403 · token not authorized to read{" "}
-                  {result?.secretName || "this variable"}
+                  {t("conjur.node.secret.danger", {
+                    secretName:
+                      result?.secretName || t("conjur.node.secret.thisVariable"),
+                  })}
                 </span>
               ) : state === "done" ? (
                 <div
                   style={{ display: "flex", flexDirection: "column", gap: 8 }}
                 >
-                  <Kv k="Variable" v={result?.secretName || CONJUR_SECRET} />
                   <Kv
-                    k="Value (masked)"
+                    k={t("chrome.ctx.variable")}
+                    v={result?.secretName || CONJUR_SECRET}
+                  />
+                  <Kv
+                    k={t("chrome.row.valueMasked")}
                     v={result?.masked || "—"}
                     vColor={INK.ok}
                   />
                 </div>
               ) : (
-                <span style={dimNote}>
-                  read the variable with the scoped token
-                </span>
+                <span style={dimNote}>{t("conjur.node.secret.dimNote")}</span>
               ),
           },
         ]
@@ -1651,13 +1671,17 @@ function makeConjur(jwt: boolean): Provider {
             stages: [0],
             doneAfter: 1,
             failsAt: [],
-            tag: (s) => (s === "done" ? "profile" : "workload"),
+            tag: (s) =>
+              s === "done"
+                ? t("chrome.state.profile")
+                : t("chrome.state.workload"),
             body: ({ result }) => (
               <>
-                <Kv k="Instance role" v={result?.identity || arn} />
-                <span style={foot}>
-                  asks the host (IMDS) for its instance-profile role
-                </span>
+                <Kv
+                  k={t("conjur.node.workloadIam.kv")}
+                  v={result?.identity || arn}
+                />
+                <span style={foot}>{t("conjur.node.workloadIam.foot")}</span>
               </>
             ),
           },
@@ -1667,17 +1691,18 @@ function makeConjur(jwt: boolean): Provider {
             stages: [1],
             doneAfter: 2,
             failsAt: [],
-            tag: (s) => (s === "done" ? "signed" : "signing"),
+            tag: (s) =>
+              s === "done"
+                ? t("chrome.state.signed")
+                : t("chrome.state.signing"),
             body: ({ state, result }) => (
               <>
                 <Kv
-                  k="Caller ARN"
+                  k={t("conjur.node.sts.kv")}
                   v={result?.identity || arn}
                   vColor={state === "done" ? INK.ok : INK.mono}
                 />
-                <span style={foot}>
-                  signs sts:GetCallerIdentity with the role credentials
-                </span>
+                <span style={foot}>{t("conjur.node.sts.foot")}</span>
               </>
             ),
           },
@@ -1689,24 +1714,21 @@ function makeConjur(jwt: boolean): Provider {
             failsAt: [2, 3],
             tag: (s) =>
               s === "failed"
-                ? "authn deny"
+                ? t("chrome.tag.authnDeny")
                 : s === "done"
-                  ? "verified"
-                  : "verifying",
+                  ? t("chrome.state.verified")
+                  : t("chrome.state.verifying"),
             body: ({ state }) =>
               state === "failed" ? (
                 <span style={dangerNote}>{authnDenyNote}</span>
               ) : (
                 <>
                   <Kv
-                    k="AWS verify"
-                    v="replayed · ARN confirmed"
+                    k={t("conjur.node.authnIam.kv")}
+                    v={t("conjur.node.authnIam.val")}
                     vColor={state === "done" ? INK.ok : INK.mono}
                   />
-                  <span style={foot}>
-                    Secrets Manager replays the signed request to AWS STS and maps the
-                    ARN to a host
-                  </span>
+                  <span style={foot}>{t("conjur.node.authnIam.foot")}</span>
                 </>
               ),
           },
@@ -1716,17 +1738,15 @@ function makeConjur(jwt: boolean): Provider {
             stages: [4],
             doneAfter: 5,
             failsAt: [],
-            tag: (s) => (s === "done" ? "granted" : ""),
+            tag: (s) => (s === "done" ? t("chrome.state.granted") : ""),
             body: ({ state, result }) => (
               <>
                 <Kv
-                  k="Scope"
+                  k={t("conjur.node.token.kv")}
                   v={result?.tokenScope || CONJUR_SECRET}
                   vColor={state === "done" ? INK.ok : INK.mono}
                 />
-                <span style={foot}>
-                  short-lived · limited to specific variables by policy
-                </span>
+                <span style={foot}>{t("conjur.node.token.foot")}</span>
               </>
             ),
           },
@@ -1737,28 +1757,35 @@ function makeConjur(jwt: boolean): Provider {
             doneAfter: 6,
             failsAt: [5],
             tag: (s) =>
-              s === "failed" ? "authz deny" : s === "done" ? "returned" : "",
+              s === "failed"
+                ? t("chrome.tag.authzDeny")
+                : s === "done"
+                  ? t("chrome.state.returned")
+                  : "",
             body: ({ state, result }) =>
               state === "failed" ? (
                 <span style={dangerNote}>
-                  403 · token not authorized to read{" "}
-                  {result?.secretName || "this variable"}
+                  {t("conjur.node.secret.danger", {
+                    secretName:
+                      result?.secretName || t("conjur.node.secret.thisVariable"),
+                  })}
                 </span>
               ) : state === "done" ? (
                 <div
                   style={{ display: "flex", flexDirection: "column", gap: 8 }}
                 >
-                  <Kv k="Variable" v={result?.secretName || CONJUR_SECRET} />
                   <Kv
-                    k="Value (masked)"
+                    k={t("chrome.ctx.variable")}
+                    v={result?.secretName || CONJUR_SECRET}
+                  />
+                  <Kv
+                    k={t("chrome.row.valueMasked")}
                     v={result?.masked || "—"}
                     vColor={INK.ok}
                   />
                 </div>
               ) : (
-                <span style={dimNote}>
-                  read the variable with the scoped token
-                </span>
+                <span style={dimNote}>{t("conjur.node.secret.dimNote")}</span>
               ),
           },
         ],
@@ -1767,88 +1794,103 @@ function makeConjur(jwt: boolean): Provider {
           {
             name: t("conjur.jwt.layer.fetch.name"),
             Icon: BadgeCheck,
-            pass: () => "JWT-SVID fetched from the Workload API · aud=idira",
-            reject: () => "could not obtain a JWT-SVID",
-            idle: "fetch a JWT-SVID from SWA",
+            pass: () => t("conjur.jwt.layer.fetch.pass"),
+            reject: () => t("conjur.jwt.layer.fetch.reject"),
+            idle: t("conjur.jwt.layer.fetch.idle"),
           },
           {
             name: t("conjur.layer.present.name"),
             Icon: Send,
-            pass: () => "JWT presented to authn-jwt",
-            reject: () => "could not reach Secrets Manager",
-            idle: "present the JWT to Secrets Manager",
+            pass: () => t("conjur.jwt.layer.present.pass"),
+            reject: () => t("conjur.jwt.layer.present.reject"),
+            idle: t("conjur.jwt.layer.present.idle"),
           },
           {
             name: t("conjur.jwt.layer.verify.name"),
             Icon: ShieldCheck,
-            pass: () => "JWKS + claims verified (issuer · audience · expiry)",
-            reject: () => "401 · authn-jwt: the JWT failed validation",
-            idle: "validate signature, issuer, and audience",
+            pass: () => t("conjur.jwt.layer.verify.pass"),
+            reject: () => t("conjur.jwt.layer.verify.reject"),
+            idle: t("conjur.jwt.layer.verify.idle"),
           },
           {
             name: t("conjur.layer.token.name"),
             Icon: KeyRound,
             pass: ({ result }) =>
-              `scoped token granted · ${result?.tokenScope || CONJUR_SECRET}`,
-            reject: () => "no access token granted",
-            idle: "receive a short-lived, scoped token",
+              t("conjur.layer.token.pass", {
+                scope: result?.tokenScope || CONJUR_SECRET,
+              }),
+            reject: () => t("conjur.layer.token.reject"),
+            idle: t("conjur.layer.token.idle"),
           },
           {
             name: t("conjur.layer.read.name"),
             Icon: Database,
             pass: ({ result }) =>
-              `${result?.masked || "returned"} · ${result?.secretName || CONJUR_SECRET}`,
+              t("conjur.layer.read.pass", {
+                masked: result?.masked || "returned",
+                secretName: result?.secretName || CONJUR_SECRET,
+              }),
             reject: ({ result }) =>
-              `403 · token not authorized to read ${result?.secretName || "this variable"}`,
-            idle: "read the variable with the scoped token",
+              t("conjur.layer.read.reject", {
+                secretName:
+                  result?.secretName || t("conjur.node.secret.thisVariable"),
+              }),
+            idle: t("conjur.layer.read.idle"),
           },
         ]
       : [
           {
             name: t("conjur.iam.layer.imds.name"),
             Icon: Server,
-            pass: () => "instance-profile role obtained from IMDS",
-            reject: () => "could not read instance metadata",
-            idle: "fetch the instance-profile role (IMDS)",
+            pass: () => t("conjur.iam.layer.imds.pass"),
+            reject: () => t("conjur.iam.layer.imds.reject"),
+            idle: t("conjur.iam.layer.imds.idle"),
           },
           {
             name: t("conjur.iam.layer.sign.name"),
             Icon: Fingerprint,
-            pass: () =>
-              "sts:GetCallerIdentity signed with the role credentials",
-            reject: () => "could not sign the STS request",
-            idle: "sign an STS caller identity",
+            pass: () => t("conjur.iam.layer.sign.pass"),
+            reject: () => t("conjur.iam.layer.sign.reject"),
+            idle: t("conjur.iam.layer.sign.idle"),
           },
           {
             name: t("conjur.layer.present.name"),
             Icon: Send,
-            pass: () => "signed request presented to authn-iam",
-            reject: () => "could not reach Secrets Manager",
-            idle: "present the signed request to Secrets Manager",
+            pass: () => t("conjur.iam.layer.present.pass"),
+            reject: () => t("conjur.iam.layer.present.reject"),
+            idle: t("conjur.iam.layer.present.idle"),
           },
           {
             name: t("conjur.iam.layer.verify.name"),
             Icon: Cloud,
-            pass: () => "Secrets Manager replayed to AWS STS · caller ARN verified",
-            reject: () => "401 · authn-iam: AWS rejected the signed request",
-            idle: "Secrets Manager replays the request to AWS STS",
+            pass: () => t("conjur.iam.layer.verify.pass"),
+            reject: () => t("conjur.iam.layer.verify.reject"),
+            idle: t("conjur.iam.layer.verify.idle"),
           },
           {
             name: t("conjur.layer.token.name"),
             Icon: KeyRound,
             pass: ({ result }) =>
-              `scoped token granted · ${result?.tokenScope || CONJUR_SECRET}`,
-            reject: () => "no access token granted",
-            idle: "receive a short-lived, scoped token",
+              t("conjur.layer.token.pass", {
+                scope: result?.tokenScope || CONJUR_SECRET,
+              }),
+            reject: () => t("conjur.layer.token.reject"),
+            idle: t("conjur.layer.token.idle"),
           },
           {
             name: t("conjur.layer.read.name"),
             Icon: Database,
             pass: ({ result }) =>
-              `${result?.masked || "returned"} · ${result?.secretName || CONJUR_SECRET}`,
+              t("conjur.layer.read.pass", {
+                masked: result?.masked || "returned",
+                secretName: result?.secretName || CONJUR_SECRET,
+              }),
             reject: ({ result }) =>
-              `403 · token not authorized to read ${result?.secretName || "this variable"}`,
-            idle: "read the variable with the scoped token",
+              t("conjur.layer.read.reject", {
+                secretName:
+                  result?.secretName || t("conjur.node.secret.thisVariable"),
+              }),
+            idle: t("conjur.layer.read.idle"),
           },
         ],
     buildTrace: (scenario, r) => {
@@ -1861,22 +1903,22 @@ function makeConjur(jwt: boolean): Provider {
       };
       const lines: Line[] = jwt
         ? [
-            { s: 0, kind: "comment", text: "workload → SWA Workload API" },
+            { s: 0, kind: "comment", text: t("conjur.trace.jwt.0") },
             { s: 0, kind: "cmd", text: "FetchJWTSVID(audience=idira)" },
             {
               s: 1,
               kind: "comment",
-              text: "POST /authn-jwt/swa/idira/authenticate   (present the JWT-SVID)",
+              text: t("conjur.trace.jwt.1"),
             },
             {
               s: 2,
               kind: "comment",
-              text: "Secrets Manager validates the JWT against the trust-domain JWKS + claims (iss · aud · exp)",
+              text: t("conjur.trace.jwt.2"),
             },
             {
               s: 3,
               kind: "comment",
-              text: "Secrets Manager returns a short-lived access token (scoped to specific variables)",
+              text: t("conjur.trace.token"),
             },
             readCmd,
           ]
@@ -1884,7 +1926,7 @@ function makeConjur(jwt: boolean): Provider {
             {
               s: 0,
               kind: "comment",
-              text: "container → host instance metadata (IMDS v2)",
+              text: t("conjur.trace.iam.0"),
             },
             {
               s: 0,
@@ -1894,7 +1936,7 @@ function makeConjur(jwt: boolean): Provider {
             {
               s: 1,
               kind: "comment",
-              text: "sign sts:GetCallerIdentity with the instance-profile role",
+              text: t("conjur.trace.iam.1"),
             },
             {
               s: 1,
@@ -1904,17 +1946,17 @@ function makeConjur(jwt: boolean): Provider {
             {
               s: 2,
               kind: "comment",
-              text: "POST /authn-iam/swa/idira/<host>/authenticate   (signed STS headers)",
+              text: t("conjur.trace.iam.2"),
             },
             {
               s: 3,
               kind: "comment",
-              text: "Secrets Manager replays the signed request to AWS STS → AWS returns the verified caller ARN",
+              text: t("conjur.trace.iam.3"),
             },
             {
               s: 4,
               kind: "comment",
-              text: "Secrets Manager returns a short-lived access token (scoped to specific variables)",
+              text: t("conjur.trace.token"),
             },
             readCmd,
           ];
