@@ -1,0 +1,11 @@
+{
+  "landing.nav.brand": "Idira Secrets",
+  "landing.nav.secured": "secured by idira · palo alto networks",
+  "landing.nav.cta": "Start the demo",
+  "landing.lang.label": "Language",
+  "landing.hero.eyebrow": "Machine identity for every workload",
+  "landing.hero.title_html": "Your workloads have secrets.<br />They shouldn't have to <span class=\"accent\">store</span> them.",
+  "landing.hero.lede": "Idira gives every application — legacy or cloud-native — a cryptographic identity, then delivers short-lived, scoped secrets it never keeps. Pick a path and watch the identity exchange unfold, live.",
+  "landing.hero.cta_primary_html": "Choose your adventure &darr;",
+  "landing.hero.cta_secondary": "What's the problem?"
+}

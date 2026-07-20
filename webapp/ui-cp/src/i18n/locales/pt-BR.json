@@ -1,0 +1,15 @@
+{
+  "cp.scenario.authorized.label": "Sucesso esperado",
+  "cp.scenario.authorized.tag": "espera ✓",
+  "cp.scenario.authorized.desc": "Um chamador cujo hash de aplicação ESTÁ registrado no App, lendo um Safe ao qual pode acessar → a credencial é retornada.",
+  "cp.scenario.authorized.ev1.lead": "Autenticado pelo hash da aplicação, não por uma chave.",
+  "cp.scenario.authorized.ev1.body": "O Credential Provider mediu o hash do jar chamador (mais o usuário do SO e o caminho) e o associou a uma Application registrada — sem certificado de cliente, sem senha armazenada.",
+  "cp.scenario.authorized.ev2.lead": "O segredo completo nunca saiu do host.",
+  "cp.scenario.authorized.ev2.body": "O chamador aplicou hash à credencial no host; apenas uma prévia de 6 caracteres, seu comprimento e o SHA-256 cruzaram a ponte para o cluster.",
+  "cp.scenario.authorized.ev3.lead": "Restrito a exatamente um Safe/Objeto.",
+  "cp.scenario.authorized.ev3.body": "O App é provisionado apenas para PIN-SEC-DEMO; qualquer outro Safe é negado na camada de autorização.",
+
+  "cp.trace.measure": "O Credential Provider mede a aplicação chamadora (hash + caminho)",
+  "cp.trace.checkOsUser": "verifica o usuário do SO ({osUser}) e o caminho do executável",
+  "cp.trace.authzQuery": "Vault: a Application '{appId}' está autorizada para o Safe {safe}?"
+}

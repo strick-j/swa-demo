@@ -6,6 +6,8 @@ import (
 	"embed"
 	"html/template"
 	"io/fs"
+
+	"github.com/strick-j/swa-demo/webapp/internal/i18n"
 )
 
 //go:embed templates/*.html
@@ -14,9 +16,10 @@ var templateFS embed.FS
 //go:embed static/*
 var staticFS embed.FS
 
-// Page parses a single page template by file name (e.g. "landing.html").
+// Page parses a single page template by file name (e.g. "landing.html"), with
+// the i18n helpers (t / tHTML) registered so templates can localize copy.
 func Page(name string) (*template.Template, error) {
-	return template.ParseFS(templateFS, "templates/"+name)
+	return template.New(name).Funcs(i18n.TemplateFuncs()).ParseFS(templateFS, "templates/"+name)
 }
 
 // IndexTemplate parses the SWA switcher page. Retained for compatibility with

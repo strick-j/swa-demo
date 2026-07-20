@@ -24,6 +24,7 @@ import {
   type ProviderResult,
   type CVS,
 } from "../visualizations/common";
+import { t } from "../i18n";
 
 export type ScenarioKey =
   | "authorized"
@@ -209,23 +210,23 @@ const cpProvider: Provider = {
   scenarios: {
     authorized: {
       key: "authorized",
-      label: "Expected success",
-      tag: "expect ✓",
+      label: t("cp.scenario.authorized.label"),
+      tag: t("cp.scenario.authorized.tag"),
       ok: true,
       failStage: -1,
-      desc: "A caller whose application hash IS registered on the App, reading a Safe it may access → the credential is returned.",
+      desc: t("cp.scenario.authorized.desc"),
       evidence: [
         {
-          lead: "Authenticated by application hash, not a key.",
-          body: "The Credential Provider measured the calling jar's hash (plus OS user and path) and matched it to a registered Application — no client certificate, no stored password.",
+          lead: t("cp.scenario.authorized.ev1.lead"),
+          body: t("cp.scenario.authorized.ev1.body"),
         },
         {
-          lead: "The full secret never left the host.",
-          body: "The caller hashed the credential on the host; only a 6-char preview, its length, and SHA-256 crossed the bridge into the cluster.",
+          lead: t("cp.scenario.authorized.ev2.lead"),
+          body: t("cp.scenario.authorized.ev2.body"),
         },
         {
-          lead: "Scoped to exactly one Safe/Object.",
-          body: "The App is provisioned for PIN-SEC-DEMO only; every other Safe is denied at the authorization layer.",
+          lead: t("cp.scenario.authorized.ev3.lead"),
+          body: t("cp.scenario.authorized.ev3.body"),
         },
       ],
     },
@@ -471,17 +472,17 @@ const cpProvider: Provider = {
       {
         s: 1,
         kind: "comment",
-        text: "Credential Provider measures the calling application (hash + path)",
+        text: t("cp.trace.measure"),
       },
       {
         s: 2,
         kind: "comment",
-        text: `checks OS user (${r?.osUser || "svc-app"}) and executable path`,
+        text: t("cp.trace.checkOsUser", { osUser: r?.osUser || "svc-app" }),
       },
       {
         s: 3,
         kind: "comment",
-        text: `Vault: is Application '${appId}' authorized for Safe ${safe}?`,
+        text: t("cp.trace.authzQuery", { appId, safe }),
       },
       { s: 4, kind: "cmd", text: "PasswordSDK.getPassword(req)" },
     ];

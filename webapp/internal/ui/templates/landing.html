@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ .Locale }}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -143,6 +143,12 @@
     footer .frow img { height: 22px; opacity: 0.85; }
     footer code { font-family: var(--font-mono); color: var(--mono); }
 
+    /* language switcher */
+    .langsel { display: inline-flex; align-items: center; gap: 2px; margin-right: 6px; font-family: var(--font-mono); font-size: 12px; }
+    .langsel a { color: var(--dim); text-decoration: none; padding: 3px 7px; border-radius: 7px; letter-spacing: 0.04em; }
+    .langsel a:hover { color: var(--mono); }
+    .langsel a.active { color: #fff; background: rgba(38,91,255,0.22); }
+
     @media (max-width: 860px) {
       .strip, .cols-3, .cols-3.variety { grid-template-columns: 1fr; }
       nav .secured { display: none; }
@@ -156,25 +162,29 @@
   <nav>
     <div class="brand">
       <img src="/cp/assets/idira-icon-white.png" alt="Idira" />
-      <span>Idira Secrets</span>
+      <span>{{ t .Locale "landing.nav.brand" }}</span>
     </div>
     <div class="right">
-      <span class="secured">secured by idira · palo alto networks</span>
-      <a class="btn btn-primary btn-sm" href="#solutions">Start the demo</a>
+      <span class="secured">{{ t .Locale "landing.nav.secured" }}</span>
+      <span class="langsel" role="group" aria-label="{{ t .Locale "landing.lang.label" }}">
+        <a href="/lang?set=en&next=/"{{ if eq .Locale "en" }} class="active" aria-current="true"{{ end }}>EN</a>
+        <a href="/lang?set=es-419&next=/"{{ if eq .Locale "es-419" }} class="active" aria-current="true"{{ end }}>ES</a>
+        <a href="/lang?set=pt-BR&next=/"{{ if eq .Locale "pt-BR" }} class="active" aria-current="true"{{ end }}>PT</a>
+      </span>
+      <a class="btn btn-primary btn-sm" href="#solutions">{{ t .Locale "landing.nav.cta" }}</a>
     </div>
   </nav>
 
   <!-- HERO -->
   <header class="hero wrap">
-    <p class="eyebrow">Machine identity for every workload</p>
-    <h1>Your workloads have secrets.<br />They shouldn't have to <span class="accent">store</span> them.</h1>
+    <p class="eyebrow">{{ t .Locale "landing.hero.eyebrow" }}</p>
+    <h1>{{ tHTML .Locale "landing.hero.title_html" }}</h1>
     <p class="lede">
-      Idira gives every application — legacy or cloud-native — a cryptographic identity, then delivers
-      short-lived, scoped secrets it never keeps. Pick a path and watch the identity exchange unfold, live.
+      {{ t .Locale "landing.hero.lede" }}
     </p>
     <div class="cta">
-      <a class="btn btn-primary" href="#solutions">Choose your adventure &darr;</a>
-      <a class="btn btn-ghost" href="#problem">What's the problem?</a>
+      <a class="btn btn-primary" href="#solutions">{{ tHTML .Locale "landing.hero.cta_primary_html" }}</a>
+      <a class="btn btn-ghost" href="#problem">{{ t .Locale "landing.hero.cta_secondary" }}</a>
     </div>
 
     <div class="strip">
