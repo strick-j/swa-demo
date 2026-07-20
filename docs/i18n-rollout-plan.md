@@ -11,7 +11,10 @@ patterns already in `internal/i18n` (server) and `ui-cp/src/i18n` (SPA); see
 - ✅ **Phase 1** — full landing page localized (en/es-419/pt-BR). 74 server keys, exact parity; `go build`, `go test ./...`, `go vet`, and `npm test` (16 tests) all green.
 - **Deviation**: no registry change was needed — `retrieve.FamilyInfo.Family` and `ModeInfo.Mode` are already stable identifiers, so the template keys off `.Family`/`.Mode` via `printf` directly. es-419/pt-BR copy drafted in this pass (Phase 5 now covers only the SPA strings from Phases 3–4), pending owner review.
 - ✅ **Phase 2** — in-SPA EN/ES/PT switcher (`components/LangSwitcher.tsx`) wired into the inspector chrome header; writes the shared `lang` cookie + reloads. The committed SPA bundle (`internal/ui/cpapp/`) was rebuilt via `pnpm build` (frozen lockfile) and re-embedded. Confirmed the pnpm artifact hash is reproducible.
-- ⬜ **Phases 3–6** — not started.
+- ✅ **Phase 3** — all **PortalPane** provider content localized across the 4 provider definitions (CP, CCP, SWA, Conjur jwt+iam): `brand.sub`, `heroTitle`, `heroLede`, and every scenario's `label`/`tag`/`desc`/`evidence` (14 scenarios). SPA catalogs grew 12 → **159 keys**, exact parity across en/es-419/pt-BR (drafted via parallel subagents, validated: 0 missing/extra, placeholder + `**bold**` integrity OK). A new `emph()` helper renders `**bold**` from translated strings into `<strong>` so hero ledes keep emphasis without per-locale JSX.
+  - **Scope note**: Phase 3 covers the PortalPane (the "brief" users read). The InspectorChrome + visualization content in `providers.tsx` — `subtitle`, `ctx` labels, `stages`, `nodes[]`, `layers[]`, and the remaining `buildTrace` `comment` lines (CP's trace is already localized from the PoC) — moves to **Phase 4**, localized together with `components/` + `visualizations/`.
+- ⬜ **Phase 4** — inspector chrome + visualizations (subtitle, ctx, stages, nodes, layers, trace comments) + shared `components/`.
+- ⬜ **Phases 5–6** — translation sweep close-out + final verification.
 
 ## Decisions (locked)
 

@@ -13,6 +13,14 @@ paths = [
   '''terraform/backend\.tf$''',
   '''terraform-swa/backend\.tf$''',
   '''docs/.*\.md$''',
+  # i18n message catalogs are UI copy only (no secrets); natural-language
+  # sentences occasionally trip the generic-api-key entropy heuristic.
+  '''webapp/internal/i18n/locales/.*\.json$''',
+  '''webapp/ui-cp/src/i18n/locales/.*\.json$''',
+  # Vite build output embedded into the Go binary — generated from the scanned
+  # source above; the minified UI copy trips the same heuristic. A browser
+  # bundle cannot safely hold real secrets in any case.
+  '''webapp/internal/ui/cpapp/assets/.*\.js$''',
 ]
 regexes = [
   '''CHANGEME[-_A-Za-z0-9]*''',

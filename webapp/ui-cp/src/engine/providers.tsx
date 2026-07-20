@@ -136,6 +136,16 @@ const grid2: React.CSSProperties = {
   gap: "11px 14px",
 };
 
+// emph renders a translated string with **bold** spans as <strong>, so the hero
+// lede keeps its emphasis without hand-written per-locale JSX. Even segments are
+// plain text; odd segments (between ** pairs) are bold. Translators mark the
+// emphasized phrase with ** in the catalog.
+function emph(s: string): ReactNode {
+  return s
+    .split("**")
+    .map((seg, i) => (i % 2 === 1 ? <strong key={i}>{seg}</strong> : seg));
+}
+
 function CredentialBody({ state, result, scenario }: NodeArgs) {
   if (state !== "done") {
     return (
@@ -171,16 +181,9 @@ const cpProvider: Provider = {
   apiPath: "/api/cp",
   resultKey: "cp",
   subtitle: "credential provider · aim · vault",
-  brand: { name: "Credential Provider", sub: "Local AIM · host bridge" },
-  heroTitle: "Retrieve a credential.",
-  heroLede: (
-    <>
-      A trusted Java application asks a Credential Provider on the host for a
-      Vault credential at request time. The Provider authenticates the calling
-      application by its <strong>hash</strong> (plus OS user and path) — no
-      stored password, no client certificate.
-    </>
-  ),
+  brand: { name: "Credential Provider", sub: t("cp.brand.sub") },
+  heroTitle: t("cp.hero.title"),
+  heroLede: emph(t("cp.hero.lede")),
   ctx: [
     { k: "Application", v: CP_CTX.application, wide: true },
     { k: "Provider", v: CP_CTX.provider },
@@ -232,67 +235,67 @@ const cpProvider: Provider = {
     },
     "invalid-hash": {
       key: "invalid-hash",
-      label: "Expected authentication failure",
-      tag: "authn deny",
+      label: t("cp.scenario.invalid-hash.label"),
+      tag: t("cp.scenario.invalid-hash.tag"),
       ok: false,
       failStage: 1,
-      desc: "A DIFFERENT jar whose hash is NOT registered on the Application → the Credential Provider rejects it at the application-authentication layer.",
+      desc: t("cp.scenario.invalid-hash.desc"),
       evidence: [
         {
-          lead: "The hash did not match a registered Application.",
-          body: "The rogue jar has a different application hash (and install path). The provider logs APPAP133E — the calling application is unauthorized.",
+          lead: t("cp.scenario.invalid-hash.ev1.lead"),
+          body: t("cp.scenario.invalid-hash.ev1.body"),
         },
         {
-          lead: "Rejected before any Safe was touched.",
-          body: "Authentication failed first, so no Safe authorization was evaluated and no credential was returned.",
+          lead: t("cp.scenario.invalid-hash.ev2.lead"),
+          body: t("cp.scenario.invalid-hash.ev2.body"),
         },
         {
-          lead: "This is the boundary working.",
-          body: "Only the exact registered jar can retrieve. Recompiling or moving it changes the hash and is rejected — as designed.",
+          lead: t("cp.scenario.invalid-hash.ev3.lead"),
+          body: t("cp.scenario.invalid-hash.ev3.body"),
         },
       ],
     },
     denied: {
       key: "denied",
-      label: "Expected authorization failure",
-      tag: "authz deny",
+      label: t("cp.scenario.denied.label"),
+      tag: t("cp.scenario.denied.tag"),
       ok: false,
       failStage: 3,
-      desc: "A registered caller, but a Safe this Application is NOT permitted to read → the Credential Provider denies it at the authorization layer.",
+      desc: t("cp.scenario.denied.desc"),
       evidence: [
         {
-          lead: "Authentication passed, authorization did not.",
-          body: "The caller's hash/OS-user/path matched a registered Application, but that App is not a member of the requested Safe.",
+          lead: t("cp.scenario.denied.ev1.lead"),
+          body: t("cp.scenario.denied.ev1.body"),
         },
         {
-          lead: "Least privilege at the Safe boundary.",
-          body: "Being a valid application is not enough — the App must also be granted the specific Safe. It was not, so the request was refused.",
+          lead: t("cp.scenario.denied.ev2.lead"),
+          body: t("cp.scenario.denied.ev2.body"),
         },
         {
-          lead: "No credential crossed the bridge.",
-          body: "The denial happened in the vault; nothing was returned to the caller or the cluster.",
+          lead: t("cp.scenario.denied.ev3.lead"),
+          body: t("cp.scenario.denied.ev3.body"),
         },
       ],
     },
     dual: {
       key: "dual",
-      label: "Dual account · expected success",
-      tag: "expect ✓",
+      label: t("cp.scenario.dual.label"),
+      tag: t("cp.scenario.dual.tag"),
       ok: true,
       failStage: -1,
-      desc: "A registered caller queries a dual-account pair → the Credential Provider returns whichever account is ACTIVE. On rotation the other goes active — zero downtime, no app change.",
+      desc: t("cp.scenario.dual.desc"),
       evidence: [
         {
-          lead: "Zero-downtime rotation, resolved for you.",
-          body: "The query fronts a dual-account pair by virtual username; the provider returns whichever account is currently active.",
+          lead: t("cp.scenario.dual.ev1.lead"),
+          body: t("cp.scenario.dual.ev1.body"),
         },
         {
-          lead: "The app never changes.",
-          body: "When the active account rotates to its partner, the same query resolves to the new active account — no code or config change.",
+          lead: t("cp.scenario.dual.ev2.lead"),
+          body: t("cp.scenario.dual.ev2.body"),
         },
         {
-          lead: "Still hashed on the host.",
-          body: "As with every CP retrieval, only the preview + length + SHA-256 of the active account's secret cross the bridge.",
+          lead: t("cp.scenario.dual.ev3.lead"),
+          body: t("cp.scenario.dual.ev3.body"),
         },
       ],
     },
@@ -514,16 +517,10 @@ const ccpProvider: Provider = {
   subtitle: "central credential provider · mtls · rest",
   brand: {
     name: "Central Credential Provider",
-    sub: "AIMWebService · client cert",
+    sub: t("ccp.brand.sub"),
   },
-  heroTitle: "Retrieve via REST.",
-  heroLede: (
-    <>
-      The app authenticates to the Central Credential Provider with a{" "}
-      <strong>client certificate</strong> (mTLS) and fetches a credential over
-      REST — no Vault password or API key stored on the workload.
-    </>
-  ),
+  heroTitle: t("ccp.hero.title"),
+  heroLede: emph(t("ccp.hero.lede")),
   ctx: [
     { k: "Application", v: CCP_CTX.application, wide: true },
     { k: "Endpoint", v: CCP_CTX.endpoint },
@@ -552,89 +549,89 @@ const ccpProvider: Provider = {
   scenarios: {
     authorized: {
       key: "authorized",
-      label: "Expected success",
-      tag: "expect ✓",
+      label: t("ccp.scenario.authorized.label"),
+      tag: t("ccp.scenario.authorized.tag"),
       ok: true,
       failStage: -1,
-      desc: "Valid client certificate, and a Safe this Application IS permitted to read → the credential is returned over REST.",
+      desc: t("ccp.scenario.authorized.desc"),
       evidence: [
         {
-          lead: "Authenticated by certificate, not a key.",
-          body: "The app proved its identity with a client certificate mapped to a registered Application — no static API key or Vault password on the workload.",
+          lead: t("ccp.scenario.authorized.ev1.lead"),
+          body: t("ccp.scenario.authorized.ev1.body"),
         },
         {
-          lead: "Masked at the source.",
-          body: "Only a short preview + hash is shown; the full credential is never logged or written to disk.",
+          lead: t("ccp.scenario.authorized.ev2.lead"),
+          body: t("ccp.scenario.authorized.ev2.body"),
         },
         {
-          lead: "Scoped to exactly one Safe/Object.",
-          body: "The App is provisioned for PIN-SEC-DEMO only; every other Safe is denied at the authorization layer.",
+          lead: t("ccp.scenario.authorized.ev3.lead"),
+          body: t("ccp.scenario.authorized.ev3.body"),
         },
       ],
     },
     "no-cert": {
       key: "no-cert",
-      label: "No certificate · expected authn failure",
-      tag: "authn deny",
+      label: t("ccp.scenario.no-cert.label"),
+      tag: t("ccp.scenario.no-cert.tag"),
       ok: false,
       failStage: 1,
-      desc: "The app connects WITHOUT a client certificate → AIMWebService rejects it at the authentication layer (this denial is the point).",
+      desc: t("ccp.scenario.no-cert.desc"),
       evidence: [
         {
-          lead: "No client certificate, no identity.",
-          body: "AIMWebService requires mutual TLS. Without a client certificate there is no Application to authenticate — APPAP227E.",
+          lead: t("ccp.scenario.no-cert.ev1.lead"),
+          body: t("ccp.scenario.no-cert.ev1.body"),
         },
         {
-          lead: "Rejected before any Safe was touched.",
-          body: "Authentication failed at the door; no Safe authorization was evaluated and no credential was returned.",
+          lead: t("ccp.scenario.no-cert.ev2.lead"),
+          body: t("ccp.scenario.no-cert.ev2.body"),
         },
         {
-          lead: "This is the boundary working.",
-          body: "Require SSL + client certificates on the AIMWebService site is exactly what turns an anonymous call away.",
+          lead: t("ccp.scenario.no-cert.ev3.lead"),
+          body: t("ccp.scenario.no-cert.ev3.body"),
         },
       ],
     },
     denied: {
       key: "denied",
-      label: "Denied safe · expected authz failure",
-      tag: "authz deny",
+      label: t("ccp.scenario.denied.label"),
+      tag: t("ccp.scenario.denied.tag"),
       ok: false,
       failStage: 2,
-      desc: "Valid client certificate, but a Safe this Application is NOT permitted to read → AIMWebService denies it at the authorization layer.",
+      desc: t("ccp.scenario.denied.desc"),
       evidence: [
         {
-          lead: "Authentication passed, authorization did not.",
-          body: "The certificate mapped to a registered Application, but that App is not a member of the requested Safe.",
+          lead: t("ccp.scenario.denied.ev1.lead"),
+          body: t("ccp.scenario.denied.ev1.body"),
         },
         {
-          lead: "Least privilege at the Safe boundary.",
-          body: "A valid certificate is not enough — the Application must also be granted the specific Safe. It was not, so the request was refused (APPAP004E).",
+          lead: t("ccp.scenario.denied.ev2.lead"),
+          body: t("ccp.scenario.denied.ev2.body"),
         },
         {
-          lead: "No credential returned.",
-          body: "The denial happened server-side; nothing crossed back to the workload.",
+          lead: t("ccp.scenario.denied.ev3.lead"),
+          body: t("ccp.scenario.denied.ev3.body"),
         },
       ],
     },
     dual: {
       key: "dual",
-      label: "Dual account · expected success",
-      tag: "expect ✓",
+      label: t("ccp.scenario.dual.label"),
+      tag: t("ccp.scenario.dual.tag"),
       ok: true,
       failStage: -1,
-      desc: "Query a dual-account pair by custom property → AIMWebService returns whichever account is ACTIVE. On rotation the other goes active — zero downtime, no app change.",
+      desc: t("ccp.scenario.dual.desc"),
       evidence: [
         {
-          lead: "Zero-downtime rotation, resolved for you.",
-          body: "The query fronts a dual-account pair by virtual username; AIMWebService returns whichever account is currently active.",
+          lead: t("ccp.scenario.dual.ev1.lead"),
+          body: t("ccp.scenario.dual.ev1.body"),
         },
         {
-          lead: "The app never changes.",
-          body: "When the active account rotates to its partner, the same query resolves to the new active account — no code or config change.",
+          lead: t("ccp.scenario.dual.ev2.lead"),
+          body: t("ccp.scenario.dual.ev2.body"),
         },
         {
-          lead: "Still masked at the source.",
-          body: "As with every CCP retrieval, only the preview + hash of the active account's secret is shown.",
+          lead: t("ccp.scenario.dual.ev3.lead"),
+          body: t("ccp.scenario.dual.ev3.body"),
         },
       ],
     },
@@ -941,15 +938,9 @@ const swaProvider: Provider = {
   apiPath: "/api/swa",
   resultKey: "swa",
   subtitle: "spiffe · mtls · jwt-svid",
-  brand: { name: "Secure Workload Access", sub: "SPIFFE workload identity" },
-  heroTitle: "Reach the database by identity.",
-  heroLede: (
-    <>
-      This workload stores <strong>no credential</strong>. It proves who it is
-      with a short-lived SPIFFE SVID; the gateway authorizes by{" "}
-      <strong>SPIFFE ID</strong> before Postgres is ever reached.
-    </>
-  ),
+  brand: { name: "Secure Workload Access", sub: t("swa.brand.sub") },
+  heroTitle: t("swa.hero.title"),
+  heroLede: emph(t("swa.hero.lede")),
   ctx: [
     { k: "Trust domain", v: SWA_CTX.trustDomain, wide: true },
     { k: "Node group", v: SWA_CTX.nodeGroup },
@@ -972,89 +963,89 @@ const swaProvider: Provider = {
   scenarios: {
     trusted: {
       key: "trusted",
-      label: "Trusted workload",
-      tag: "expect ✓",
+      label: t("swa.scenario.trusted.label"),
+      tag: t("swa.scenario.trusted.tag"),
       ok: true,
       failStage: -1,
-      desc: "Issued a valid SVID, passes mTLS, and its SPIFFE ID is allow-listed at the gateway → it reads the shipments database.",
+      desc: t("swa.scenario.trusted.desc"),
       evidence: [
         {
-          lead: "Cryptographic identity, not a key.",
-          body: "The workload proved who it is with a short-lived SPIFFE SVID issued by the trust domain — no static API key or password anywhere.",
+          lead: t("swa.scenario.trusted.ev1.lead"),
+          body: t("swa.scenario.trusted.ev1.body"),
         },
         {
-          lead: "Authorized by SPIFFE ID at the gateway.",
-          body: "ghostunnel allow-lists the exact SPIFFE ID before the connection reaches Postgres; identity is the authorization.",
+          lead: t("swa.scenario.trusted.ev2.lead"),
+          body: t("swa.scenario.trusted.ev2.body"),
         },
         {
-          lead: "Nothing stored, nothing to leak.",
-          body: "The SVID is ephemeral and rotates; there is no credential on disk to steal or rotate manually.",
+          lead: t("swa.scenario.trusted.ev3.lead"),
+          body: t("swa.scenario.trusted.ev3.body"),
         },
       ],
     },
     untrusted: {
       key: "untrusted",
-      label: "Untrusted workload",
-      tag: "authz deny",
+      label: t("swa.scenario.untrusted.label"),
+      tag: t("swa.scenario.untrusted.tag"),
       ok: false,
       failStage: 4,
-      desc: "Holds a valid SVID, but its SPIFFE ID is NOT allow-listed at the gateway → rejected during the mTLS handshake, before Postgres.",
+      desc: t("swa.scenario.untrusted.desc"),
       evidence: [
         {
-          lead: "Valid identity, not authorized.",
-          body: "The workload has a genuine SVID from the same trust domain — but the gateway's allow-list does not include its SPIFFE ID.",
+          lead: t("swa.scenario.untrusted.ev1.lead"),
+          body: t("swa.scenario.untrusted.ev1.body"),
         },
         {
-          lead: "Authorization is on the identity.",
-          body: "Same CA, valid certificate — the gateway rejects the handshake purely because the SPIFFE ID is not permitted.",
+          lead: t("swa.scenario.untrusted.ev2.lead"),
+          body: t("swa.scenario.untrusted.ev2.body"),
         },
         {
-          lead: "No data crossed the wire.",
-          body: "The connection was refused at the gateway; Postgres was never reached.",
+          lead: t("swa.scenario.untrusted.ev3.lead"),
+          body: t("swa.scenario.untrusted.ev3.body"),
         },
       ],
     },
     unknown: {
       key: "unknown",
-      label: "Unknown workload",
-      tag: "no identity",
+      label: t("swa.scenario.unknown.label"),
+      tag: t("swa.scenario.unknown.tag"),
       ok: false,
       failStage: 2,
-      desc: "The node attests, but no registration policy matches this workload → the SWA server refuses to issue an SVID. With no identity, it cannot even attempt the resource.",
+      desc: t("swa.scenario.unknown.desc"),
       evidence: [
         {
-          lead: "No policy, no identity.",
-          body: "The SWA server has no node-group selector matching this workload, so it declines to mint an SVID at all.",
+          lead: t("swa.scenario.unknown.ev1.lead"),
+          body: t("swa.scenario.unknown.ev1.body"),
         },
         {
-          lead: "Failure is the default.",
-          body: "Without an SVID there is nothing to present at the gateway — the request never leaves the starting line.",
+          lead: t("swa.scenario.unknown.ev2.lead"),
+          body: t("swa.scenario.unknown.ev2.body"),
         },
         {
-          lead: "Explicit allow-listing.",
-          body: "Only workloads whose ns/sa match a registration entry receive an identity — everything else is unknown by design.",
+          lead: t("swa.scenario.unknown.ev3.lead"),
+          body: t("swa.scenario.unknown.ev3.body"),
         },
       ],
     },
     foreign: {
       key: "foreign",
-      label: "Foreign trust domain",
-      tag: "trust boundary",
+      label: t("swa.scenario.foreign.label"),
+      tag: t("swa.scenario.foreign.tag"),
       ok: false,
       failStage: 3,
-      desc: "A workload from a foreign trust domain (acme.courier) presents a self-signed identity → rejected at the mTLS trust boundary; no federation is configured.",
+      desc: t("swa.scenario.foreign.desc"),
       evidence: [
         {
-          lead: "Signed by a CA you don't anchor.",
-          body: "The peer presented a valid certificate — just from a foreign trust domain. Without federation, your trust roots don't anchor it.",
+          lead: t("swa.scenario.foreign.ev1.lead"),
+          body: t("swa.scenario.foreign.ev1.body"),
         },
         {
-          lead: "Rejected before any data moved.",
-          body: "The mTLS handshake failed at the door; no SVID exchange, no gateway authorization, no database access.",
+          lead: t("swa.scenario.foreign.ev2.lead"),
+          body: t("swa.scenario.foreign.ev2.body"),
         },
         {
-          lead: "This is the boundary working.",
-          body: "acme.courier still has its own identity — your trust roots simply do not anchor it. SWA trust-domain federation would resolve this.",
+          lead: t("swa.scenario.foreign.ev3.lead"),
+          body: t("swa.scenario.foreign.ev3.body"),
         },
       ],
     },
@@ -1362,25 +1353,11 @@ function makeConjur(jwt: boolean): Provider {
     resultKey: "conjur",
     subtitle: `secrets manager · ${authn}`,
     brand: {
-      name: jwt ? "Open Standard · JWT" : "Native Platform · AWS STS",
+      name: jwt ? t("conjur.jwt.brand.name") : t("conjur.iam.brand.name"),
       sub: "Idira Secrets Manager",
     },
-    heroTitle: "Fetch a scoped secret.",
-    heroLede: jwt ? (
-      <>
-        The workload presents a <strong>JWT-SVID</strong> to Secrets Manager (authn-jwt).
-        Secrets Manager validates it against the trust-domain JWKS, returns a{" "}
-        <strong>short-lived, scoped</strong> access token, and the app reads a
-        variable — no stored API key.
-      </>
-    ) : (
-      <>
-        The workload signs an <strong>sts:GetCallerIdentity</strong> with its
-        instance-profile role (via IMDS). Secrets Manager replays it to AWS (authn-iam),
-        verifies the ARN, and returns a <strong>short-lived, scoped</strong>{" "}
-        access token — no static AWS secret, no API key.
-      </>
-    ),
+    heroTitle: t("conjur.hero.title"),
+    heroLede: emph(jwt ? t("conjur.hero.lede.jwt") : t("conjur.hero.lede.iam")),
     ctx: [
       { k: "Tenant", v: "swa-demo.secretsmgr.cyberark.cloud", wide: true },
       { k: "Authenticator", v: `${authn}/swa` },
@@ -1447,81 +1424,81 @@ function makeConjur(jwt: boolean): Provider {
     scenarios: {
       authorized: {
         key: "authorized",
-        label: "Authorized retrieval",
-        tag: "expect ✓",
+        label: t("conjur.scenario.authorized.label"),
+        tag: t("conjur.scenario.authorized.tag"),
         ok: true,
         failStage: -1,
         desc: jwt
-          ? "Present a JWT-SVID → Secrets Manager authenticates it (authn-jwt), grants a scoped token, and the app reads the in-scope variable."
-          : "Sign an STS caller identity → Secrets Manager verifies the ARN (authn-iam), grants a scoped token, and the app reads the in-scope variable.",
+          ? t("conjur.scenario.authorized.desc.jwt")
+          : t("conjur.scenario.authorized.desc.iam"),
         evidence: [
           {
-            lead: "Workload-native identity, no key.",
+            lead: t("conjur.scenario.authorized.ev1.lead"),
             body: jwt
-              ? "The app authenticated with a JWT-SVID from SWA — no static API key and no long-lived credential."
-              : "The app authenticated with a signed sts:GetCallerIdentity from its instance-profile role — no static AWS secret, no Secrets Manager API key.",
+              ? t("conjur.scenario.authorized.ev1.body.jwt")
+              : t("conjur.scenario.authorized.ev1.body.iam"),
           },
           {
-            lead: "Short-lived, scoped token.",
-            body: "Secrets Manager returned an access token scoped to a limited set of variables; it expires quickly and is held only in memory.",
+            lead: t("conjur.scenario.authorized.ev2.lead"),
+            body: t("conjur.scenario.authorized.ev2.body"),
           },
           {
-            lead: "Masked at the source.",
-            body: "Only a short preview + hash is shown; the full secret is never logged or written to disk.",
+            lead: t("conjur.scenario.authorized.ev3.lead"),
+            body: t("conjur.scenario.authorized.ev3.body"),
           },
         ],
       },
       invalid: {
         key: "invalid",
-        label: "Invalid credential · expected authn deny",
-        tag: "authn deny",
+        label: t("conjur.scenario.invalid.label"),
+        tag: t("conjur.scenario.invalid.tag"),
         ok: false,
         failStage: authnFail,
         desc: jwt
-          ? "Present an invalid or expired JWT (bad signature / wrong audience / expired) → Secrets Manager's authn-jwt validation rejects it before any token is issued."
-          : "Present a tampered or expired STS request (or an ARN mapped to no host) → Secrets Manager replays it to AWS, AWS rejects it, and authn-iam fails before any token is issued.",
+          ? t("conjur.scenario.invalid.desc.jwt")
+          : t("conjur.scenario.invalid.desc.iam"),
         evidence: [
           {
             lead: jwt
-              ? "The token failed validation."
-              : "AWS didn't verify the request.",
+              ? t("conjur.scenario.invalid.ev1.lead.jwt")
+              : t("conjur.scenario.invalid.ev1.lead.iam"),
             body: jwt
-              ? "Secrets Manager checked the JWT against the trust-domain JWKS and required claims (issuer, audience, expiry) — it did not pass."
-              : "Secrets Manager replayed the sts:GetCallerIdentity to AWS; AWS rejected it (bad or expired signature), or the verified ARN maps to no Secrets Manager host.",
+              ? t("conjur.scenario.invalid.ev1.body.jwt")
+              : t("conjur.scenario.invalid.ev1.body.iam"),
           },
           {
-            lead: "No token, no secret.",
-            body: "Authentication failed before any access token was issued — nothing was authorized and nothing was read.",
+            lead: t("conjur.scenario.invalid.ev2.lead"),
+            body: t("conjur.scenario.invalid.ev2.body"),
           },
           {
             lead: jwt
-              ? "Signatures, not secrets."
-              : "Verified, not trusted blindly.",
+              ? t("conjur.scenario.invalid.ev3.lead.jwt")
+              : t("conjur.scenario.invalid.ev3.lead.iam"),
             body: jwt
-              ? "A forged or expired JWT can't be minted without the trust domain's signing key — the boundary holds."
-              : "Secrets Manager doesn't take the caller's word for it; it re-verifies the identity with AWS on every request.",
+              ? t("conjur.scenario.invalid.ev3.body.jwt")
+              : t("conjur.scenario.invalid.ev3.body.iam"),
           },
         ],
       },
       denied: {
         key: "denied",
-        label: "Out of scope · expected authz deny",
-        tag: "authz deny",
+        label: t("conjur.scenario.denied.label"),
+        tag: t("conjur.scenario.denied.tag"),
         ok: false,
         failStage: readStage,
-        desc: "Authentication succeeds and a scoped token is granted — but the token is NOT authorized to read a variable outside its scope → Secrets Manager refuses the read (403).",
+        desc: t("conjur.scenario.denied.desc"),
         evidence: [
           {
-            lead: "The token is scoped.",
-            body: "The access token may only read the variables its Secrets Manager policy grants — this one is outside that set.",
+            lead: t("conjur.scenario.denied.ev1.lead"),
+            body: t("conjur.scenario.denied.ev1.body"),
           },
           {
-            lead: "Least privilege by policy.",
-            body: "Even a valid identity and token cannot read arbitrary secrets; the token is scoped to specific variables by policy.",
+            lead: t("conjur.scenario.denied.ev2.lead"),
+            body: t("conjur.scenario.denied.ev2.body"),
           },
           {
-            lead: "No secret returned.",
-            body: "The read was refused (403 Forbidden); nothing crossed back to the workload.",
+            lead: t("conjur.scenario.denied.ev3.lead"),
+            body: t("conjur.scenario.denied.ev3.body"),
           },
         ],
       },
