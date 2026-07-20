@@ -1,11 +1,11 @@
 output "host_public_ip" {
-  description = "Public IP of the demo host."
-  value       = aws_instance.host.public_ip
+  description = "Stable public IP of the demo host (Elastic IP)."
+  value       = aws_eip.host.public_ip
 }
 
 output "host_public_dns" {
-  description = "Public DNS of the demo host."
-  value       = aws_instance.host.public_dns
+  description = "Public DNS of the demo host (Elastic IP)."
+  value       = aws_eip.host.public_dns
 }
 
 locals {
@@ -21,7 +21,7 @@ output "ssh_private_key_path" {
 
 output "webapp_url" {
   description = "Direct NodePort URL for the demo webapp UI (plain HTTP)."
-  value       = "http://${aws_instance.host.public_ip}:${var.webapp_nodeport}"
+  value       = "http://${aws_eip.host.public_ip}:${var.webapp_nodeport}"
 }
 
 output "alb_dns_name" {

@@ -17,16 +17,25 @@ log() { echo -e "\033[34m[webapp]\033[0m $*"; }
 
 # docker-driver minikube keeps the NodePort on the minikube container IP, not the
 # host's public interface, so the SG-opened public URL is unreachable without a
-# bridge. Forward host:NODEPORT -> minikube:NODEPORT with a transient systemd
-# unit running socat (installed by the common ansible role). Idempotent.
+# bridge forwarding host:NODEPORT -> minikube:NODEPORT.
+#
+# Prefer the persistent swa-webapp-forward unit (installed by the minikube ansible
+# role): it resolves the minikube IP itself on each start and survives reboots, so
+# a power cycle self-heals. Fall back to a transient unit when that unit isn't
+# installed (e.g. running this script against an older host). Idempotent either way.
 expose() {
+  if systemctl cat swa-webapp-forward.service >/dev/null 2>&1; then
+    log "Restarting persistent NodePort bridge (swa-webapp-forward)"
+    sudo systemctl restart swa-webapp-forward
+    return
+  fi
   local mk_ip
   mk_ip="$(minikube ip 2>/dev/null || true)"
   if [[ -z "${mk_ip}" ]]; then
     log "WARN: could not resolve 'minikube ip'; skipping NodePort forward"
     return
   fi
-  log "Bridging host:${WEBAPP_NODEPORT} -> ${mk_ip}:${WEBAPP_NODEPORT} (socat/systemd)"
+  log "Bridging host:${WEBAPP_NODEPORT} -> ${mk_ip}:${WEBAPP_NODEPORT} (transient socat/systemd)"
   sudo systemctl stop swa-webapp-forward 2>/dev/null || true
   sudo systemctl reset-failed swa-webapp-forward 2>/dev/null || true
   sudo systemd-run --unit=swa-webapp-forward --collect \

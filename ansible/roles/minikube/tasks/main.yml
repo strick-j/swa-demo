@@ -69,3 +69,63 @@
 - name: Report nodes
   ansible.builtin.debug:
     var: nodes_out.stdout_lines
+
+# --- Boot persistence -------------------------------------------------------
+# A stop/start (power cycle) leaves minikube Stopped and drops any transient
+# NodePort bridge, so the demo comes back 502 until someone reruns things by
+# hand. These two units make the stack self-heal on boot: minikube starts after
+# docker, then the socat bridge starts after minikube and re-resolves the
+# (possibly changed) minikube IP on every (re)start.
+- name: Install minikube autostart unit
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/swa-minikube.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Start minikube (docker driver) on boot
+      After=docker.service network-online.target
+      Requires=docker.service
+      Wants=network-online.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      User={{ minikube_user }}
+      Environment=HOME=/home/{{ minikube_user }}
+      Environment=MINIKUBE_HOME=/home/{{ minikube_user }}/.minikube
+      ExecStart=/usr/local/bin/minikube start
+      ExecStop=/usr/local/bin/minikube stop
+      TimeoutStartSec=600
+
+      [Install]
+      WantedBy=multi-user.target
+
+- name: Install webapp NodePort bridge unit
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/swa-webapp-forward.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Forward host:{{ webapp_nodeport | default(30080) }} -> minikube NodePort (webapp bridge)
+      After=swa-minikube.service
+      Requires=swa-minikube.service
+
+      [Service]
+      User={{ minikube_user }}
+      Environment=HOME=/home/{{ minikube_user }}
+      Environment=MINIKUBE_HOME=/home/{{ minikube_user }}/.minikube
+      ExecStart=/bin/sh -c 'MK="$(/usr/local/bin/minikube ip)"; exec /usr/bin/socat TCP-LISTEN:{{ webapp_nodeport | default(30080) }},fork,reuseaddr TCP:"$MK":{{ webapp_nodeport | default(30080) }}'
+      Restart=always
+      RestartSec=5
+
+      [Install]
+      WantedBy=multi-user.target
+
+- name: Enable minikube + webapp bridge on boot
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    daemon_reload: true
+  loop:
+    - swa-minikube.service
+    - swa-webapp-forward.service

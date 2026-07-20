@@ -75,3 +75,21 @@ resource "aws_instance" "host" {
     Role = "minikube-swa"
   }
 }
+
+# Static Elastic IP: an auto-assigned public IP changes on every stop/start, which
+# breaks SSH targets and any host-exec/DNS that points at the host. The EIP pins a
+# stable address that survives stop/start.
+#
+# IMPORTANT — adopting an already-allocated EIP: if you created the EIP out of band
+# (aws ec2 allocate-address), import it BEFORE the next apply so Terraform manages
+# the existing address instead of allocating a second one:
+#
+#   terraform import aws_eip.host <allocation-id>   # e.g. eipalloc-0abc123...
+resource "aws_eip" "host" {
+  domain   = "vpc"
+  instance = aws_instance.host.id
+
+  tags = {
+    Name = "${var.project}-host-eip"
+  }
+}
