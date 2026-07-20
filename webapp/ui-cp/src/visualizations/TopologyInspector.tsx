@@ -189,7 +189,7 @@ export function TopologyInspector({
         {done && (
           <div style={ts.resolved}>
             <CircleCheckBig style={{ width: 14, height: 14 }} />
-            credential returned · full secret never exposed
+            {t("viz.topo.resolved")}
           </div>
         )}
       </div>

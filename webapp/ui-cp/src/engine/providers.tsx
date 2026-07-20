@@ -888,7 +888,7 @@ function appendOutcome(
             scenario === "dual" && r.dualActive
               ? `  "DualAccountStatus": "${r.dualActive}",`
               : "",
-            `  "Content": "${r.masked}"   // masked — full value never shown`,
+            `  "Content": "${r.masked}"   // ${t("conjur.trace.masked")}`,
             "}",
           ];
     for (const t of body.filter(Boolean))
@@ -1977,13 +1977,13 @@ function makeConjur(jwt: boolean): Provider {
         lines.push({
           s: readStage,
           kind: "out",
-          text: `${secret} = ${r.masked}   // masked — full value never shown`,
+          text: `${secret} = ${r.masked}   // ${t("conjur.trace.masked")}`,
           terminal: true,
         });
         lines.push({
           s: readStage,
           kind: "ok",
-          text: "✓ retrieved · scoped token · secret masked at the source",
+          text: t("conjur.trace.retrieved"),
           terminal: true,
         });
       } else if (r && scenario === "invalid") {
@@ -2003,8 +2003,8 @@ function makeConjur(jwt: boolean): Provider {
           s: authnFail,
           kind: "err",
           text: jwt
-            ? "✗ authn-jwt failed — the JWT did not validate; no token was issued"
-            : "✗ authn-iam failed — AWS rejected the signed request; no token was issued",
+            ? t("conjur.trace.authnFail.jwt")
+            : t("conjur.trace.authnFail.iam"),
           terminal: true,
         });
       } else if (r) {
@@ -2023,7 +2023,7 @@ function makeConjur(jwt: boolean): Provider {
         lines.push({
           s: readStage,
           kind: "err",
-          text: "✗ denied — the scoped token is not authorized for this variable",
+          text: t("conjur.trace.denied"),
           terminal: true,
         });
       }
