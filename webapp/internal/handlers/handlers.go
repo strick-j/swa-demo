@@ -8,10 +8,12 @@ import (
 	"html/template"
 	"io/fs"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/strick-j/swa-demo/webapp/internal/db"
 	"github.com/strick-j/swa-demo/webapp/internal/foreign"
+	"github.com/strick-j/swa-demo/webapp/internal/i18n"
 	"github.com/strick-j/swa-demo/webapp/internal/retrieve"
 	"github.com/strick-j/swa-demo/webapp/internal/retrieve/ccp"
 	"github.com/strick-j/swa-demo/webapp/internal/retrieve/cp"
@@ -122,6 +124,7 @@ func New(d Deps) *Server {
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleLanding)
+	mux.HandleFunc("/lang", s.handleSetLang)
 	// The one inspector SPA (Vite base=/cp/, assets under /cp/) serves the whole
 	// Credential-Providers + SWA family: /cp (local CP), /credential-providers
 	// (CCP), and /swa. The React app picks the provider from the URL path; the
@@ -211,7 +214,21 @@ func (s *Server) handleLanding(w http.ResponseWriter, r *http.Request) {
 	if s.registry != nil {
 		families = s.registry.Catalog()
 	}
-	s.renderPage(w, s.pages.Landing, struct{ Families []retrieve.FamilyInfo }{families})
+	s.renderPage(w, s.pages.Landing, struct {
+		Families []retrieve.FamilyInfo
+		Locale   string
+	}{families, i18n.Resolve(r)})
+}
+
+// handleSetLang persists the chosen locale in the shared "lang" cookie and
+// redirects back. next is restricted to local paths to avoid an open redirect.
+func (s *Server) handleSetLang(w http.ResponseWriter, r *http.Request) {
+	i18n.SetCookie(w, r.URL.Query().Get("set"))
+	next := r.URL.Query().Get("next")
+	if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
+		next = "/"
+	}
+	http.Redirect(w, r, next, http.StatusSeeOther)
 }
 
 // handleSWA renders the Secure Workload Access switcher page.

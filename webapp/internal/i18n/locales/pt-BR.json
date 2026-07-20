@@ -1,0 +1,11 @@
+{
+  "landing.nav.brand": "Idira Secrets",
+  "landing.nav.secured": "protegido por idira · palo alto networks",
+  "landing.nav.cta": "Iniciar a demonstração",
+  "landing.lang.label": "Idioma",
+  "landing.hero.eyebrow": "Identidade de máquina para cada carga de trabalho",
+  "landing.hero.title_html": "Suas cargas de trabalho têm segredos.<br />Elas não deveriam precisar <span class=\"accent\">armazená-los</span>.",
+  "landing.hero.lede": "A Idira dá a cada aplicação — legada ou nativa da nuvem — uma identidade criptográfica e então entrega segredos efêmeros e restritos que nunca guarda. Escolha um caminho e veja a troca de identidade acontecer ao vivo.",
+  "landing.hero.cta_primary_html": "Escolha sua aventura &darr;",
+  "landing.hero.cta_secondary": "Qual é o problema?"
+}
