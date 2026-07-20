@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/strick-j/swa-demo/webapp/internal/db"
-	"github.com/strick-j/swa-demo/webapp/internal/i18n"
 	"github.com/strick-j/swa-demo/webapp/internal/foreign"
+	"github.com/strick-j/swa-demo/webapp/internal/i18n"
 	"github.com/strick-j/swa-demo/webapp/internal/retrieve"
 	"github.com/strick-j/swa-demo/webapp/internal/retrieve/ccp"
 	"github.com/strick-j/swa-demo/webapp/internal/retrieve/cp"
