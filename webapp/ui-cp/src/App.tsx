@@ -11,12 +11,13 @@ import { AccessibilityHints } from "./components/AccessibilityHints";
 import { TopologyInspector } from "./visualizations/TopologyInspector";
 import { LayersInspector } from "./visualizations/LayersInspector";
 import { TraceInspector } from "./visualizations/TraceInspector";
+import { Walkthrough } from "./visualizations/Walkthrough";
 import { useResolveEngine } from "./engine/useResolveEngine";
 import { providerFromPath, pmeta, type ScenarioKey } from "./engine/providers";
 import * as paceQueue from "./engine/paceQueue";
 import { t } from "./i18n";
 
-type ViewMode = "topology" | "layers" | "trace";
+type ViewMode = "topology" | "layers" | "trace" | "walkthrough";
 type PaceMode = "off" | "fast" | "medium" | "slow";
 
 const VIEW_OPTIONS: { v: ViewMode; label: string; icon: React.ReactNode }[] = [
@@ -78,6 +79,10 @@ export function App() {
     engine.reset();
   }, [engine]);
 
+  const handleLearnMore = useCallback(() => {
+    setView("walkthrough");
+  }, []);
+
   const inspectorControls = useMemo(
     () => (
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -136,6 +141,7 @@ export function App() {
           stageVerb={engine.stageVerb}
           onResolve={handleResolve}
           result={engine.result}
+          onLearnMore={handleLearnMore}
         />
       </div>
 
@@ -152,6 +158,7 @@ export function App() {
           {view === "topology" && <TopologyInspector {...vizProps} />}
           {view === "layers" && <LayersInspector {...vizProps} />}
           {view === "trace" && <TraceInspector {...vizProps} />}
+          {view === "walkthrough" && <Walkthrough provider={provider} />}
         </InspectorChrome>
       </div>
     </div>
