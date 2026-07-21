@@ -142,6 +142,7 @@ const jwtFlow: FlowConfig = {
   }),
   links: SM_LINKS,
   chip: ["header", "payload", "sig"],
+  canvasHeight: 380,
   steps: [
     {
       title: "The JWT Authenticator — Actors Overview",
@@ -223,6 +224,7 @@ const iamFlow: FlowConfig = {
   }),
   links: SM_LINKS,
   chip: ["akid", "sig"],
+  canvasHeight: 380,
   steps: [
     {
       title: "The IAM Authenticator — Actors Overview",
@@ -330,7 +332,7 @@ const ccpRetrieval: FlowConfig = {
   nodes: CCP_NODES,
   links: CCP_LINKS,
   chip: ["client cert"],
-  canvasHeight: 380,
+  canvasHeight: 420,
   steps: [
     {
       title: "The Central Credential Provider — Actors Overview",
@@ -379,7 +381,7 @@ const ccpRotation: FlowConfig = {
   lede: "Running continuously behind every request: how Idira Privilege Cloud rotates the target credential and keeps the CCP's cache current, so the app always retrieves a valid secret without any change.",
   nodes: CCP_NODES,
   links: CCP_LINKS,
-  canvasHeight: 380,
+  canvasHeight: 420,
   steps: [
     {
       title: "Background — Rotation & Refresh Overview",
@@ -460,7 +462,7 @@ const cpRetrieval: FlowConfig = {
   nodes: CP_NODES,
   links: CP_LINKS,
   chip: ["app hash"],
-  canvasHeight: 380,
+  canvasHeight: 420,
   steps: [
     {
       title: "The Credential Provider — Actors Overview",
@@ -515,7 +517,7 @@ const cpRotation: FlowConfig = {
   lede: "Running continuously behind every request: how Idira Privilege Cloud rotates the target credential and keeps the local Credential Provider's cache current, so the app always retrieves a valid secret without any change.",
   nodes: CP_NODES,
   links: CP_LINKS,
-  canvasHeight: 380,
+  canvasHeight: 420,
   steps: [
     {
       title: "Background — Rotation & Refresh Overview",
@@ -559,22 +561,22 @@ const cpRotation: FlowConfig = {
    ========================================================================= */
 
 const DUAL = {
-  app: { left: 2, top: 38, width: 17, height: 18 },
-  cp: { left: 23, top: 33, width: 20, height: 28 },
-  vault: { left: 47, top: 12, width: 27, height: 66 },
-  acctA: { left: 49, top: 19, width: 23, height: 25 },
-  acctB: { left: 49, top: 50, width: 23, height: 25 },
-  cpm: { left: 78, top: 18, width: 20, height: 19 },
-  target: { left: 77, top: 58, width: 21, height: 19 },
+  app: { left: 1, top: 41, width: 15, height: 16 },
+  cp: { left: 20, top: 36, width: 21, height: 26 },
+  vault: { left: 46, top: 11, width: 28, height: 72 },
+  acctA: { left: 48, top: 17, width: 24, height: 27 },
+  acctB: { left: 48, top: 52, width: 24, height: 27 },
+  cpm: { left: 79, top: 14, width: 19, height: 21 },
+  target: { left: 78, top: 61, width: 20, height: 21 },
 } as const;
 
 const DUAL_LINKS: WLinkDef[] = [
-  { id: "app_to_cp", d: "M19,44 C20,44 22,44 23,44", label: { x: 21, y: 40 }, head: { x: 23, y: 44 } },
-  { id: "cp_to_app", d: "M23,51 C22,51 20,51 19,51", label: { x: 21, y: 55 }, head: { x: 19, y: 51 } },
-  { id: "cp_to_acctA", d: "M43,42 C46,37 47,34 49,32", label: { x: 46, y: 35 }, head: { x: 49, y: 32 } },
-  { id: "cp_to_acctB", d: "M43,54 C46,58 47,61 49,62", label: { x: 46, y: 60 }, head: { x: 49, y: 62 } },
-  { id: "cpm_to_acctA", d: "M78,28 C76,28 74,29 72,30", label: { x: 75, y: 24 }, head: { x: 72, y: 30 } },
-  { id: "cpm_to_target", d: "M88,37 L88,58", label: { x: 93, y: 48 }, head: { x: 88, y: 58 } },
+  { id: "app_to_cp", d: "M16,47 C17,47 19,47 20,47", label: { x: 18, y: 43 }, head: { x: 20, y: 47 } },
+  { id: "cp_to_app", d: "M20,53 C19,53 17,53 16,53", label: { x: 18, y: 57 }, head: { x: 16, y: 53 } },
+  { id: "cp_to_acctA", d: "M41,45 C44,39 46,33 48,30", label: { x: 44, y: 36 }, head: { x: 48, y: 30 } },
+  { id: "cp_to_acctB", d: "M41,53 C44,59 46,63 48,65", label: { x: 44, y: 61 }, head: { x: 48, y: 65 } },
+  { id: "cpm_to_acctA", d: "M79,25 C77,25 74,28 72,30", label: { x: 75, y: 21 }, head: { x: 72, y: 30 } },
+  { id: "cpm_to_target", d: "M88.5,35 L88,61", label: { x: 93, y: 48 }, head: { x: 88, y: 61 } },
 ];
 
 // Account status detail (rendered inside the Account A/B cards).
@@ -594,7 +596,7 @@ function makeDual(providerTitle: string): FlowConfig {
     eyebrow: "Dual Account",
     title: "Zero-Downtime Credential Rotation",
     lede: "Two accounts, one always active — how IDIRA Dual Accounts guarantee the Credential Provider always serves a valid credential, even during password rotation.",
-    canvasHeight: 400,
+    canvasHeight: 460,
     nodes: [
       { key: "app", title: "Application", sub: "requests credentials", box: DUAL.app },
       { key: "cp", title: providerTitle, sub: "in-memory cache", box: DUAL.cp },
@@ -611,7 +613,7 @@ function makeDual(providerTitle: string): FlowConfig {
         body: "In the Vault, Account A is tagged ACTIVE and Account B INACTIVE via the DualAccountStatus property. On the target system both accounts exist with identical permissions and are both enabled — the Vault status is the only switch.",
         focus: ["vault", "acctA", "cp", "target"],
         detail: { acctA: A_ACTIVE, acctB: B_INACTIVE, cp: CP_SERVE_A },
-        links: [{ id: "cp_to_acctA", label: "serving", tone: "brand" }],
+        links: [{ id: "cp_to_acctA", tone: "brand" }],
       },
       {
         title: "Steady State — the App Is Served Account A",
@@ -621,7 +623,7 @@ function makeDual(providerTitle: string): FlowConfig {
         links: [
           { id: "app_to_cp", label: "request", tone: "brand" },
           { id: "cp_to_app", label: "cred", tone: "ok" },
-          { id: "cp_to_acctA", label: "serving", tone: "brand" },
+          { id: "cp_to_acctA", tone: "brand" },
         ],
       },
       {
@@ -643,7 +645,7 @@ function makeDual(providerTitle: string): FlowConfig {
         body: "The Credential Provider detects the status change in the Vault and refreshes its cache — it now serves Account B. The grace period gives every CP in the environment time to switch before any password is touched.",
         focus: ["cp", "acctB", "vault"],
         detail: { acctA: A_INACTIVE, acctB: B_ACTIVE, cp: CP_SERVE_B },
-        links: [{ id: "cp_to_acctB", label: "serving", tone: "brand" }],
+        links: [{ id: "cp_to_acctB", tone: "brand" }],
       },
       {
         title: "Business Continues — Zero Interruption",
@@ -653,7 +655,7 @@ function makeDual(providerTitle: string): FlowConfig {
         links: [
           { id: "app_to_cp", label: "request", tone: "brand" },
           { id: "cp_to_app", label: "cred", tone: "ok" },
-          { id: "cp_to_acctB", label: "serving", tone: "brand" },
+          { id: "cp_to_acctB", tone: "brand" },
         ],
       },
       {
@@ -662,7 +664,7 @@ function makeDual(providerTitle: string): FlowConfig {
         focus: ["cpm", "target", "acctA"],
         detail: { acctA: A_RESET, acctB: B_ACTIVE, cp: CP_SERVE_B },
         links: [
-          { id: "cpm_to_acctA", label: "update vault", tone: "brand" },
+          { id: "cpm_to_acctA", label: "update", tone: "brand" },
           { id: "cpm_to_target", label: "reset pw", tone: "brand" },
         ],
       },
@@ -674,7 +676,7 @@ function makeDual(providerTitle: string): FlowConfig {
         links: [
           { id: "app_to_cp", label: "request", tone: "brand" },
           { id: "cp_to_app", label: "cred", tone: "ok" },
-          { id: "cp_to_acctB", label: "serving", tone: "brand" },
+          { id: "cp_to_acctB", tone: "brand" },
         ],
       },
     ],

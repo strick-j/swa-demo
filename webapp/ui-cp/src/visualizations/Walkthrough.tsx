@@ -196,23 +196,11 @@ function Diagram({ flow, step }: { flow: FlowConfig; step: WStep }) {
 
   return (
     <div style={{ position: "relative", width: "100%", height: flow.canvasHeight ?? 360 }}>
+      {/* dormant rails — painted behind everything */}
       <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
-        {/* dormant rails */}
         {flow.links.map((l) => (
           <path key={`rail-${l.id}`} d={l.d} fill="none" stroke={INK.line} strokeWidth={1} vectorEffect="non-scaling-stroke" />
         ))}
-        {/* active connectors */}
-        {activeLinks.map((l) => {
-          const g = linkById[l.id];
-          if (!g) return null;
-          const col = toneColor(l.tone);
-          return (
-            <g key={`live-${l.id}`}>
-              <path d={g.d} fill="none" stroke={col} strokeWidth={1.6} vectorEffect="non-scaling-stroke" className="wk-flow" />
-              <circle cx={g.head.x} cy={g.head.y} r={0.9} fill={col} />
-            </g>
-          );
-        })}
       </svg>
 
       {/* container rings behind cards */}
@@ -235,6 +223,26 @@ function Diagram({ flow, step }: { flow: FlowConfig; step: WStep }) {
           />
         );
       })}
+
+      {/* active connectors + end-dots — painted ABOVE the cards (DOM order) so
+          a line terminating on a box edge sits on the top-most layer */}
+      <svg
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}
+      >
+        {activeLinks.map((l) => {
+          const g = linkById[l.id];
+          if (!g) return null;
+          const col = toneColor(l.tone);
+          return (
+            <g key={`live-${l.id}`}>
+              <path d={g.d} fill="none" stroke={col} strokeWidth={1.6} vectorEffect="non-scaling-stroke" className="wk-flow" />
+              <circle cx={g.head.x} cy={g.head.y} r={1} fill={col} />
+            </g>
+          );
+        })}
+      </svg>
 
       {/* credential chips */}
       {flow.chip &&
