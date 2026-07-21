@@ -55,11 +55,11 @@ const BOX: Record<
   idp: { left: 2, top: 10, width: 18, height: 18 },
   workload: { left: 2, top: 48, width: 18, height: 18 },
   container: { left: 36, top: 6, width: 30, height: 86 },
-  validator: { left: 39, top: 14, width: 24, height: 20 },
-  policy: { left: 39, top: 40, width: 24, height: 20 },
-  vault: { left: 39, top: 66, width: 24, height: 20 },
+  validator: { left: 39, top: 13, width: 24, height: 23 },
+  policy: { left: 39, top: 40, width: 24, height: 23 },
+  vault: { left: 39, top: 66, width: 24, height: 23 },
   privcontainer: { left: 70, top: 58, width: 28, height: 32 },
-  privvault: { left: 73, top: 66, width: 22, height: 18 },
+  privvault: { left: 73, top: 66, width: 22, height: 20 },
 };
 
 // Connector geometry (path + label anchor + arrow head) in the same % space.
@@ -88,19 +88,19 @@ const LINK: Record<
     head: { x: 20, y: 59 },
   },
   policy_to_vault: {
-    d: "M51,60 L51,66",
-    label: { x: 57, y: 63 },
+    d: "M51,63 L51,66",
+    label: { x: 57, y: 64 },
     head: { x: 51, y: 66 },
   },
   vault_to_workload: {
-    d: "M39,80 C31,90 25,82 20,63",
-    label: { x: 29, y: 85 },
+    d: "M39,82 C31,92 25,84 20,63",
+    label: { x: 29, y: 86 },
     head: { x: 20, y: 63 },
   },
   privvault_to_vault: {
-    d: "M73,75 C69,75 66,76 63,76",
-    label: { x: 68, y: 70 },
-    head: { x: 63, y: 76 },
+    d: "M73,76 C69,76 66,77 63,77",
+    label: { x: 68, y: 71 },
+    head: { x: 63, y: 77 },
   },
 };
 
