@@ -381,7 +381,8 @@ export function PortalPane({
     provider.id === "conjur-jwt" ||
     provider.id === "conjur-iam" ||
     provider.id === "cp" ||
-    provider.id === "ccp";
+    provider.id === "ccp" ||
+    provider.id === "swa";
 
   return (
     <div style={ps.pane}>
