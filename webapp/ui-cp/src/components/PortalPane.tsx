@@ -8,6 +8,8 @@ import {
   XOctagon,
   CheckCircle2,
   ChevronLeft,
+  BookOpen,
+  ArrowRight,
 } from "lucide-react";
 import { Button } from "./Button";
 import { Badge } from "./Badge";
@@ -26,6 +28,7 @@ interface PortalPaneProps {
   stageVerb: string;
   onResolve: () => void;
   result: ProviderResult | null;
+  onLearnMore?: () => void;
 }
 
 const ps = {
@@ -118,6 +121,25 @@ const ps = {
     lineHeight: 1.55,
     color: "var(--text-muted)",
     maxWidth: 460,
+  },
+  learnMore: {
+    display: "flex",
+    alignItems: "center",
+    gap: 9,
+    width: "100%",
+    maxWidth: 470,
+    textAlign: "left" as const,
+    padding: "12px 16px",
+    borderRadius: "var(--radius-md)",
+    border: "1px solid var(--border-default)",
+    background: "var(--neutral-0)",
+    color: "var(--text-link)",
+    fontFamily: "var(--font-sans)",
+    fontSize: 13.5,
+    fontWeight: 600,
+    cursor: "pointer",
+    flexShrink: 0 as const,
+    transition: "all 160ms var(--ease-standard)",
   },
   selectWrap: {
     display: "flex",
@@ -347,6 +369,7 @@ export function PortalPane({
   stageVerb,
   onResolve,
   result,
+  onLearnMore,
 }: PortalPaneProps) {
   const busy = status === "running";
   const done = status === "done";
@@ -354,6 +377,8 @@ export function PortalPane({
   const meta = pmeta(provider, scenario);
   const r = result;
   const isSwa = provider.id === "swa";
+  const hasWalkthrough =
+    provider.id === "conjur-jwt" || provider.id === "conjur-iam";
 
   return (
     <div style={ps.pane}>
@@ -410,6 +435,26 @@ export function PortalPane({
           <h1 style={ps.h1}>{provider.heroTitle}</h1>
           <p style={ps.lede}>{provider.heroLede}</p>
         </div>
+
+        {hasWalkthrough && onLearnMore && (
+          <button
+            type="button"
+            onClick={onLearnMore}
+            style={ps.learnMore}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "var(--surface-brand-tint)";
+              e.currentTarget.style.borderColor = "var(--border-brand)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "var(--neutral-0)";
+              e.currentTarget.style.borderColor = "var(--border-default)";
+            }}
+          >
+            <BookOpen size={15} style={{ flexShrink: 0 }} />
+            <span>{t("chrome.portal.learnMore")}</span>
+            <ArrowRight size={15} style={{ flexShrink: 0, marginLeft: "auto" }} />
+          </button>
+        )}
 
         {/* use-case selection */}
         <div style={ps.selectWrap}>

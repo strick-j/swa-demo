@@ -90,6 +90,15 @@
   100% { transform: scale(1); }
 }
 
+/* Walkthrough: animated dash flow along an active connector (direction cue). */
+@keyframes wkDash {
+  to { stroke-dashoffset: -20; }
+}
+.wk-flow {
+  stroke-dasharray: 4 5;
+  animation: wkDash 0.9s linear infinite;
+}
+
 /* Skip-to-content link: visible only on :focus-visible. */
 a[href="#main-content"]:focus-visible {
   position: fixed !important;

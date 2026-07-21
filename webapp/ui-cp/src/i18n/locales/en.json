@@ -215,6 +215,7 @@
   "chrome.portal.backToDemos": "Back to all demos",
   "chrome.portal.securedBy": "Secured by Idira",
   "chrome.portal.useCase": "Use case",
+  "chrome.portal.learnMore": "Learn how it works",
   "chrome.portal.retrieving": "Retrieving…",
   "chrome.portal.retrieveAgain": "Retrieve again",
   "chrome.portal.retrieve": "Retrieve credential",
