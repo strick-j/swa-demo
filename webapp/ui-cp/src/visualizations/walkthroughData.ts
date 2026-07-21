@@ -696,32 +696,32 @@ function makeDual(providerTitle: string): FlowConfig {
    ========================================================================= */
 
 const SWA = {
-  node: { left: 1, top: 14, width: 30, height: 50 },
-  workload: { left: 4, top: 21, width: 24, height: 18 },
-  agent: { left: 4, top: 45, width: 24, height: 15 },
-  swa: { left: 40, top: 8, width: 33, height: 64 },
-  attestor: { left: 43, top: 14, width: 27, height: 16 },
-  registrar: { left: 43, top: 34, width: 27, height: 16 },
-  issuer: { left: 43, top: 54, width: 27, height: 16 },
-  target: { left: 79, top: 42, width: 19, height: 20 },
+  node: { left: 2, top: 8, width: 37, height: 58 },
+  agent: { left: 6, top: 15, width: 29, height: 20 },
+  workload: { left: 6, top: 42, width: 29, height: 20 },
+  target: { left: 6, top: 74, width: 29, height: 18 },
+  swa: { left: 52, top: 6, width: 44, height: 80 },
+  issuer: { left: 56, top: 13, width: 36, height: 19 },
+  registrar: { left: 56, top: 39, width: 36, height: 19 },
+  attestor: { left: 56, top: 65, width: 36, height: 19 },
 } as const;
 
 const SWA_NODES: WNode[] = [
-  { key: "node", kind: "container", title: "Node · platform", box: SWA.node },
-  { key: "workload", title: "Workload · Pod", sub: "namespace / service account", box: SWA.workload },
+  { key: "node", kind: "container", title: "Node · Platform", box: SWA.node },
   { key: "agent", title: "SWA Agent", sub: "Workload API", box: SWA.agent },
-  { key: "swa", kind: "container", title: "Secure Workload Access · SaaS", box: SWA.swa },
-  { key: "attestor", title: "Node Attestor", sub: "platform attestation", box: SWA.attestor },
-  { key: "registrar", title: "Workload Registrar", sub: "ns / sa selectors", box: SWA.registrar },
-  { key: "issuer", title: "SVID Issuer", sub: "trust-domain CA", box: SWA.issuer },
+  { key: "workload", title: "Workload · Pod", sub: "namespace / service account", box: SWA.workload },
   { key: "target", title: "Target Service", sub: "any SPIFFE/SVID-aware endpoint", box: SWA.target },
+  { key: "swa", kind: "container", title: "Secure Workload Access · SaaS", box: SWA.swa },
+  { key: "issuer", title: "SVID Issuer", sub: "trust-domain CA", box: SWA.issuer },
+  { key: "registrar", title: "Workload Registrar", sub: "ns / sa selectors", box: SWA.registrar },
+  { key: "attestor", title: "Node Attestor", sub: "platform attestation", box: SWA.attestor },
 ];
 
 const SWA_LINKS: WLinkDef[] = [
-  { id: "wl_to_agent", d: "M16,39 L16,45", label: { x: 21, y: 42 }, head: { x: 16, y: 45 } },
-  { id: "agent_to_swa", d: "M28,52 C36,44 40,30 43,24", label: { x: 35, y: 39 }, head: { x: 43, y: 24 } },
-  { id: "swa_to_wl", d: "M43,62 C36,58 32,44 28,34", label: { x: 32, y: 50 }, head: { x: 28, y: 34 } },
-  { id: "wl_to_target", d: "M10,39 C10,84 56,88 79,56", label: { x: 45, y: 86 }, head: { x: 79, y: 56 } },
+  { id: "wl_to_agent", d: "M20.5,42 L20.5,35", label: { x: 26, y: 38 }, head: { x: 20.5, y: 35 } },
+  { id: "agent_to_attestor", d: "M35,27 C47,38 49,62 56,73", label: { x: 46, y: 50 }, head: { x: 56, y: 73 } },
+  { id: "issuer_to_wl", d: "M56,23 C48,30 42,42 35,50", label: { x: 45, y: 34 }, head: { x: 35, y: 50 } },
+  { id: "wl_to_target", d: "M20.5,62 L20.5,74", label: { x: 26, y: 68 }, head: { x: 20.5, y: 74 } },
 ];
 
 const swaFlow: FlowConfig = {
@@ -733,7 +733,7 @@ const swaFlow: FlowConfig = {
   nodes: SWA_NODES,
   links: SWA_LINKS,
   chip: ["SPIFFE ID"],
-  canvasHeight: 420,
+  canvasHeight: 440,
   steps: [
     {
       title: "The Actors — Identity, Not Credentials",
@@ -750,7 +750,7 @@ const swaFlow: FlowConfig = {
       title: "SWA Agent Attests the Node",
       body: "The Agent proves the node to the SWA server using platform attestation — on Kubernetes, a projected ServiceAccount token verified via TokenReview. This establishes that the node genuinely belongs to a registered node group.",
       focus: ["node", "agent", "swa", "attestor"],
-      links: [{ id: "agent_to_swa", label: "attest node", tone: "brand" }],
+      links: [{ id: "agent_to_attestor", label: "attest node", tone: "brand" }],
       detail: { attestor: { lines: ["node → SWA server", "platform token verified", "node group confirmed"], ok: true } },
     },
     {
@@ -763,7 +763,7 @@ const swaFlow: FlowConfig = {
       title: "SVID Issued by the Trust Domain",
       body: "The SWA SaaS mints a short-lived SVID for the workload — a SPIFFE ID (spiffe://<trust-domain>/…) signed by the trust-domain CA, available as an X.509-SVID for mTLS or a JWT-SVID. It is delivered to the workload, auto-rotates, and is never written to disk.",
       focus: ["swa", "issuer", "workload"],
-      links: [{ id: "swa_to_wl", label: "SVID", tone: "brand" }],
+      links: [{ id: "issuer_to_wl", label: "SVID", tone: "brand" }],
       chips: ["workload"],
     },
     {
