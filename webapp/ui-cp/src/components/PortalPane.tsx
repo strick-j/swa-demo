@@ -378,7 +378,10 @@ export function PortalPane({
   const r = result;
   const isSwa = provider.id === "swa";
   const hasWalkthrough =
-    provider.id === "conjur-jwt" || provider.id === "conjur-iam";
+    provider.id === "conjur-jwt" ||
+    provider.id === "conjur-iam" ||
+    provider.id === "cp" ||
+    provider.id === "ccp";
 
   return (
     <div style={ps.pane}>
