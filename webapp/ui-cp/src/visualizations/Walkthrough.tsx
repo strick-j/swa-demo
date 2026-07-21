@@ -1,15 +1,14 @@
-// Walkthrough -- the "Learn More" step-through animation shown in the inspector
-// stage when a Secrets Manager use-case page invokes it. Renders a horizontal
-// actor diagram (Workload · IdP · Secrets Manager [Validator + Policy] · Vault)
-// with animated SVG connectors, and a controller (prev / next / play-pause /
-// reset) that steps through the flow one screen at a time or auto-advances.
+// Walkthrough -- the "Learn how it works" step-through animation shown in the
+// inspector stage. Fully data-driven: it renders whatever nodes (cards +
+// container rings) and connectors a flow declares, and steps through them one at
+// a time or auto-advances. A provider may expose several flows (e.g. Retrieval +
+// Rotation); a selector switches between them.
 //
-// Layout uses a single 0–100 % coordinate space shared by HTML actor cards
+// Layout uses a single 0–100 % coordinate space shared by HTML nodes
 // (absolute-positioned) and an SVG connector overlay (viewBox 0 0 100 100,
 // preserveAspectRatio="none", non-scaling strokes) so cards and lines stay
-// aligned at any pane width. Content comes from walkthroughData; geometry lives
-// here. Palette matches the inspector's INK tokens.
-import { useEffect, useState } from "react";
+// aligned at any pane width. Palette matches the inspector's INK tokens.
+import { useEffect, useMemo, useState } from "react";
 import {
   Play,
   Pause,
@@ -21,9 +20,10 @@ import {
 import { INK } from "./common";
 import type { Provider } from "../engine/providers";
 import {
-  flowForProvider,
-  type ActorKey,
-  type LinkId,
+  flowsForProvider,
+  type Box,
+  type FlowConfig,
+  type WNode,
   type WStep,
 } from "./walkthroughData";
 
@@ -34,105 +34,75 @@ interface WalkthroughProps {
   provider: Provider;
 }
 
-// Box geometry in % of the diagram canvas. left/top/width/height.
-// `container` is the Idira Secrets Manager ring wrapping the validator, policy,
-// and vault cards; `privcontainer` is the Idira Privilege Cloud ring wrapping
-// the Privilege Cloud Safe. Neither "manager" nor "privcloud" gets a card of its
-// own — they are drawn as the two container rings.
-type BoxKey =
-  | "workload"
-  | "idp"
-  | "validator"
-  | "policy"
-  | "vault"
-  | "privvault"
-  | "container"
-  | "privcontainer";
-const BOX: Record<
-  BoxKey,
-  { left: number; top: number; width: number; height: number }
-> = {
-  idp: { left: 2, top: 10, width: 18, height: 18 },
-  workload: { left: 2, top: 48, width: 18, height: 18 },
-  container: { left: 36, top: 6, width: 30, height: 86 },
-  validator: { left: 39, top: 13, width: 24, height: 23 },
-  policy: { left: 39, top: 40, width: 24, height: 23 },
-  vault: { left: 39, top: 66, width: 24, height: 23 },
-  privcontainer: { left: 70, top: 58, width: 28, height: 32 },
-  privvault: { left: 73, top: 66, width: 22, height: 20 },
-};
-
-// Connector geometry (path + label anchor + arrow head) in the same % space.
-const LINK: Record<
-  LinkId,
-  { d: string; label: { x: number; y: number }; head: { x: number; y: number } }
-> = {
-  idp_to_workload: {
-    d: "M13,28 C20,33 20,43 13,48",
-    label: { x: 24, y: 38 },
-    head: { x: 13, y: 48 },
-  },
-  workload_to_manager: {
-    d: "M20,54 C27,50 31,42 36,38",
-    label: { x: 28, y: 43 },
-    head: { x: 36, y: 38 },
-  },
-  manager_to_idp: {
-    d: "M36,18 C30,18 26,19 20,20",
-    label: { x: 28, y: 14 },
-    head: { x: 20, y: 20 },
-  },
-  manager_to_workload: {
-    d: "M36,52 C29,56 25,58 20,59",
-    label: { x: 28, y: 57 },
-    head: { x: 20, y: 59 },
-  },
-  policy_to_vault: {
-    d: "M51,63 L51,66",
-    label: { x: 57, y: 64 },
-    head: { x: 51, y: 66 },
-  },
-  vault_to_workload: {
-    d: "M39,82 C31,92 25,84 20,63",
-    label: { x: 29, y: 86 },
-    head: { x: 20, y: 63 },
-  },
-  privvault_to_vault: {
-    d: "M73,76 C69,76 66,77 63,77",
-    label: { x: 68, y: 71 },
-    head: { x: 63, y: 77 },
-  },
-};
-
 function toneColor(tone: "brand" | "ok" | undefined): string {
   return tone === "ok" ? INK.ok : "var(--idira-blue-500)";
 }
 
-// One actor card. `lit` = focused this step (blue glow); otherwise dimmed.
+const boxStyle = (box: Box) => ({
+  position: "absolute" as const,
+  left: `${box.left}%`,
+  top: `${box.top}%`,
+  width: `${box.width}%`,
+  height: `${box.height}%`,
+});
+
+// A labelled boundary ring (a container node). `active` = focused this step.
+function ContainerRing({ box, label, active }: { box: Box; label: string; active: boolean }) {
+  return (
+    <div
+      style={{
+        ...boxStyle(box),
+        borderRadius: "var(--radius-lg)",
+        border: `1.5px ${active ? "dashed" : "solid"} ${active ? "var(--idira-blue-500)" : INK.line}`,
+        background: active ? "rgba(38,91,255,0.06)" : "rgba(120,150,255,0.02)",
+        boxShadow: active ? "0 0 0 1px rgba(38,91,255,0.25), 0 10px 40px rgba(38,91,255,0.18)" : "none",
+        transition: "all 320ms var(--ease-standard)",
+      }}
+    >
+      <span
+        style={{
+          position: "absolute",
+          top: -9,
+          left: 12,
+          padding: "0 6px",
+          fontSize: 9,
+          fontWeight: 700,
+          letterSpacing: "0.1em",
+          textTransform: "uppercase",
+          color: active ? INK.mono : INK.faint,
+          background: "radial-gradient(120% 90% at 80% 0%, #0E2A78 0%, #061D63 60%, #050F38 100%)",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {label}
+      </span>
+    </div>
+  );
+}
+
+// A filled node card. Shows either inline detail (mono lines / check rows) or its
+// static sub-label.
 function ActorCard({
-  box,
-  title,
-  sub,
+  node,
   lit,
+  detailLines,
+  detailOk,
+  detailRows,
   keyProp,
-  children,
 }: {
-  box: { left: number; top: number; width: number; height: number };
-  title: string;
-  sub: string;
+  node: WNode;
   lit: boolean;
+  detailLines?: string[];
+  detailOk?: boolean;
+  detailRows?: { k: string; v: string }[];
   keyProp: string;
-  children?: React.ReactNode;
 }) {
+  const hasDetail = !!(detailLines || detailRows);
   return (
     <div
       key={keyProp}
       style={{
-        position: "absolute",
-        left: `${box.left}%`,
-        top: `${box.top}%`,
-        width: `${box.width}%`,
-        height: `${box.height}%`,
+        ...boxStyle(node.box),
         display: "flex",
         flexDirection: "column",
         gap: 4,
@@ -140,9 +110,7 @@ function ActorCard({
         borderRadius: "var(--radius-md)",
         border: `1px solid ${lit ? "var(--idira-blue-500)" : INK.line}`,
         background: lit ? INK.cardActive : INK.card,
-        boxShadow: lit
-          ? "0 0 0 1px var(--idira-blue-500), 0 8px 30px rgba(38,91,255,0.25)"
-          : "none",
+        boxShadow: lit ? "0 0 0 1px var(--idira-blue-500), 0 8px 30px rgba(38,91,255,0.25)" : "none",
         opacity: lit ? 1 : 0.62,
         backdropFilter: "blur(2px)",
         transition: "all 300ms var(--ease-standard)",
@@ -150,60 +118,51 @@ function ActorCard({
         overflow: "hidden",
       }}
     >
-      <span
-        style={{
-          fontSize: 11,
-          fontWeight: 700,
-          letterSpacing: "0.02em",
-          color: lit ? INK.text : INK.dim,
-        }}
-      >
-        {title}
+      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.02em", color: lit ? INK.text : INK.dim }}>
+        {node.title}
       </span>
-      <span
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 9.5,
-          color: INK.faint,
-          letterSpacing: "0.01em",
-          lineHeight: 1.35,
-        }}
-      >
-        {sub}
-      </span>
-      {children}
+      {!hasDetail && node.sub && (
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9.5, color: INK.faint, lineHeight: 1.35 }}>
+          {node.sub}
+        </span>
+      )}
+      {detailLines && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          {detailLines.map((ln) => (
+            <span key={ln} style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: detailOk ? INK.ok : INK.mono, lineHeight: 1.4 }}>
+              {ln}
+            </span>
+          ))}
+        </div>
+      )}
+      {detailRows && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          {detailRows.map((r) => (
+            <span key={r.k} style={{ display: "flex", alignItems: "center", gap: 4, fontFamily: "var(--font-mono)", fontSize: 9, color: INK.dim, lineHeight: 1.35 }}>
+              <Check style={{ width: 9, height: 9, color: INK.ok }} />
+              {r.k}: {r.v}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-// Colored token segments under the workload while it holds the credential.
-function TokenChip({ segments }: { segments: string[] }) {
-  const colors = [
-    "var(--idira-blue-500)",
-    "var(--status-warning)",
-    "var(--idira-blue-250)",
-  ];
+// Colored credential/token segments rendered under a node.
+function Chip({ box, segments }: { box: Box; segments: string[] }) {
+  const colors = ["var(--idira-blue-500)", "var(--status-warning)", "var(--idira-blue-250)"];
   return (
     <div
       style={{
         position: "absolute",
-        left: `${BOX.workload.left}%`,
-        top: `${BOX.workload.top + BOX.workload.height + 2}%`,
+        left: `${box.left}%`,
+        top: `${box.top + box.height + 1.5}%`,
         display: "flex",
         gap: 4,
         alignItems: "center",
       }}
     >
-      <span
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 9,
-          color: INK.faint,
-          marginRight: 2,
-        }}
-      >
-        token:
-      </span>
       {segments.map((s, i) => (
         <span
           key={s}
@@ -225,204 +184,67 @@ function TokenChip({ segments }: { segments: string[] }) {
   );
 }
 
-// A labelled boundary ring (Idira Secrets Manager / Idira Privilege Cloud).
-// `active` draws the dashed brand-blue "in focus" state; otherwise a faint rail.
-function ContainerRing({
-  box,
-  label,
-  active,
-}: {
-  box: { left: number; top: number; width: number; height: number };
-  label: string;
-  active: boolean;
-}) {
-  return (
-    <div
-      style={{
-        position: "absolute",
-        left: `${box.left}%`,
-        top: `${box.top}%`,
-        width: `${box.width}%`,
-        height: `${box.height}%`,
-        borderRadius: "var(--radius-lg)",
-        border: `1.5px ${active ? "dashed" : "solid"} ${
-          active ? "var(--idira-blue-500)" : INK.line
-        }`,
-        background: active ? "rgba(38,91,255,0.06)" : "rgba(120,150,255,0.02)",
-        boxShadow: active
-          ? "0 0 0 1px rgba(38,91,255,0.25), 0 10px 40px rgba(38,91,255,0.18)"
-          : "none",
-        transition: "all 320ms var(--ease-standard)",
-      }}
-    >
-      <span
-        style={{
-          position: "absolute",
-          top: -9,
-          left: 12,
-          padding: "0 6px",
-          fontSize: 9,
-          fontWeight: 700,
-          letterSpacing: "0.12em",
-          textTransform: "uppercase",
-          color: active ? INK.mono : INK.faint,
-          background:
-            "radial-gradient(120% 90% at 80% 0%, #0E2A78 0%, #061D63 60%, #050F38 100%)",
-          whiteSpace: "nowrap",
-        }}
-      >
-        {label}
-      </span>
-    </div>
-  );
-}
-
-// The diagram: SVG connectors under, HTML actor cards over.
-function Diagram({ flow, step }: { flow: FlowConfigLite; step: WStep }) {
-  const focus = new Set<ActorKey>(step.focus);
+function Diagram({ flow, step }: { flow: FlowConfig; step: WStep }) {
+  const focus = new Set(step.focus ?? []);
   const activeLinks = step.links ?? [];
-  const a = flow.actors;
+  const linkById = useMemo(() => Object.fromEntries(flow.links.map((l) => [l.id, l])), [flow]);
+  const containers = flow.nodes.filter((n) => n.kind === "container");
+  const cards = flow.nodes.filter((n) => n.kind !== "container");
+  const chipNodes = (step.chips ?? [])
+    .map((k) => flow.nodes.find((n) => n.key === k))
+    .filter((n): n is WNode => !!n);
 
   return (
-    <div style={ws.canvas}>
-      <svg
-        viewBox="0 0 100 100"
-        preserveAspectRatio="none"
-        style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
-      >
-        {/* dormant connector rails */}
-        {(Object.keys(LINK) as LinkId[]).map((id) => (
-          <path
-            key={`rail-${id}`}
-            d={LINK[id].d}
-            fill="none"
-            stroke={INK.line}
-            strokeWidth={1}
-            vectorEffect="non-scaling-stroke"
-          />
+    <div style={{ position: "relative", width: "100%", height: flow.canvasHeight ?? 360 }}>
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
+        {/* dormant rails */}
+        {flow.links.map((l) => (
+          <path key={`rail-${l.id}`} d={l.d} fill="none" stroke={INK.line} strokeWidth={1} vectorEffect="non-scaling-stroke" />
         ))}
-        {/* active connectors this step */}
+        {/* active connectors */}
         {activeLinks.map((l) => {
-          const g = LINK[l.id];
+          const g = linkById[l.id];
+          if (!g) return null;
           const col = toneColor(l.tone);
           return (
             <g key={`live-${l.id}`}>
-              <path
-                d={g.d}
-                fill="none"
-                stroke={col}
-                strokeWidth={1.6}
-                vectorEffect="non-scaling-stroke"
-                className="wk-flow"
-              />
+              <path d={g.d} fill="none" stroke={col} strokeWidth={1.6} vectorEffect="non-scaling-stroke" className="wk-flow" />
               <circle cx={g.head.x} cy={g.head.y} r={0.9} fill={col} />
             </g>
           );
         })}
       </svg>
 
-      {/* container rings */}
-      <ContainerRing
-        box={BOX.container}
-        label={a.manager.title}
-        active={!!step.container}
-      />
-      <ContainerRing
-        box={BOX.privcontainer}
-        label={a.privcloud.title}
-        active={focus.has("privvault") || focus.has("privcloud")}
-      />
+      {/* container rings behind cards */}
+      {containers.map((n) => (
+        <ContainerRing key={n.key} box={n.box} label={n.title} active={focus.has(n.key)} />
+      ))}
 
-      {/* actor cards */}
-      <ActorCard
-        box={BOX.workload}
-        title={a.workload.title}
-        sub={a.workload.sub}
-        lit={focus.has("workload")}
-        keyProp={`wl-${step.title}-${focus.has("workload")}`}
-      />
-      <ActorCard
-        box={BOX.idp}
-        title={a.idp.title}
-        sub={a.idp.sub}
-        lit={focus.has("idp")}
-        keyProp={`idp-${step.title}-${focus.has("idp")}`}
-      />
-      <ActorCard
-        box={BOX.validator}
-        title={a.validator.title}
-        sub={step.validatorLines ? "" : a.validator.sub}
-        lit={focus.has("validator")}
-        keyProp={`val-${step.title}-${focus.has("validator")}`}
-      >
-        {step.validatorLines && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            {step.validatorLines.map((ln) => (
-              <span
-                key={ln}
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 9,
-                  color: step.validatorOk ? INK.ok : INK.mono,
-                  lineHeight: 1.4,
-                }}
-              >
-                {ln}
-              </span>
-            ))}
-          </div>
-        )}
-      </ActorCard>
-      <ActorCard
-        box={BOX.policy}
-        title={a.policy.title}
-        sub={step.policyRows ? "" : a.policy.sub}
-        lit={focus.has("policy")}
-        keyProp={`pol-${step.title}-${focus.has("policy")}`}
-      >
-        {step.policyRows && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-            {step.policyRows.map((r) => (
-              <span
-                key={r.k}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 4,
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 9,
-                  color: INK.dim,
-                  lineHeight: 1.35,
-                }}
-              >
-                <Check style={{ width: 9, height: 9, color: INK.ok }} />
-                {r.k}: {r.v}
-              </span>
-            ))}
-          </div>
-        )}
-      </ActorCard>
-      <ActorCard
-        box={BOX.vault}
-        title={a.vault.title}
-        sub={a.vault.sub}
-        lit={focus.has("vault")}
-        keyProp={`vlt-${step.title}-${focus.has("vault")}`}
-      />
-      <ActorCard
-        box={BOX.privvault}
-        title={a.privvault.title}
-        sub={a.privvault.sub}
-        lit={focus.has("privvault")}
-        keyProp={`pv-${step.title}-${focus.has("privvault")}`}
-      />
+      {/* cards */}
+      {cards.map((n) => {
+        const d = step.detail?.[n.key];
+        return (
+          <ActorCard
+            key={n.key}
+            node={n}
+            lit={focus.has(n.key)}
+            detailLines={d?.lines}
+            detailOk={d?.ok}
+            detailRows={d?.rows}
+            keyProp={`${n.key}-${step.title}-${focus.has(n.key)}`}
+          />
+        );
+      })}
 
-      {step.token && flow.chip.length > 0 && <TokenChip segments={flow.chip} />}
+      {/* credential chips */}
+      {flow.chip &&
+        flow.chip.length > 0 &&
+        chipNodes.map((n) => <Chip key={`chip-${n.key}`} box={n.box} segments={flow.chip!} />)}
 
-      {/* connector labels (HTML, for crisp text over the distorted SVG space) */}
+      {/* connector labels (crisp HTML over the distorted SVG space) */}
       {activeLinks.map((l) => {
-        const g = LINK[l.id];
-        if (!l.label) return null;
+        const g = linkById[l.id];
+        if (!g || !l.label) return null;
         return (
           <span
             key={`lbl-${l.id}`}
@@ -447,9 +269,6 @@ function Diagram({ flow, step }: { flow: FlowConfigLite; step: WStep }) {
     </div>
   );
 }
-
-// Minimal shape the Diagram needs from a FlowConfig (avoids a circular import name).
-type FlowConfigLite = NonNullable<ReturnType<typeof flowForProvider>>;
 
 function CtrlButton({
   onClick,
@@ -497,11 +316,54 @@ function CtrlButton({
   );
 }
 
+// Segmented control to switch between a provider's flows.
+function FlowSelector({
+  flows,
+  active,
+  onChange,
+}: {
+  flows: FlowConfig[];
+  active: number;
+  onChange: (i: number) => void;
+}) {
+  return (
+    <div style={{ display: "flex", gap: 2, padding: 3, background: "rgba(6,18,55,0.6)", border: "1px solid rgba(97,134,252,0.2)", borderRadius: 9 }}>
+      {flows.map((f, i) => {
+        const on = i === active;
+        return (
+          <button
+            key={f.key + i}
+            onClick={() => onChange(i)}
+            style={{
+              border: "none",
+              borderRadius: 6,
+              cursor: "pointer",
+              fontFamily: "var(--font-sans)",
+              fontSize: 12,
+              fontWeight: 600,
+              letterSpacing: "0.01em",
+              padding: "5px 12px",
+              color: on ? "#fff" : "rgba(196,210,250,0.6)",
+              background: on ? "var(--idira-blue-500)" : "transparent",
+              boxShadow: on ? "0 2px 10px rgba(38,91,255,0.45)" : "none",
+              transition: "all 160ms var(--ease-standard)",
+            }}
+          >
+            {f.navLabel}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function Walkthrough({ provider }: WalkthroughProps) {
-  const flow = flowForProvider(provider.id);
+  const flows = flowsForProvider(provider.id);
+  const [flowIdx, setFlowIdx] = useState(0);
   const [i, setI] = useState(0);
   const [playing, setPlaying] = useState(false);
 
+  const flow = flows?.[Math.min(flowIdx, (flows?.length ?? 1) - 1)] ?? null;
   const total = flow?.steps.length ?? 0;
 
   // Auto-advance while playing; stop at the last step.
@@ -537,6 +399,11 @@ export function Walkthrough({ provider }: WalkthroughProps) {
       setPlaying((p) => !p);
     }
   };
+  const switchFlow = (n: number) => {
+    setFlowIdx(n);
+    setI(0);
+    setPlaying(false);
+  };
 
   return (
     <div style={ws.scroll}>
@@ -545,6 +412,9 @@ export function Walkthrough({ provider }: WalkthroughProps) {
           <span style={ws.eyebrow}>{flow.eyebrow}</span>
           <h2 style={ws.title}>{flow.title}</h2>
           <p style={ws.lede}>{flow.lede}</p>
+          {flows && flows.length > 1 && (
+            <FlowSelector flows={flows} active={flowIdx} onChange={switchFlow} />
+          )}
         </header>
 
         <div style={ws.stage}>
@@ -552,29 +422,18 @@ export function Walkthrough({ provider }: WalkthroughProps) {
             <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
               <span style={ws.stepCount}>
                 Step {i + 1} of {total}
+                {step.badge && <span style={ws.badge}>{step.badge}</span>}
               </span>
               <span style={ws.stepTitle}>{step.title}</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <CtrlButton onClick={togglePlay} title={playing ? "Pause" : "Play"}>
-                {playing ? (
-                  <Pause style={{ width: 14, height: 14 }} />
-                ) : (
-                  <Play style={{ width: 14, height: 14 }} />
-                )}
+                {playing ? <Pause style={{ width: 14, height: 14 }} /> : <Play style={{ width: 14, height: 14 }} />}
               </CtrlButton>
-              <CtrlButton
-                onClick={() => go(i - 1)}
-                disabled={atStart}
-                title="Previous step"
-              >
+              <CtrlButton onClick={() => go(i - 1)} disabled={atStart} title="Previous step">
                 <ChevronLeft style={{ width: 15, height: 15 }} />
               </CtrlButton>
-              <CtrlButton
-                onClick={() => go(i + 1)}
-                disabled={atEnd}
-                title="Next step"
-              >
+              <CtrlButton onClick={() => go(i + 1)} disabled={atEnd} title="Next step">
                 <ChevronRight style={{ width: 15, height: 15 }} />
               </CtrlButton>
               <CtrlButton onClick={reset} title="Restart">
@@ -593,14 +452,16 @@ export function Walkthrough({ provider }: WalkthroughProps) {
           </div>
         </div>
 
-        <div style={ws.features}>
-          {flow.features.map((f) => (
-            <div key={f.title} style={ws.feature}>
-              <span style={ws.featureTitle}>{f.title}</span>
-              <span style={ws.featureBody}>{f.body}</span>
-            </div>
-          ))}
-        </div>
+        {flow.features && flow.features.length > 0 && (
+          <div style={ws.features}>
+            {flow.features.map((f) => (
+              <div key={f.title} style={ws.feature}>
+                <span style={ws.featureTitle}>{f.title}</span>
+                <span style={ws.featureBody}>{f.body}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -640,20 +501,8 @@ const ws = {
     border: "1px solid rgba(97,134,252,0.3)",
     background: "rgba(38,91,255,0.1)",
   },
-  title: {
-    margin: 0,
-    fontSize: 24,
-    fontWeight: 700,
-    letterSpacing: "-0.02em",
-    color: INK.text,
-  },
-  lede: {
-    margin: 0,
-    maxWidth: 560,
-    fontSize: 13,
-    lineHeight: 1.55,
-    color: INK.dim,
-  },
+  title: { margin: 0, fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em", color: INK.text },
+  lede: { margin: 0, maxWidth: 560, fontSize: 13, lineHeight: 1.55, color: INK.dim },
   stage: {
     display: "flex",
     flexDirection: "column" as const,
@@ -664,43 +513,31 @@ const ws = {
     background: "rgba(6,18,55,0.4)",
     backdropFilter: "blur(2px)",
   },
-  stageHead: {
-    display: "flex",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 12,
-  },
+  stageHead: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
   stepCount: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
     fontFamily: "var(--font-mono)",
     fontSize: 10,
     letterSpacing: "0.1em",
     textTransform: "uppercase" as const,
     color: INK.faint,
   },
-  stepTitle: {
-    fontSize: 14.5,
+  badge: {
+    fontFamily: "var(--font-mono)",
+    fontSize: 8.5,
     fontWeight: 700,
-    color: INK.text,
-    letterSpacing: "-0.01em",
+    letterSpacing: "0.1em",
+    color: "var(--status-warning)",
+    border: "1px solid rgba(214,159,37,0.5)",
+    borderRadius: 999,
+    padding: "1px 7px",
   },
-  narration: {
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: 12,
-  },
-  body: {
-    margin: 0,
-    fontSize: 12.5,
-    lineHeight: 1.6,
-    color: INK.dim,
-    minHeight: 60,
-  },
-  progressTrack: {
-    height: 3,
-    borderRadius: 3,
-    background: "rgba(255,255,255,0.08)",
-    overflow: "hidden" as const,
-  },
+  stepTitle: { fontSize: 14.5, fontWeight: 700, color: INK.text, letterSpacing: "-0.01em" },
+  narration: { display: "flex", flexDirection: "column" as const, gap: 12 },
+  body: { margin: 0, fontSize: 12.5, lineHeight: 1.6, color: INK.dim, minHeight: 60 },
+  progressTrack: { height: 3, borderRadius: 3, background: "rgba(255,255,255,0.08)", overflow: "hidden" as const },
   progressFill: {
     height: "100%",
     borderRadius: 3,
@@ -708,11 +545,7 @@ const ws = {
     boxShadow: "0 0 10px var(--idira-blue-500)",
     transition: "width 500ms var(--ease-emphasis)",
   },
-  features: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, 1fr)",
-    gap: 12,
-  },
+  features: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 },
   feature: {
     display: "flex",
     flexDirection: "column" as const,
@@ -722,19 +555,6 @@ const ws = {
     border: "1px solid rgba(97,134,252,0.15)",
     background: "rgba(120,150,255,0.035)",
   },
-  featureTitle: {
-    fontSize: 12.5,
-    fontWeight: 700,
-    color: INK.text,
-  },
-  featureBody: {
-    fontSize: 11,
-    lineHeight: 1.55,
-    color: INK.faint,
-  },
-  canvas: {
-    position: "relative" as const,
-    width: "100%",
-    height: 360,
-  },
+  featureTitle: { fontSize: 12.5, fontWeight: 700, color: INK.text },
+  featureBody: { fontSize: 11, lineHeight: 1.55, color: INK.faint },
 };
