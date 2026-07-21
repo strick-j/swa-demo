@@ -72,6 +72,9 @@ export function App() {
   );
 
   const handleResolve = useCallback(() => {
+    // If the "how it works" walkthrough is open, drop back to the topology view
+    // so the caller can watch the run they just kicked off.
+    setView((v) => (v === "walkthrough" ? "topology" : v));
     engine.run(scenario);
   }, [engine, scenario]);
 
