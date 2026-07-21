@@ -552,13 +552,147 @@ const cpRotation: FlowConfig = {
   ],
 };
 
+/* =========================================================================
+   Dual Account — zero-downtime credential rotation (CP + CCP)
+   Two accounts, one always ACTIVE. The Vault's DualAccountStatus is the switch;
+   CPM / SRS flips it, then rotates the now-inactive account after a grace period.
+   ========================================================================= */
+
+const DUAL = {
+  app: { left: 2, top: 38, width: 17, height: 18 },
+  cp: { left: 23, top: 33, width: 20, height: 28 },
+  vault: { left: 47, top: 12, width: 27, height: 66 },
+  acctA: { left: 49, top: 19, width: 23, height: 25 },
+  acctB: { left: 49, top: 50, width: 23, height: 25 },
+  cpm: { left: 78, top: 18, width: 20, height: 19 },
+  target: { left: 77, top: 58, width: 21, height: 19 },
+} as const;
+
+const DUAL_LINKS: WLinkDef[] = [
+  { id: "app_to_cp", d: "M19,44 C20,44 22,44 23,44", label: { x: 21, y: 40 }, head: { x: 23, y: 44 } },
+  { id: "cp_to_app", d: "M23,51 C22,51 20,51 19,51", label: { x: 21, y: 55 }, head: { x: 19, y: 51 } },
+  { id: "cp_to_acctA", d: "M43,42 C46,37 47,34 49,32", label: { x: 46, y: 35 }, head: { x: 49, y: 32 } },
+  { id: "cp_to_acctB", d: "M43,54 C46,58 47,61 49,62", label: { x: 46, y: 60 }, head: { x: 49, y: 62 } },
+  { id: "cpm_to_acctA", d: "M78,28 C76,28 74,29 72,30", label: { x: 75, y: 24 }, head: { x: 72, y: 30 } },
+  { id: "cpm_to_target", d: "M88,37 L88,58", label: { x: 93, y: 48 }, head: { x: 88, y: 58 } },
+];
+
+// Account status detail (rendered inside the Account A/B cards).
+const A_ACTIVE: WDetail = { lines: ["appuser_01", "● ACTIVE", "DualAccountStatus"], ok: true };
+const A_INACTIVE: WDetail = { lines: ["appuser_01", "○ INACTIVE", "DualAccountStatus"], ok: false };
+const A_RESET: WDetail = { lines: ["appuser_01", "○ INACTIVE", "password reset"], ok: false };
+const B_ACTIVE: WDetail = { lines: ["appuser_02", "● ACTIVE", "DualAccountStatus"], ok: true };
+const B_INACTIVE: WDetail = { lines: ["appuser_02", "○ INACTIVE", "DualAccountStatus"], ok: false };
+const CP_SERVE_A: WDetail = { lines: ["in-memory cache", "→ serving Account A"] };
+const CP_SERVE_A_STALE: WDetail = { lines: ["in-memory cache", "→ Account A (stale)"] };
+const CP_SERVE_B: WDetail = { lines: ["in-memory cache", "→ serving Account B"] };
+
+function makeDual(providerTitle: string): FlowConfig {
+  return {
+    key: "dual",
+    navLabel: "Dual account",
+    eyebrow: "Dual Account",
+    title: "Zero-Downtime Credential Rotation",
+    lede: "Two accounts, one always active — how IDIRA Dual Accounts guarantee the Credential Provider always serves a valid credential, even during password rotation.",
+    canvasHeight: 400,
+    nodes: [
+      { key: "app", title: "Application", sub: "requests credentials", box: DUAL.app },
+      { key: "cp", title: providerTitle, sub: "in-memory cache", box: DUAL.cp },
+      { key: "vault", kind: "container", title: "IDIRA Vault", box: DUAL.vault },
+      { key: "acctA", title: "Account A", box: DUAL.acctA },
+      { key: "acctB", title: "Account B", box: DUAL.acctB },
+      { key: "cpm", title: "Central Policy Mgr / SRS", sub: "rotation service", box: DUAL.cpm },
+      { key: "target", title: "Target System", sub: "DB / Server · A + B enabled", box: DUAL.target },
+    ],
+    links: DUAL_LINKS,
+    steps: [
+      {
+        title: "The Setup — Two Accounts, One Active",
+        body: "In the Vault, Account A is tagged ACTIVE and Account B INACTIVE via the DualAccountStatus property. On the target system both accounts exist with identical permissions and are both enabled — the Vault status is the only switch.",
+        focus: ["vault", "acctA", "cp", "target"],
+        detail: { acctA: A_ACTIVE, acctB: B_INACTIVE, cp: CP_SERVE_A },
+        links: [{ id: "cp_to_acctA", label: "serving", tone: "brand" }],
+      },
+      {
+        title: "Steady State — the App Is Served Account A",
+        body: "The application requests its credential and the Credential Provider returns Account A from its in-memory cache. Account B stays enabled but idle — a warm standby.",
+        focus: ["app", "cp", "acctA"],
+        detail: { acctA: A_ACTIVE, acctB: B_INACTIVE, cp: CP_SERVE_A },
+        links: [
+          { id: "app_to_cp", label: "request", tone: "brand" },
+          { id: "cp_to_app", label: "cred", tone: "ok" },
+          { id: "cp_to_acctA", label: "serving", tone: "brand" },
+        ],
+      },
+      {
+        title: "CPM / SRS Detects the Rotation Schedule",
+        body: "The Central Policy Mgr / SRS detects that the rotational group is due for a password change based on platform settings. It prepares to flip the DualAccountStatus of both accounts — no passwords have been touched yet.",
+        focus: ["cpm", "vault", "acctA"],
+        detail: { acctA: A_ACTIVE, acctB: B_INACTIVE, cp: CP_SERVE_A },
+        links: [{ id: "cpm_to_acctA", label: "manage", tone: "brand" }],
+      },
+      {
+        title: "The Status Flip — A → Inactive, B → Active",
+        body: "CPM / SRS simultaneously updates DualAccountStatus: Account A becomes INACTIVE, Account B becomes ACTIVE. On the target both accounts are still valid and enabled — no lockout, no error. The grace period begins now.",
+        focus: ["cpm", "vault", "acctB"],
+        detail: { acctA: A_INACTIVE, acctB: B_ACTIVE, cp: CP_SERVE_A_STALE },
+        links: [{ id: "cpm_to_acctA", label: "manage", tone: "brand" }],
+      },
+      {
+        title: "Grace Period — CP Refreshes Its Cache",
+        body: "The Credential Provider detects the status change in the Vault and refreshes its cache — it now serves Account B. The grace period gives every CP in the environment time to switch before any password is touched.",
+        focus: ["cp", "acctB", "vault"],
+        detail: { acctA: A_INACTIVE, acctB: B_ACTIVE, cp: CP_SERVE_B },
+        links: [{ id: "cp_to_acctB", label: "serving", tone: "brand" }],
+      },
+      {
+        title: "Business Continues — Zero Interruption",
+        body: "The application keeps requesting credentials and the CP now returns Account B seamlessly. Zero restarts, zero errors, zero downtime — the active account's password is never changed while it is active.",
+        focus: ["app", "cp", "acctB"],
+        detail: { acctA: A_INACTIVE, acctB: B_ACTIVE, cp: CP_SERVE_B },
+        links: [
+          { id: "app_to_cp", label: "request", tone: "brand" },
+          { id: "cp_to_app", label: "cred", tone: "ok" },
+          { id: "cp_to_acctB", label: "serving", tone: "brand" },
+        ],
+      },
+      {
+        title: "Grace Period Ends — CPM Resets Account A",
+        body: "After the grace period, CPM / SRS rotates the password of Account A (now inactive) on the target system and updates the Vault. Account A gets a fresh, secure password while Account B serves all traffic undisturbed.",
+        focus: ["cpm", "target", "acctA"],
+        detail: { acctA: A_RESET, acctB: B_ACTIVE, cp: CP_SERVE_B },
+        links: [
+          { id: "cpm_to_acctA", label: "update vault", tone: "brand" },
+          { id: "cpm_to_target", label: "reset pw", tone: "brand" },
+        ],
+      },
+      {
+        title: "Cycle Complete — Ready for Next Rotation",
+        body: "Account A now holds a rotated, secured password; Account B is active and serving all traffic. At the next scheduled rotation the process repeats in reverse — B → inactive, A → active, then B is rotated. Always two accounts, always one active.",
+        focus: ["vault", "acctB", "cp", "app", "target"],
+        detail: { acctA: A_INACTIVE, acctB: B_ACTIVE, cp: CP_SERVE_B },
+        links: [
+          { id: "app_to_cp", label: "request", tone: "brand" },
+          { id: "cp_to_app", label: "cred", tone: "ok" },
+          { id: "cp_to_acctB", label: "serving", tone: "brand" },
+        ],
+      },
+    ],
+    features: [
+      { title: "Zero Downtime", body: "The active account's password is never changed while it is active. Only the inactive account is rotated — and only after the grace period ensures every CP has already switched to the new active account." },
+      { title: "Grace Period", body: "A configurable delay between the status flip and the password reset. It gives every Credential Provider time to refresh its cache and start serving the newly active account before any credential becomes invalid." },
+      { title: "Always One Active", body: "Both accounts exist and are valid on the target system at all times. The Vault's DualAccountStatus is the only control — and it flips atomically, with no window of unavailability." },
+    ],
+  };
+}
+
 /* ----------------------------- registry ----------------------------- */
 
 const FLOWS: Record<string, FlowConfig[]> = {
   "conjur-jwt": [jwtFlow],
   "conjur-iam": [iamFlow],
-  ccp: [ccpRetrieval, ccpRotation],
-  cp: [cpRetrieval, cpRotation],
+  ccp: [ccpRetrieval, ccpRotation, makeDual("Central Credential Provider")],
+  cp: [cpRetrieval, cpRotation, makeDual("Credential Provider")],
 };
 
 /** All walkthrough flows for a provider id, or null when it has none. */
