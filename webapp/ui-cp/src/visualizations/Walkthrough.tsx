@@ -484,7 +484,10 @@ const ws = {
     padding: "20px 30px 30px",
   },
   wrap: {
-    maxWidth: 720,
+    // Fluid: fills the inspector pane, but caps out so it doesn't get unwieldy
+    // on very wide (27"/32") monitors. Narrower panes (laptops) just fill.
+    width: "100%",
+    maxWidth: 1080,
     margin: "0 auto",
     display: "flex",
     flexDirection: "column" as const,

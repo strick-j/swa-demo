@@ -105,7 +105,6 @@ const ps = {
     display: "flex",
     flexDirection: "column" as const,
     gap: 12,
-    maxWidth: 470,
     flexShrink: 0 as const,
   },
   h1: {
@@ -120,14 +119,12 @@ const ps = {
     fontSize: 14.5,
     lineHeight: 1.55,
     color: "var(--text-muted)",
-    maxWidth: 460,
   },
   learnMore: {
     display: "flex",
     alignItems: "center",
     gap: 9,
     width: "100%",
-    maxWidth: 470,
     textAlign: "left" as const,
     padding: "12px 16px",
     borderRadius: "var(--radius-md)",
@@ -145,7 +142,6 @@ const ps = {
     display: "flex",
     flexDirection: "column" as const,
     gap: 10,
-    maxWidth: 470,
     flexShrink: 0 as const,
   },
   ucList: { display: "flex", flexDirection: "column" as const, gap: 8 },
@@ -168,7 +164,6 @@ const ps = {
     fontSize: 13,
     lineHeight: 1.55,
     color: "var(--text-muted)",
-    maxWidth: 470,
     minHeight: 40,
   },
   formHint: {
@@ -178,14 +173,13 @@ const ps = {
     color: "var(--text-subtle)",
     lineHeight: 1.45,
     marginTop: -2,
-    maxWidth: 470,
   },
   // flexShrink:0 is essential: the body is a flex-column scroll container, and
   // when a run's result overflows, the flex algorithm would otherwise compress
   // this box below its content height — the manifest + evidence card then spill
   // past the trailing spacer and land flush against the pane bottom. Keeping the
   // content children at natural height makes the container scroll instead.
-  result: { minHeight: 60, maxWidth: 470, flexShrink: 0 as const },
+  result: { minHeight: 60, flexShrink: 0 as const },
   empty: {
     display: "flex",
     alignItems: "center",
@@ -423,14 +417,6 @@ export function PortalPane({
               <span style={ps.brandSub}>{provider.brand.sub}</span>
             </div>
           </div>
-        </div>
-        <div style={ps.secured}>
-          <img
-            src="/cp/assets/idira-icon-color.png"
-            alt=""
-            style={{ height: 16, width: "auto" }}
-          />
-          <span>{t("chrome.portal.securedBy")}</span>
         </div>
       </header>
 
