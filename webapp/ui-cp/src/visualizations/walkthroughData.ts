@@ -688,6 +688,114 @@ function makeDual(providerTitle: string): FlowConfig {
   };
 }
 
+/* =========================================================================
+   Secure Workload Access (SWA) — SPIFFE workload identity
+   A workload proves who it is with a short-lived SVID issued by SWA after node +
+   workload attestation, then reaches its target by identity (SPIFFE ID) alone.
+   Kept broad: the target is any SPIFFE/SVID-aware service (Postgres is one example).
+   ========================================================================= */
+
+const SWA = {
+  node: { left: 1, top: 14, width: 30, height: 50 },
+  workload: { left: 4, top: 21, width: 24, height: 18 },
+  agent: { left: 4, top: 45, width: 24, height: 15 },
+  swa: { left: 40, top: 8, width: 33, height: 64 },
+  attestor: { left: 43, top: 14, width: 27, height: 16 },
+  registrar: { left: 43, top: 34, width: 27, height: 16 },
+  issuer: { left: 43, top: 54, width: 27, height: 16 },
+  target: { left: 79, top: 42, width: 19, height: 20 },
+} as const;
+
+const SWA_NODES: WNode[] = [
+  { key: "node", kind: "container", title: "Node · platform", box: SWA.node },
+  { key: "workload", title: "Workload · Pod", sub: "namespace / service account", box: SWA.workload },
+  { key: "agent", title: "SWA Agent", sub: "Workload API", box: SWA.agent },
+  { key: "swa", kind: "container", title: "Secure Workload Access · SaaS", box: SWA.swa },
+  { key: "attestor", title: "Node Attestor", sub: "platform attestation", box: SWA.attestor },
+  { key: "registrar", title: "Workload Registrar", sub: "ns / sa selectors", box: SWA.registrar },
+  { key: "issuer", title: "SVID Issuer", sub: "trust-domain CA", box: SWA.issuer },
+  { key: "target", title: "Target Service", sub: "any SPIFFE/SVID-aware endpoint", box: SWA.target },
+];
+
+const SWA_LINKS: WLinkDef[] = [
+  { id: "wl_to_agent", d: "M16,39 L16,45", label: { x: 21, y: 42 }, head: { x: 16, y: 45 } },
+  { id: "agent_to_swa", d: "M28,52 C36,44 40,30 43,24", label: { x: 35, y: 39 }, head: { x: 43, y: 24 } },
+  { id: "swa_to_wl", d: "M43,62 C36,58 32,44 28,34", label: { x: 32, y: 50 }, head: { x: 28, y: 34 } },
+  { id: "wl_to_target", d: "M10,39 C10,84 56,88 79,56", label: { x: 45, y: 86 }, head: { x: 79, y: 56 } },
+];
+
+const swaFlow: FlowConfig = {
+  key: "identity",
+  navLabel: "Identity & access",
+  eyebrow: "Secure Workload Access",
+  title: "How Workload Identity Works",
+  lede: "From pod startup to reaching a target — how a workload proves who it is with a short-lived SPIFFE SVID from Secure Workload Access, and connects to its target by identity alone, with no stored credential. The target here is a database, but it can be any service that accepts SPIFFE/SVID authentication.",
+  nodes: SWA_NODES,
+  links: SWA_LINKS,
+  chip: ["SPIFFE ID"],
+  canvasHeight: 420,
+  steps: [
+    {
+      title: "The Actors — Identity, Not Credentials",
+      body: "A Workload runs in a Node; the on-node SWA Agent brokers its identity, and the Secure Workload Access SaaS attests it and issues an SVID. The Workload then reaches a Target Service — a database, API, message queue, or service-mesh peer; anything that accepts SPIFFE/SVID auth. Nothing stores a static credential.",
+      focus: ["node", "workload", "agent", "swa", "attestor", "registrar", "issuer", "target"],
+    },
+    {
+      title: "Pod Starts — Workload Asks for an Identity",
+      body: "When the pod starts, the workload calls the SWA Agent's Workload API over a local socket and asks for its identity. It presents no secret and stores nothing — its identity will be attested, not asserted.",
+      focus: ["node", "workload", "agent"],
+      links: [{ id: "wl_to_agent", label: "ask", tone: "brand" }],
+    },
+    {
+      title: "SWA Agent Attests the Node",
+      body: "The Agent proves the node to the SWA server using platform attestation — on Kubernetes, a projected ServiceAccount token verified via TokenReview. This establishes that the node genuinely belongs to a registered node group.",
+      focus: ["node", "agent", "swa", "attestor"],
+      links: [{ id: "agent_to_swa", label: "attest node", tone: "brand" }],
+      detail: { attestor: { lines: ["node → SWA server", "platform token verified", "node group confirmed"], ok: true } },
+    },
+    {
+      title: "SWA Server Attests the Workload",
+      body: "On the attested node, the server derives the workload's selectors — for example its Kubernetes namespace and service account — and matches them against registration policy. Only a workload whose selectors match a policy is granted an identity; everything else is unknown by design.",
+      focus: ["swa", "registrar"],
+      detail: { registrar: { lines: ["namespace + service account", "matched registration", "= workload identity"], ok: true } },
+    },
+    {
+      title: "SVID Issued by the Trust Domain",
+      body: "The SWA SaaS mints a short-lived SVID for the workload — a SPIFFE ID (spiffe://<trust-domain>/…) signed by the trust-domain CA, available as an X.509-SVID for mTLS or a JWT-SVID. It is delivered to the workload, auto-rotates, and is never written to disk.",
+      focus: ["swa", "issuer", "workload"],
+      links: [{ id: "swa_to_wl", label: "SVID", tone: "brand" }],
+      chips: ["workload"],
+    },
+    {
+      title: "Workload Presents Its SVID over mTLS",
+      body: "The workload opens a mutual-TLS connection to its target — directly, or through a SPIFFE-aware gateway/proxy in front of it — presenting its SVID. Both sides verify each other by SPIFFE ID within the trust domain; a peer from a foreign trust domain is not anchored and is refused.",
+      focus: ["workload", "target"],
+      links: [{ id: "wl_to_target", label: "present SVID · mTLS", tone: "brand" }],
+      chips: ["workload"],
+    },
+    {
+      title: "Authorized by SPIFFE ID",
+      body: "The target (or its gateway) checks the peer's SPIFFE ID against its allow-list before any application traffic flows. Identity is the authorization — there are no shared passwords and no reliance on network location.",
+      focus: ["target"],
+      detail: { target: { lines: ["verify SPIFFE ID ✓", "allow-listed identity", "identity = authorization"], ok: true } },
+      chips: ["workload"],
+    },
+    {
+      title: "Target Reached — by Identity",
+      body: "The authorized connection is proxied through to the service and the workload does its work — reading a database, calling an API, joining the mesh. The same pattern secures any SPIFFE/SVID-aware target, with no credential ever stored on the workload.",
+      focus: ["workload", "target"],
+      links: [{ id: "wl_to_target", label: "access", tone: "ok" }],
+      detail: { target: { lines: ["connection proxied", "target reached", "by identity"], ok: true } },
+      chips: ["workload"],
+    },
+  ],
+  features: [
+    { title: "Zero Stored Credentials", body: "The workload's only credential is a short-lived SVID issued on demand and auto-rotated. There is no API key, password, or certificate on disk to steal or rotate by hand." },
+    { title: "Attested, Not Asserted", body: "The workload never claims who it is. SWA derives its identity from attested node and workload facts (platform token, namespace / service account), so the identity cannot be spoofed." },
+    { title: "Identity Is the Authorization", body: "Access is granted by SPIFFE ID at the target or its gateway — not by network location or a shared secret. Only allow-listed identities in the trust domain get through." },
+  ],
+};
+
 /* ----------------------------- registry ----------------------------- */
 
 const FLOWS: Record<string, FlowConfig[]> = {
@@ -695,6 +803,7 @@ const FLOWS: Record<string, FlowConfig[]> = {
   "conjur-iam": [iamFlow],
   ccp: [ccpRetrieval, ccpRotation, makeDual("Central Credential Provider")],
   cp: [cpRetrieval, cpRotation, makeDual("Credential Provider")],
+  swa: [swaFlow],
 };
 
 /** All walkthrough flows for a provider id, or null when it has none. */
