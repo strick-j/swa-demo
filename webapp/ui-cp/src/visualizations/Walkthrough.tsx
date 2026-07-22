@@ -25,6 +25,7 @@ import {
   type FlowConfig,
   type WNode,
   type WStep,
+  type WTone,
 } from "./walkthroughData";
 
 // Auto-advance dwell per step while "playing".
@@ -278,6 +279,211 @@ function Diagram({ flow, step }: { flow: FlowConfig; step: WStep }) {
   );
 }
 
+/* ============================ policy variant ============================
+   A "policy" flow renders a policy.yml editor (progressive reveal + per-step
+   highlight) beside a branch tree, instead of the node+connector Diagram. */
+
+// Tree-node accent per tone (root/branch neutral-ish; leaves colored by kind).
+const TREE_TONE: Record<WTone, string> = {
+  root: "#5EEAD4",
+  branch: "var(--status-warning)",
+  variable: INK.ok,
+  group: "var(--idira-blue-500)",
+  host: "#B794F6",
+};
+
+const YAML_TAG = "var(--status-warning)"; // !policy / !variable / !host …
+
+// Colorize one YAML line: !tags amber, keys blue, everything else dim. Leading
+// whitespace is preserved (the container uses white-space: pre).
+function colorizeYaml(line: string): React.ReactNode {
+  return line.split(/(\s+)/).map((tok, i) => {
+    if (tok === "" || /^\s+$/.test(tok)) return tok;
+    let color: string = INK.dim;
+    if (tok.startsWith("!")) color = YAML_TAG;
+    else if (tok.endsWith(":")) color = INK.mono;
+    return (
+      <span key={i} style={{ color }}>
+        {tok}
+      </span>
+    );
+  });
+}
+
+function YamlEditor({ yaml, step, height }: { yaml: string[]; step: WStep; height: number }) {
+  const reveal = step.reveal ?? yaml.length;
+  const hi = new Set(step.highlight ?? []);
+  return (
+    <div style={{ ...pd.panel, height }}>
+      <div style={pd.panelHead}>
+        <span style={pd.fileName}>policy.yml</span>
+        <span style={pd.fileKind}>YAML</span>
+      </div>
+      <div style={pd.code}>
+        {yaml.map((line, idx) => {
+          const n = idx + 1;
+          const lit = hi.has(n);
+          const revealed = n <= reveal;
+          return (
+            <div
+              key={n}
+              style={{
+                display: "flex",
+                gap: 10,
+                padding: "1px 8px 1px 0",
+                borderLeft: `2px solid ${lit ? "var(--idira-blue-500)" : "transparent"}`,
+                background: lit ? "rgba(38,91,255,0.14)" : "transparent",
+                opacity: revealed ? 1 : 0.3,
+                transition: "opacity 300ms var(--ease-standard), background 240ms var(--ease-standard)",
+              }}
+            >
+              <span style={pd.lineNo}>{n}</span>
+              <pre style={pd.line}>{colorizeYaml(line)}</pre>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// A single branch-tree node — tone-colored border, lit when focused this step.
+function TreeNode({ node, lit }: { node: WNode; lit: boolean }) {
+  const color = node.tone ? TREE_TONE[node.tone] : INK.mono;
+  return (
+    <div
+      style={{
+        ...boxStyle(node.box),
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 2,
+        padding: "4px 8px",
+        borderRadius: "var(--radius-md)",
+        border: `1.5px solid ${lit ? color : INK.line}`,
+        background: lit ? "rgba(255,255,255,0.05)" : INK.card,
+        boxShadow: lit ? `0 0 0 1px ${color}, 0 8px 26px rgba(4,15,56,0.55)` : "none",
+        opacity: lit ? 1 : 0.45,
+        transition: "all 300ms var(--ease-standard)",
+        animation: lit ? "topoPop 320ms var(--ease-emphasis) both" : "none",
+        textAlign: "center",
+        overflow: "hidden",
+      }}
+    >
+      <span style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, fontWeight: 700, letterSpacing: "0.01em", color: lit ? color : INK.dim }}>
+        {node.title}
+      </span>
+      {node.sub && (
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 8.5, color: INK.faint, lineHeight: 1.3 }}>
+          {node.sub}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function PolicyTree({ flow, step, height }: { flow: FlowConfig; step: WStep; height: number }) {
+  const focus = new Set(step.focus ?? []);
+  const activeLinks = step.links ?? [];
+  const linkById = useMemo(() => Object.fromEntries(flow.links.map((l) => [l.id, l])), [flow]);
+  return (
+    <div style={{ ...pd.panel, height }}>
+      <div style={pd.panelHead}>
+        <span style={pd.treeLabel}>policy tree</span>
+      </div>
+      <div style={{ position: "relative", flex: 1 }}>
+        {/* dormant rails */}
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
+          {flow.links.map((l) => (
+            <path
+              key={`rail-${l.id}`}
+              d={l.d}
+              fill="none"
+              stroke={INK.line}
+              strokeWidth={1}
+              strokeDasharray={l.dashed ? "3 3" : undefined}
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+        </svg>
+
+        {/* nodes */}
+        {flow.nodes.map((n) => (
+          <TreeNode key={n.key} node={n} lit={focus.has(n.key)} />
+        ))}
+
+        {/* active connectors above nodes */}
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}>
+          {activeLinks.map((l) => {
+            const g = linkById[l.id];
+            if (!g) return null;
+            const col = toneColor(l.tone);
+            const dashed = l.dashed ?? g.dashed;
+            return (
+              <g key={`live-${l.id}`}>
+                <path
+                  d={g.d}
+                  fill="none"
+                  stroke={col}
+                  strokeWidth={1.6}
+                  strokeDasharray={dashed ? "3 3" : undefined}
+                  vectorEffect="non-scaling-stroke"
+                  className="wk-flow"
+                />
+                <circle cx={g.head.x} cy={g.head.y} r={1} fill={col} />
+              </g>
+            );
+          })}
+        </svg>
+
+        {/* connector labels */}
+        {activeLinks.map((l) => {
+          const g = linkById[l.id];
+          if (!g || !l.label) return null;
+          return (
+            <span
+              key={`lbl-${l.id}`}
+              style={{
+                position: "absolute",
+                left: `${g.label.x}%`,
+                top: `${g.label.y}%`,
+                transform: "translate(-50%, -50%)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 9,
+                fontWeight: 600,
+                color: l.tone === "ok" ? INK.ok : INK.mono,
+                whiteSpace: "nowrap",
+                pointerEvents: "none",
+              }}
+            >
+              {l.label}
+            </span>
+          );
+        })}
+
+        {/* fully-qualified ID chip */}
+        {step.fqid && (
+          <div style={pd.fqid}>
+            <span style={pd.fqidLabel}>fully-qualified ID</span>
+            <span style={pd.fqidValue}>{step.fqid}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PolicyDiagram({ flow, step }: { flow: FlowConfig; step: WStep }) {
+  const height = flow.canvasHeight ?? 440;
+  return (
+    <div style={pd.grid}>
+      <YamlEditor yaml={flow.yaml ?? []} step={step} height={height} />
+      <PolicyTree flow={flow} step={step} height={height} />
+    </div>
+  );
+}
+
 function CtrlButton({
   onClick,
   disabled,
@@ -385,6 +591,34 @@ export function Walkthrough({ provider }: WalkthroughProps) {
     return () => clearTimeout(id);
   }, [playing, i, total]);
 
+  // Keyboard navigation: ← / → step, Space plays/pauses (restarts at the end).
+  useEffect(() => {
+    if (total === 0) return;
+    const onKey = (e: KeyboardEvent) => {
+      const tgt = e.target as HTMLElement | null;
+      if (tgt && (tgt.tagName === "INPUT" || tgt.tagName === "TEXTAREA" || tgt.isContentEditable)) return;
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        setPlaying(false);
+        setI(Math.min(total - 1, i + 1));
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        setPlaying(false);
+        setI(Math.max(0, i - 1));
+      } else if (e.key === " " || e.key === "Spacebar") {
+        e.preventDefault();
+        if (i >= total - 1) {
+          setI(0);
+          setPlaying(true);
+        } else {
+          setPlaying((p) => !p);
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [i, total]);
+
   if (!flow) return null;
   const step = flow.steps[i]!;
   const atStart = i === 0;
@@ -450,7 +684,11 @@ export function Walkthrough({ provider }: WalkthroughProps) {
             </div>
           </div>
 
-          <Diagram flow={flow} step={step} />
+          {flow.variant === "policy" ? (
+            <PolicyDiagram flow={flow} step={step} />
+          ) : (
+            <Diagram flow={flow} step={step} />
+          )}
 
           <div style={ws.narration}>
             <p style={ws.body}>{step.body}</p>
@@ -470,6 +708,8 @@ export function Walkthrough({ provider }: WalkthroughProps) {
             ))}
           </div>
         )}
+
+        <div style={ws.footerHint}>← → arrow keys · Space to play/pause</div>
       </div>
     </div>
   );
@@ -568,4 +808,110 @@ const ws = {
   },
   featureTitle: { fontSize: 12.5, fontWeight: 700, color: INK.text },
   featureBody: { fontSize: 11, lineHeight: 1.55, color: INK.faint },
+  footerHint: {
+    textAlign: "center" as const,
+    fontFamily: "var(--font-mono)",
+    fontSize: 10.5,
+    letterSpacing: "0.04em",
+    color: INK.faint,
+    paddingTop: 2,
+  },
+};
+
+// Policy-variant (YAML editor + branch tree) styles.
+const pd = {
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
+    gap: 14,
+    alignItems: "stretch" as const,
+  },
+  panel: {
+    display: "flex",
+    flexDirection: "column" as const,
+    borderRadius: "var(--radius-lg)",
+    border: "1px solid rgba(97,134,252,0.18)",
+    background: "rgba(4,12,40,0.55)",
+    overflow: "hidden" as const,
+  },
+  panelHead: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "8px 12px",
+    borderBottom: "1px solid rgba(97,134,252,0.14)",
+  },
+  fileName: {
+    fontFamily: "var(--font-mono)",
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: "0.02em",
+    color: "var(--status-warning)",
+  },
+  fileKind: {
+    fontFamily: "var(--font-mono)",
+    fontSize: 9.5,
+    letterSpacing: "0.12em",
+    textTransform: "uppercase" as const,
+    color: INK.faint,
+  },
+  treeLabel: {
+    fontFamily: "var(--font-mono)",
+    fontSize: 10,
+    fontWeight: 700,
+    letterSpacing: "0.14em",
+    textTransform: "uppercase" as const,
+    color: INK.mono,
+  },
+  code: {
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 1,
+    padding: "10px 6px",
+    overflowY: "auto" as const,
+  },
+  lineNo: {
+    flex: "0 0 auto",
+    width: 20,
+    textAlign: "right" as const,
+    fontFamily: "var(--font-mono)",
+    fontSize: 10.5,
+    color: "rgba(157,180,255,0.4)",
+    userSelect: "none" as const,
+  },
+  line: {
+    margin: 0,
+    fontFamily: "var(--font-mono)",
+    fontSize: 11,
+    lineHeight: 1.55,
+    whiteSpace: "pre" as const,
+    color: INK.dim,
+  },
+  fqid: {
+    position: "absolute" as const,
+    left: "2%",
+    right: "2%",
+    bottom: 0,
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 2,
+    padding: "7px 11px",
+    borderRadius: "var(--radius-md)",
+    border: "1px solid rgba(94,234,212,0.4)",
+    background: "rgba(94,234,212,0.08)",
+  },
+  fqidLabel: {
+    fontFamily: "var(--font-mono)",
+    fontSize: 8,
+    letterSpacing: "0.14em",
+    textTransform: "uppercase" as const,
+    color: INK.faint,
+  },
+  fqidValue: {
+    fontFamily: "var(--font-mono)",
+    fontSize: 12,
+    fontWeight: 700,
+    letterSpacing: "0.02em",
+    color: "#5EEAD4",
+  },
 };

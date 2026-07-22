@@ -18,6 +18,9 @@ export interface Box {
   height: number;
 }
 
+/** Tone for a policy-tree node — drives its border/label color. */
+export type WTone = "root" | "branch" | "variable" | "group" | "host";
+
 /** A diagram element: a `card` (filled, focusable) or a `container` (labelled
  *  ring that groups cards). Positions are in % of the diagram canvas. */
 export interface WNode {
@@ -26,6 +29,8 @@ export interface WNode {
   sub?: string;
   box: Box;
   kind?: "card" | "container";
+  /** Policy-tree only: node tone (root/branch neutral; variable/group/host colored). */
+  tone?: WTone;
 }
 
 /** Fixed connector geometry (svg path + label anchor + arrow head), % coords. */
@@ -34,6 +39,8 @@ export interface WLinkDef {
   d: string;
   label: { x: number; y: number };
   head: { x: number; y: number };
+  /** Rendered as a dashed connector (e.g. policy `!permit` / `!grant` edges). */
+  dashed?: boolean;
 }
 
 /** A connector activated during a step. */
@@ -41,6 +48,8 @@ export interface WLink {
   id: string;
   label?: string;
   tone?: "brand" | "ok";
+  /** Force a dashed stroke for this activation (falls back to the def's `dashed`). */
+  dashed?: boolean;
 }
 
 /** Per-node detail rendered inside a card for a given step. */
@@ -63,6 +72,13 @@ export interface WStep {
   chips?: string[];
   /** Optional badge on the step header, e.g. "Background". */
   badge?: string;
+  /* ---- policy variant only ---- */
+  /** YAML lines 1..reveal are shown bright; lines beyond are dimmed. */
+  reveal?: number;
+  /** 1-based YAML line numbers emphasized (accent bar + tinted background). */
+  highlight?: number[];
+  /** Fully-qualified ID chip text shown beneath the tree (e.g. prod/app1/db-password). */
+  fqid?: string;
 }
 
 export interface FlowConfig {
@@ -73,6 +89,11 @@ export interface FlowConfig {
   eyebrow: string;
   title: string;
   lede: string;
+  /** Diagram renderer to use. "diagram" (default) = node+connector; "policy" =
+   *  YAML editor + branch tree. */
+  variant?: "diagram" | "policy";
+  /** Policy variant only: full `policy.yml` source, one entry per line. */
+  yaml?: string[];
   nodes: WNode[];
   links: WLinkDef[];
   /** Credential/token chip segments (rendered where a step lists a chip node). */
@@ -796,11 +817,156 @@ const swaFlow: FlowConfig = {
   ],
 };
 
+/* =========================================================================
+   Secrets Manager Policy — how policy is structured (authn-jwt + authn-iam)
+   A "policy" variant flow: a policy.yml editor on the left (progressive reveal +
+   per-step highlight) paired with a branch tree on the right. Auth-method
+   independent, so one shared flow serves both Conjur providers.
+   ========================================================================= */
+
+// The example policy.yml, one entry per line (index + 1 == line number).
+const POLICY_YAML: string[] = [
+  "- !policy",
+  "  id: prod",
+  "  owner: !group prod-admins",
+  "  body:",
+  "    - !policy",
+  "      id: app1",
+  "      body:",
+  "        - !variable db-password",
+  "        - !host     app1-host",
+  "        - !group    admins",
+  "        - !permit",
+  "          role:       !group admins",
+  "          privileges: [ read, execute ]",
+  "          resource:   !variable db-password",
+  "        - !grant",
+  "          role:   !group admins",
+  "          member: !host app1-host",
+];
+
+const POLICY_TREE: WNode[] = [
+  { key: "root", title: "root (account)", sub: "implicit top-level branch", box: { left: 20, top: 1, width: 60, height: 13 }, tone: "root" },
+  { key: "prod", title: "prod/", sub: "branch", box: { left: 28, top: 19, width: 44, height: 12 }, tone: "branch" },
+  { key: "app1", title: "app1/", sub: "nested branch", box: { left: 28, top: 36, width: 44, height: 12 }, tone: "branch" },
+  { key: "variable", title: "!variable", sub: "db-password", box: { left: 1, top: 54, width: 30, height: 14 }, tone: "variable" },
+  { key: "group", title: "!group", sub: "admins", box: { left: 35, top: 54, width: 30, height: 14 }, tone: "group" },
+  { key: "host", title: "!host", sub: "app1-host", box: { left: 69, top: 54, width: 30, height: 14 }, tone: "host" },
+];
+
+const POLICY_LINKS: WLinkDef[] = [
+  { id: "root_prod", d: "M50,14 L50,19", label: { x: 50, y: 16 }, head: { x: 50, y: 19 } },
+  { id: "prod_app1", d: "M50,31 L50,36", label: { x: 50, y: 33 }, head: { x: 50, y: 36 } },
+  { id: "app1_variable", d: "M50,48 C40,52 24,53 16,54", label: { x: 30, y: 50 }, head: { x: 16, y: 54 } },
+  { id: "app1_group", d: "M50,48 L50,54", label: { x: 50, y: 51 }, head: { x: 50, y: 54 } },
+  { id: "app1_host", d: "M50,48 C60,52 76,53 84,54", label: { x: 70, y: 50 }, head: { x: 84, y: 54 } },
+  { id: "permit", d: "M42,68 C34,75 22,75 16,68", label: { x: 27, y: 78 }, head: { x: 16, y: 68 }, dashed: true },
+  { id: "grant", d: "M84,68 C78,76 60,76 50,68", label: { x: 68, y: 78 }, head: { x: 50, y: 68 }, dashed: true },
+];
+
+const policyFlow: FlowConfig = {
+  key: "policy",
+  navLabel: "Policy",
+  eyebrow: "Policy & Branches",
+  title: "How Secrets Manager Policy is Structured",
+  lede: "Secrets Manager policy is YAML loaded into a tree of branches. Each !policy statement creates a namespace, resources inside get fully-qualified IDs, and roles + permits drive every authorization decision. This animation walks through the structure one concept at a time.",
+  variant: "policy",
+  yaml: POLICY_YAML,
+  nodes: POLICY_TREE,
+  links: POLICY_LINKS,
+  canvasHeight: 400,
+  steps: [
+    {
+      title: "Policy as a Tree of Branches",
+      body: "Secrets Manager policy is plain YAML — a list of statements. When loaded, those statements build a tree of branches rooted at a single implicit container: the account itself. Every secret, every identity and every authorization rule lives somewhere on this tree, addressable by its path. The animation will progressively introduce each piece: the root, branches created by !policy, the resources inside them, and how !permit and !grant tie identities to secrets.",
+      reveal: 0,
+      focus: ["root"],
+    },
+    {
+      title: "The Root and the First !policy",
+      body: "A !policy statement at the top of the file creates a top-level branch under the root. It has three keys: id (its name, e.g. prod), owner (a role that controls the branch — usually a group like prod-admins), and body (the list of statements that live inside it). The owner has full authority over everything declared inside the branch and is the only role that can replace or delete its contents.",
+      reveal: 4,
+      highlight: [1, 2, 3, 4],
+      focus: ["root", "prod"],
+      links: [{ id: "root_prod", tone: "brand" }],
+    },
+    {
+      title: "Nesting Branches — !policy Inside !policy",
+      body: "Branches nest arbitrarily. A !policy declared inside another !policy's body creates a sub-branch. Here, app1 is a sub-branch of prod. Nesting is how teams partition ownership: prod is owned by prod-admins, while app1 can declare its own owner so the app1 team manages its own resources without touching the rest of prod.",
+      reveal: 7,
+      highlight: [5, 6, 7],
+      focus: ["root", "prod", "app1"],
+      links: [{ id: "prod_app1", tone: "brand" }],
+    },
+    {
+      title: "Resources Get Fully-Qualified IDs",
+      body: "Every resource declared inside a branch is namespaced by it. The !variable db-password declared inside prod/app1 is referenced everywhere as prod/app1/db-password. Two branches can declare the same local name without colliding — they live in different namespaces. The fully-qualified ID is what tools, APIs and audit logs always use.",
+      reveal: 8,
+      highlight: [8],
+      focus: ["app1", "variable"],
+      links: [{ id: "app1_variable", tone: "brand" }],
+      fqid: "prod/app1/db-password",
+    },
+    {
+      title: "Roles — !host, !user, !group, !layer",
+      body: "Roles are anything that can act. !host is a machine identity (a workload, pipeline, server), !user is a person, !group bundles roles together for delegation, and !layer groups hosts. Roles, like resources, get fully-qualified IDs. The !group admins declared inside prod/app1 is prod/app1/admins — that exact identifier is what !permit and !grant refer to.",
+      reveal: 10,
+      highlight: [9, 10],
+      focus: ["app1", "variable", "group", "host"],
+      links: [
+        { id: "app1_variable", tone: "brand" },
+        { id: "app1_group", tone: "brand" },
+        { id: "app1_host", tone: "brand" },
+      ],
+    },
+    {
+      title: "!permit — Granting Privileges on a Resource",
+      body: "!permit attaches privileges to a (role, resource) pair. Here, the admins group is permitted read and execute on db-password, meaning anyone in that group can fetch its value. The privilege set is fixed per resource type: variables support read, execute, update; policies support read, create, update, delete. !permit is additive — multiple permits on the same resource simply union the privileges.",
+      reveal: 14,
+      highlight: [11, 12, 13, 14],
+      focus: ["variable", "group"],
+      links: [{ id: "permit", label: "permit: read, execute", tone: "ok" }],
+    },
+    {
+      title: "!grant — Adding Members to a Role",
+      body: "!grant adds a member role to a parent role. Granting app1-host membership in admins means app1-host inherits every privilege admins ever had — including the read/execute on db-password from the previous step. This is how indirection works: hosts and users are added to groups; groups are what permits target. To revoke access, change the grant — never touch the permit. Groups can grant into groups; layers can grant into layers; the hierarchy can be as deep as you need.",
+      reveal: 17,
+      highlight: [15, 16, 17],
+      focus: ["variable", "group", "host"],
+      links: [
+        { id: "permit", label: "permit: read, execute", tone: "ok" },
+        { id: "grant", label: "grant: member", tone: "ok" },
+      ],
+    },
+    {
+      title: "The Full Picture",
+      body: "Putting it all together: branches partition the namespace and ownership, resources live inside branches with fully-qualified IDs, roles identify who can act, !permit names what they can do on each resource, and !grant binds identities into the role hierarchy. Loading this YAML produces exactly the tree on the right, addressable by paths like prod/app1/db-password. Editing the YAML and re-loading is the only way state ever changes — policy is the single source of truth.",
+      reveal: 17,
+      focus: ["root", "prod", "app1", "variable", "group", "host"],
+      links: [
+        { id: "root_prod", tone: "brand" },
+        { id: "prod_app1", tone: "brand" },
+        { id: "app1_variable", tone: "brand" },
+        { id: "app1_group", tone: "brand" },
+        { id: "app1_host", tone: "brand" },
+        { id: "permit", label: "permit: read, execute", tone: "ok" },
+        { id: "grant", label: "grant: member", tone: "ok" },
+      ],
+      fqid: "prod/app1/db-password",
+    },
+  ],
+  features: [
+    { title: "Branches = Namespaces", body: "Every !policy creates a branch. Resources inside it are addressed as branch/sub-branch/resource. Branches partition ownership: one team can manage prod/app1 without touching prod/app2. Nesting is unbounded — design the tree to match your org." },
+    { title: "Roles, Resources, Privileges", body: "Roles (!host, !user, !group, !layer) are anything that acts. Resources (!variable, !webservice, !policy) are anything acted upon. !permit connects them with a privilege set, !grant inserts roles into the role hierarchy. Every authorization is computed from this graph." },
+    { title: "Policy as Code", body: "Policy is plain YAML committed to git. Loading is the only mutation: replace mode overwrites a branch, patch mode adds and removes specific items, update mode adds without deleting. Pull requests review every change to identity and access — auditable, reversible, version-controlled." },
+  ],
+};
+
 /* ----------------------------- registry ----------------------------- */
 
 const FLOWS: Record<string, FlowConfig[]> = {
-  "conjur-jwt": [jwtFlow],
-  "conjur-iam": [iamFlow],
+  "conjur-jwt": [jwtFlow, policyFlow],
+  "conjur-iam": [iamFlow, policyFlow],
   ccp: [ccpRetrieval, ccpRotation, makeDual("Central Credential Provider")],
   cp: [cpRetrieval, cpRotation, makeDual("Credential Provider")],
   swa: [swaFlow],
