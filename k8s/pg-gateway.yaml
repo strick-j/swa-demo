@@ -41,6 +41,12 @@ spec:
           args:
             # Identity + trust bundle come from the SWA Agent Workload API.
             - "--use-workload-api-addr=unix:///tmp/swa-agent/public/api.sock"
+            # Silence the per-probe "error on TLS handshake ... EOF" log spam: the
+            # readinessProbe below is a plain-TCP check against the mTLS listener
+            # (6432), so every probe aborts the handshake. Upstream recommends this
+            # exact flag for k8s TCP health checks on the listening port. Global
+            # flag — must precede the `server` subcommand.
+            - "--quiet=handshake-errs"
             - "server"
             - "--listen=0.0.0.0:6432"
             - "--target=postgres.swa-data.svc.cluster.local:5432"
@@ -54,6 +60,11 @@ spec:
             - name: swa-agent-socket
               mountPath: /tmp/swa-agent
               readOnly: true
+          # TCP check on the mTLS port: proves ghostunnel is listening. It can't
+          # complete an mTLS handshake (no client cert), so the aborted-handshake
+          # log line is silenced via --quiet=handshake-errs above. (A richer check
+          # would use ghostunnel's --status /_status endpoint, but that adds an
+          # HTTPS port + metrics exposure and couples readiness to the backend.)
           readinessProbe:
             tcpSocket:
               port: 6432
