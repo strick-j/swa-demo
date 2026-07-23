@@ -3,7 +3,7 @@
 // path; both are served by this one SPA. The left pane selects a use case; the
 // inspector animates the provider's staged flow.
 import { useState, useCallback, useEffect, useMemo } from "react";
-import { GitFork, Layers, Terminal } from "lucide-react";
+import { GitFork, Layers, Terminal, PanelRightClose } from "lucide-react";
 import { PortalPane } from "./components/PortalPane";
 import { DarkSeg } from "./components/DarkSeg";
 import { InspectorChrome } from "./components/InspectorChrome";
@@ -57,11 +57,21 @@ export function App() {
   );
   const [view, setView] = useState<ViewMode>("topology");
   const [pace, setPace] = useState<PaceMode>("medium");
+  // Collapse the left (use-case) pane to give the inspector full width. On
+  // laptops the walkthrough ("Learn how it works") is cramped otherwise.
+  const [collapsed, setCollapsed] = useState(false);
   const engine = useResolveEngine(provider);
 
   useEffect(() => {
     paceQueue.setPace(pace);
   }, [pace]);
+
+  // Auto-collapse when the walkthrough opens; restore on any other view. The
+  // manual toggle still overrides within the current view (this only re-fires
+  // when the view itself changes).
+  useEffect(() => {
+    setCollapsed(view === "walkthrough");
+  }, [view]);
 
   const handleScenarioChange = useCallback(
     (v: ScenarioKey) => {
@@ -130,22 +140,106 @@ export function App() {
       <div
         id="main-content"
         style={{
-          flex: "0 0 44%",
-          minWidth: 440,
-          maxWidth: 640,
+          position: "relative",
+          flex: collapsed ? "0 0 64px" : "0 0 44%",
+          minWidth: collapsed ? 64 : 440,
+          maxWidth: collapsed ? 64 : 640,
           height: "100%",
+          overflow: "hidden",
+          transition:
+            "flex-basis 260ms var(--ease-standard), min-width 260ms var(--ease-standard), max-width 260ms var(--ease-standard)",
         }}
       >
-        <PortalPane
-          provider={provider}
-          scenario={scenario}
-          setScenario={handleScenarioChange}
-          status={engine.status}
-          stageVerb={engine.stageVerb}
-          onResolve={handleResolve}
-          result={engine.result}
-          onLearnMore={handleLearnMore}
-        />
+        {/* Expanded portal (faded out under the collapsing width). */}
+        <div
+          style={{
+            height: "100%",
+            opacity: collapsed ? 0 : 1,
+            pointerEvents: collapsed ? "none" : "auto",
+            transition: "opacity 140ms var(--ease-standard)",
+          }}
+        >
+          <PortalPane
+            provider={provider}
+            scenario={scenario}
+            setScenario={handleScenarioChange}
+            status={engine.status}
+            stageVerb={engine.stageVerb}
+            onResolve={handleResolve}
+            result={engine.result}
+            onLearnMore={handleLearnMore}
+          />
+        </div>
+
+        {/* Collapse control — top-right of the white pane (expanded only). */}
+        {!collapsed && (
+          <button
+            type="button"
+            onClick={() => setCollapsed(true)}
+            aria-label="Collapse use cases"
+            aria-expanded={true}
+            title="Collapse"
+            style={{
+              position: "absolute",
+              top: 20,
+              right: 20,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 34,
+              height: 34,
+              borderRadius: "var(--radius-md)",
+              border: "1px solid rgba(97,134,252,0.35)",
+              background: "#fff",
+              color: "var(--idira-blue-750)",
+              cursor: "pointer",
+              transition: "background 160ms var(--ease-standard), border-color 160ms var(--ease-standard)",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(97,134,252,0.10)";
+              e.currentTarget.style.borderColor = "var(--idira-blue-500)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "#fff";
+              e.currentTarget.style.borderColor = "rgba(97,134,252,0.35)";
+            }}
+          >
+            <PanelRightClose style={{ width: 18, height: 18 }} />
+          </button>
+        )}
+
+        {/* Collapsed rail — ~80px white bar with just the Idira mark (collapsed only). */}
+        {collapsed && (
+          <button
+            type="button"
+            onClick={() => setCollapsed(false)}
+            aria-label="Show use cases"
+            aria-expanded={false}
+            title="Show use cases"
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 12,
+              paddingTop: 18,
+              background: "#fff",
+              border: "none",
+              borderRight: "1px solid rgba(16,24,64,0.10)",
+              cursor: "pointer",
+            }}
+          >
+            <img
+              src="/cp/assets/idira-icon-color.png"
+              alt="Idira — show use cases"
+              style={{ width: 32, height: 32 }}
+            />
+            <span style={{ width: 28, height: 1, background: "rgba(16,24,64,0.12)" }} />
+          </button>
+        )}
       </div>
 
       <div style={{ flex: 1, minWidth: 0, height: "100%" }}>
