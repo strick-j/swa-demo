@@ -133,13 +133,21 @@ Recovery (confirms the cause):
 - Restart the **SWA server** → subscriber registry flushed → next re-subscribe
   succeeds.
 
-## Workarounds in place (not fixes)
+## Status
 
-- Raised `x509.workload_ttl` 1h → 8h so rotation rarely fires within a session.
-- A CronJob that `rollout restart`s the gateway every 4h (fresh PID before the
-  wedge point).
+**Addressed by the SWA v1.0.3 upgrade.** With v1.0.3 the demo dropped the agent's
+`hostPID`/`hostNetwork` (a host-global, stable PID was the root of the PID-keyed
+subscriber collision), and the proactive `swa-svid-resync` CronJob + the manual
+`make swa-resync` workaround were removed. Retained only as a historical record of
+the v1.0.2 defect for CyberArk.
 
-Both only reduce exposure. The subscriber-cleanup race is the defect.
+### Former workarounds (removed)
+
+- Raised `x509.workload_ttl` 1h → 8h so rotation rarely fired within a session.
+- A CronJob that `rollout restart`ed the chain to force fresh PIDs before the wedge
+  point.
+
+Both only reduced exposure; the subscriber-cleanup race was the underlying defect.
 
 ## Requested fix
 

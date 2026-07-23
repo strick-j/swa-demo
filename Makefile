@@ -191,7 +191,7 @@ webapp-deploy: stage ## Deploy webapp manifests + inject Conjur/CCP live config 
 # ---------------------------------------------------------------------------
 # Phase 5 — End to end
 # ---------------------------------------------------------------------------
-.PHONY: up down verify demo swa-resync
+.PHONY: up down verify demo
 up: preflight webapp-test tf-apply configure control-setup tenant-tf swa webapp-build webapp-deploy verify ## Full bring-up
 	@echo "swa-demo is up. Run 'make demo' to open the UI."
 	@echo "Assumes the SWA bundle is uploaded to SWA_IMAGES_S3_URI and a Conjur"
@@ -205,6 +205,3 @@ verify: ## Health-check every layer
 
 demo: ## Print the demo UI URL (and open it on macOS)
 	bash scripts/demo.sh
-
-swa-resync: ## Clear a Firefly CA-rotation wedge (swa-server -> pg-gateway -> webapp) + verify trusted read
-	bash scripts/resync-svid-ca.sh

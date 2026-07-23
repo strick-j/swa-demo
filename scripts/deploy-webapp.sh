@@ -62,10 +62,11 @@ deploy_data() {
   # e.g. minikube --cni=calico, to actually enforce; inert otherwise).
   kubectl apply -f "${ROOT}/k8s/postgres-netpol.yaml"
   kubectl apply -f "${ROOT}/k8s/pg-gateway.yaml"
-  # Proactively resync the SPIFFE chain on a schedule to prevent the SWA v1.0.2
-  # SVID/CA-rotation wedges (supersedes the old pg-gateway-recycler).
-  kubectl apply -f "${ROOT}/k8s/swa-svid-resync.yaml"
-  # One-time cleanup of the superseded recycler (no-op once it's gone).
+  # One-time cleanup of the retired SVID/CA-rotation workarounds (no-op once gone).
+  # The subscriber-cleanup wedge is addressed by the SWA v1.0.3 upgrade (which also
+  # let us drop the agent's hostPID/hostNetwork), so the proactive resync CronJob
+  # and the old pg-gateway-recycler are removed.
+  kubectl -n swa-system delete cronjob,rolebinding,role,serviceaccount swa-svid-resync --ignore-not-found
   kubectl -n swa-data delete cronjob,rolebinding,role,serviceaccount pg-gateway-recycler --ignore-not-found
   kubectl apply -f "${ROOT}/k8s/untrusted-app.yaml"
   kubectl apply -f "${ROOT}/k8s/rogue-app.yaml"
