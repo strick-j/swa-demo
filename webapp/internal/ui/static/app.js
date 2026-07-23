@@ -35,12 +35,22 @@
   }
 
   function esc(s) {
-    return String(s == null ? "" : s).replace(/[&<>"]/g, (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    return String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
 
   function show(id, value) {
     document.getElementById(id).textContent = value;
+  }
+
+  // maskToken renders a compact JWT as a short, non-replayable preview. The raw
+  // token is bearer material; the decoded header/claims are shown separately, so
+  // only a redacted preview belongs in the DOM.
+  function maskToken(t) {
+    if (!t) return "—";
+    const s = String(t);
+    if (s.length <= 24) return s;
+    return s.slice(0, 12) + "…" + s.slice(-6) + "  · " + s.length + "-char JWT (redacted — see claims above)";
   }
 
   // --- lifecycle rendering -------------------------------------------------
@@ -154,7 +164,7 @@
       show("validity", "issued:  " + fmtTime(r.issued_at) + "\nexpires: " + fmtTime(r.expires_at));
       show("jwt-header", JSON.stringify(r.header, null, 2));
       show("jwt-claims", JSON.stringify(r.claims, null, 2));
-      show("jwt-token", r.token || "—");
+      show("jwt-token", maskToken(r.token));
     } else {
       show("scenario-id", "✗ no identity issued");
       await renderSteps(refusalSteps(svid.error), animate);

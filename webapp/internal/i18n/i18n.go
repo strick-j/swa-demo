@@ -126,17 +126,23 @@ func TemplateFuncs() template.FuncMap {
 }
 
 // SetCookie writes the locale cookie (one year) when loc is supported. It is not
-// HttpOnly on purpose: the SPA reads it to choose its own catalog.
-func SetCookie(w http.ResponseWriter, loc string) bool {
+// HttpOnly on purpose: the SPA reads it to choose its own catalog. Secure is set
+// only when the request arrived over HTTPS (directly or via a TLS-terminating
+// proxy) — setting it unconditionally would make browsers drop the cookie on the
+// plain-HTTP NodePort demo, breaking the language switcher.
+func SetCookie(w http.ResponseWriter, r *http.Request, loc string) bool {
 	if !IsSupported(loc) {
 		return false
 	}
+	secure := r != nil && (r.TLS != nil ||
+		strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https"))
 	http.SetCookie(w, &http.Cookie{
 		Name:     CookieName,
 		Value:    loc,
 		Path:     "/",
 		MaxAge:   60 * 60 * 24 * 365,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   secure,
 	})
 	return true
 }

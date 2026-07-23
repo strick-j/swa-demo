@@ -64,7 +64,13 @@ export function detectLocale(): Locale {
 export function setLocale(loc: Locale): void {
   if (typeof document === "undefined" || !isLocale(loc)) return;
   const oneYear = 60 * 60 * 24 * 365;
-  document.cookie = `${COOKIE_NAME}=${loc}; path=/; max-age=${oneYear}; samesite=lax`;
+  // Add Secure only over HTTPS — a Secure cookie set over the plain-HTTP demo
+  // would be dropped by the browser, losing the locale preference.
+  const secure =
+    typeof location !== "undefined" && location.protocol === "https:"
+      ? "; secure"
+      : "";
+  document.cookie = `${COOKIE_NAME}=${loc}; path=/; max-age=${oneYear}; samesite=lax${secure}`;
 }
 
 // The active locale is resolved once per page load (the switcher reloads).
