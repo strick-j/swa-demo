@@ -133,13 +133,35 @@ Recovery (confirms the cause):
 - Restart the **SWA server** → subscriber registry flushed → next re-subscribe
   succeeds.
 
-## Workarounds in place (not fixes)
+## Status (SWA v1.0.3)
 
-- Raised `x509.workload_ttl` 1h → 8h so rotation rarely fires within a session.
-- A CronJob that `rollout restart`s the gateway every 4h (fresh PID before the
-  wedge point).
+**Not confirmed fixed.** Two things were checked on the v1.0.3 upgrade:
 
-Both only reduce exposure. The subscriber-cleanup race is the defect.
+1. **Can the agent drop `hostPID`/`hostNetwork`?** — **No** (tested 2026-07-23).
+   Both are still required on the minikube Docker driver: without `hostNetwork` the
+   k8s *workload* attestor cannot reach the kubelet and the agent resets every
+   Workload API connection (workloads get no SVID, though the agent's own *node*
+   SVID keeps minting and masks it); `hostPID` is still needed for caller-PID→pod
+   resolution. Config reverted to `hostPID: true` / `hostNetwork: true`. So the
+   host-global stable PID that underlies the subscriber collision is **still
+   present**.
+2. **Is the subscriber-cleanup wedge itself fixed in v1.0.3?** — **Not retested.**
+   Because the stable-PID precondition remains, assume the wedge can still occur
+   until a long-lived workload is observed rotating cleanly past one `workload_ttl`.
+
+The proactive `swa-svid-resync` CronJob was **removed** (it was failing with
+`ContainerCannotRun` and never worked reliably). If the wedge recurs on v1.0.3
+(Postgres scenario fails with an expired gateway leaf), restart the chain in order
+— swa-server → pg-gateway → swa-demo-webapp — and reopen the bug with CyberArk.
+
+### Former workarounds (removed)
+
+- Raised `x509.workload_ttl` 1h → 8h so rotation rarely fired within a session
+  (still set in terraform-swa; independent of the removed CronJob).
+- A CronJob that `rollout restart`ed the chain to force fresh PIDs before the wedge
+  point — removed.
+
+Both only reduced exposure; the subscriber-cleanup race is the underlying defect.
 
 ## Requested fix
 

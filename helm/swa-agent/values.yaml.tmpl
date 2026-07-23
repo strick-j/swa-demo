@@ -61,6 +61,20 @@ socketHostPath: /tmp/swa-agent
 podLabels:
   swa_nodegroup: "${SWA_NODE_GROUP}"
 
+# ACCEPTED RISK — both host namespaces are REQUIRED by the SWA agent on the
+# minikube Docker driver. We TESTED dropping them on SWA v1.0.3 (2026-07-23) and
+# both are still needed; do NOT set either to false here.
+#   - hostNetwork: the k8s WORKLOAD attestor must reach the node kubelet
+#     (https://<node>:10250) to map a caller to its pod. From the pod network
+#     (hostNetwork:false + dnsPolicy:ClusterFirst) it cannot, so the agent resets
+#     every Workload API connection ("connection reset by peer" at the socket) and
+#     workloads never get SVIDs. NOTE: NODE attestation (k8s_psat -> server) keeps
+#     working, so the agent still mints its OWN node SVID — which masks the outage.
+#   - hostPID: caller-PID -> pod resolution on the Docker driver (the agent reads
+#     the peer PID via SO_PEERCRED and must see it in the host PID namespace).
+# Mitigations: agent runs non-root (runAsUser 65532), non-privileged,
+# allowPrivilegeEscalation=false (securityContext below). Inherent to a SPIFFE
+# node agent; accepted (.trivyignore AVD-KSV-0009 hostNetwork / AVD-KSV-0010 hostPID).
 hostPID: true
 hostNetwork: true
 setNodeNameEnv: true

@@ -106,7 +106,7 @@ configure: ## Run Ansible on the TARGET: minikube + load images (S3) + vendor ch
 # so deploy-swa.sh can Helm-install the SWA server + agent there.
 # ---------------------------------------------------------------------------
 # Release version drives the local bundle dir; override via env to match .env.
-SWA_RELEASE_VERSION ?= 1.0.2
+SWA_RELEASE_VERSION ?= 1.0.3
 SWA_RELEASE_DIR ?= $(HOME)/Downloads/Secure Workload Access/Secure Workload Access/swa-release-v$(SWA_RELEASE_VERSION)
 TFSWA_DIR := terraform-swa
 
@@ -191,7 +191,7 @@ webapp-deploy: stage ## Deploy webapp manifests + inject Conjur/CCP live config 
 # ---------------------------------------------------------------------------
 # Phase 5 — End to end
 # ---------------------------------------------------------------------------
-.PHONY: up down verify demo swa-resync
+.PHONY: up down verify demo
 up: preflight webapp-test tf-apply configure control-setup tenant-tf swa webapp-build webapp-deploy verify ## Full bring-up
 	@echo "swa-demo is up. Run 'make demo' to open the UI."
 	@echo "Assumes the SWA bundle is uploaded to SWA_IMAGES_S3_URI and a Conjur"
@@ -205,6 +205,3 @@ verify: ## Health-check every layer
 
 demo: ## Print the demo UI URL (and open it on macOS)
 	bash scripts/demo.sh
-
-swa-resync: ## Clear a Firefly CA-rotation wedge (swa-server -> pg-gateway -> webapp) + verify trusted read
-	bash scripts/resync-svid-ca.sh
