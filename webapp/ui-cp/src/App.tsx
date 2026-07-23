@@ -141,9 +141,9 @@ export function App() {
         id="main-content"
         style={{
           position: "relative",
-          flex: collapsed ? "0 0 80px" : "0 0 44%",
-          minWidth: collapsed ? 80 : 440,
-          maxWidth: collapsed ? 80 : 640,
+          flex: collapsed ? "0 0 64px" : "0 0 44%",
+          minWidth: collapsed ? 64 : 440,
+          maxWidth: collapsed ? 64 : 640,
           height: "100%",
           overflow: "hidden",
           transition:
@@ -224,8 +224,8 @@ export function App() {
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              gap: 14,
-              paddingTop: 22,
+              gap: 12,
+              paddingTop: 18,
               background: "#fff",
               border: "none",
               borderRight: "1px solid rgba(16,24,64,0.10)",
@@ -235,9 +235,9 @@ export function App() {
             <img
               src="/cp/assets/idira-icon-color.png"
               alt="Idira — show use cases"
-              style={{ width: 44, height: 44 }}
+              style={{ width: 32, height: 32 }}
             />
-            <span style={{ width: 40, height: 1, background: "rgba(16,24,64,0.12)" }} />
+            <span style={{ width: 28, height: 1, background: "rgba(16,24,64,0.12)" }} />
           </button>
         )}
       </div>
