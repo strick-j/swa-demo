@@ -3,7 +3,7 @@
 // path; both are served by this one SPA. The left pane selects a use case; the
 // inspector animates the provider's staged flow.
 import { useState, useCallback, useEffect, useMemo } from "react";
-import { GitFork, Layers, Terminal } from "lucide-react";
+import { GitFork, Layers, Terminal, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { PortalPane } from "./components/PortalPane";
 import { DarkSeg } from "./components/DarkSeg";
 import { InspectorChrome } from "./components/InspectorChrome";
@@ -57,11 +57,21 @@ export function App() {
   );
   const [view, setView] = useState<ViewMode>("topology");
   const [pace, setPace] = useState<PaceMode>("medium");
+  // Collapse the left (use-case) pane to give the inspector full width. On
+  // laptops the walkthrough ("Learn how it works") is cramped otherwise.
+  const [collapsed, setCollapsed] = useState(false);
   const engine = useResolveEngine(provider);
 
   useEffect(() => {
     paceQueue.setPace(pace);
   }, [pace]);
+
+  // Auto-collapse when the walkthrough opens; restore on any other view. The
+  // manual toggle still overrides within the current view (this only re-fires
+  // when the view itself changes).
+  useEffect(() => {
+    setCollapsed(view === "walkthrough");
+  }, [view]);
 
   const handleScenarioChange = useCallback(
     (v: ScenarioKey) => {
@@ -130,10 +140,13 @@ export function App() {
       <div
         id="main-content"
         style={{
-          flex: "0 0 44%",
-          minWidth: 440,
-          maxWidth: 640,
+          flex: collapsed ? "0 0 0px" : "0 0 44%",
+          minWidth: collapsed ? 0 : 440,
+          maxWidth: collapsed ? 0 : 640,
           height: "100%",
+          overflow: "hidden",
+          transition:
+            "flex-basis 260ms var(--ease-standard), min-width 260ms var(--ease-standard), max-width 260ms var(--ease-standard)",
         }}
       >
         <PortalPane
@@ -147,6 +160,43 @@ export function App() {
           onLearnMore={handleLearnMore}
         />
       </div>
+
+      <button
+        type="button"
+        onClick={() => setCollapsed((c) => !c)}
+        aria-label={collapsed ? "Show use cases" : "Hide use cases"}
+        aria-expanded={!collapsed}
+        title={collapsed ? "Show use cases" : "Hide use cases"}
+        style={{
+          flex: "0 0 auto",
+          width: 20,
+          height: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 0,
+          border: "none",
+          borderRight: "1px solid rgba(97,134,252,0.18)",
+          background: "#070d20",
+          color: "rgba(196,210,250,0.65)",
+          cursor: "pointer",
+          transition: "background 160ms var(--ease-standard), color 160ms var(--ease-standard)",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = "#0c1633";
+          e.currentTarget.style.color = "#fff";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = "#070d20";
+          e.currentTarget.style.color = "rgba(196,210,250,0.65)";
+        }}
+      >
+        {collapsed ? (
+          <PanelLeftOpen style={{ width: 15, height: 15 }} />
+        ) : (
+          <PanelLeftClose style={{ width: 15, height: 15 }} />
+        )}
+      </button>
 
       <div style={{ flex: 1, minWidth: 0, height: "100%" }}>
         <InspectorChrome
