@@ -55,9 +55,17 @@
     const el = document.getElementById(id);
     if (el) el.textContent = value;
   }
+  // maskToken renders a compact JWT as a short, non-replayable preview. The raw
+  // token is bearer material; the decoded header/claims are shown separately.
+  function maskToken(t) {
+    if (!t) return "—";
+    const s = String(t);
+    if (s.length <= 24) return s;
+    return s.slice(0, 12) + "…" + s.slice(-6) + "  · " + s.length + "-char JWT (redacted — see claims above)";
+  }
   function esc(s) {
-    return String(s == null ? "" : s).replace(/[&<>"]/g, (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    return String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
 
   async function renderSteps(steps) {
@@ -87,7 +95,7 @@
     const jwt = body.jwt || {};
     show("jwt-header", jwt.header ? JSON.stringify(jwt.header, null, 2) : "—");
     show("jwt-claims", jwt.claims ? JSON.stringify(jwt.claims, null, 2) : "—");
-    show("jwt-token", jwt.token || "—");
+    show("jwt-token", maskToken(jwt.token));
 
     const aws = body.aws || {};
     show("iam-arn", aws.caller_arn || "—");

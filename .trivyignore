@@ -15,3 +15,11 @@ AVD-KSV-0023  # hostPath volume
 # Locally-built webapp image uses the mutable :dev tag (loaded into minikube; no
 # registry). Digest pinning is a deferred supply-chain item.
 AVD-KSV-0013  # image tag should be fixed/digest
+
+# SWA agent DaemonSet (helm/swa-agent) shares host PID + network namespaces.
+# hostPID is REQUIRED by the k8s workload attestor on the Docker driver (no SVIDs
+# issue without it — see docs/SWA-SVID-ROTATION-BUG.md); hostNetwork supports node
+# attestation + host-served health. Inherent to a SPIFFE node agent; mitigated by
+# non-root/non-privileged/no-priv-escalation securityContext. Accepted.
+AVD-KSV-0009  # hostNetwork (swa-agent)
+AVD-KSV-0010  # hostPID (swa-agent)

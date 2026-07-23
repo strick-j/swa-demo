@@ -172,10 +172,26 @@ func (s *Server) Routes() http.Handler {
 	return securityHeaders(mux)
 }
 
-// securityHeaders adds conservative response headers to every response. It stops
-// short of a strict Content-Security-Policy on purpose: the Vite/React inspector
-// SPA relies on inline styles/scripts that a strict CSP would break, so headers
-// here are the ones that are safe without per-asset nonces.
+// contentSecurityPolicy applies to every page and asset. script-src is 'self'
+// only — both the Vite/React SPA (external module script) and the legacy pages
+// (external /static/*.js) ship NO inline <script> or inline event handlers, so
+// no nonce/hash is needed and inline script injection is blocked outright. Inline
+// STYLES are required (large inline <style> blocks + React style={{}} attributes),
+// so style-src keeps 'unsafe-inline'; img/font/connect are same-origin (data: for
+// inline SVG/data-URI images). base-uri/frame-ancestors/object-src are locked
+// down to blunt injection and clickjacking.
+const contentSecurityPolicy = "default-src 'self'; " +
+	"script-src 'self'; " +
+	"style-src 'self' 'unsafe-inline'; " +
+	"img-src 'self' data:; " +
+	"font-src 'self'; " +
+	"connect-src 'self'; " +
+	"object-src 'none'; " +
+	"base-uri 'none'; " +
+	"frame-ancestors 'none'; " +
+	"form-action 'self'"
+
+// securityHeaders adds conservative response headers to every response.
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
@@ -183,8 +199,22 @@ func securityHeaders(next http.Handler) http.Handler {
 		h.Set("X-Frame-Options", "SAMEORIGIN")
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+		h.Set("Content-Security-Policy", contentSecurityPolicy)
+		// HSTS is only honored (and only meaningful) over HTTPS. Set it when the
+		// request reached us securely — directly (r.TLS) or via a TLS-terminating
+		// proxy/ALB (X-Forwarded-Proto=https) — so it is a no-op on the plain-HTTP
+		// NodePort demo but protects real HTTPS deployments.
+		if isHTTPS(r) {
+			h.Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
+		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// isHTTPS reports whether the client's connection to the edge is HTTPS, either
+// directly or through a TLS-terminating proxy (ALB) that sets X-Forwarded-Proto.
+func isHTTPS(r *http.Request) bool {
+	return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }
 
 type indexData struct {
@@ -223,7 +253,7 @@ func (s *Server) handleLanding(w http.ResponseWriter, r *http.Request) {
 // handleSetLang persists the chosen locale in the shared "lang" cookie and
 // redirects back. next is restricted to local paths to avoid an open redirect.
 func (s *Server) handleSetLang(w http.ResponseWriter, r *http.Request) {
-	i18n.SetCookie(w, r.URL.Query().Get("set"))
+	i18n.SetCookie(w, r, r.URL.Query().Get("set"))
 	next := r.URL.Query().Get("next")
 	if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
 		next = "/"
@@ -357,6 +387,14 @@ func (s *Server) handleRetrieve(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "unknown mode: " + mode})
 		return
+	}
+	// Never return the raw compact JWT to HTTP clients. In live mode the
+	// conjur-jwt retriever mints a real JWT-SVID with aud=conjur; returning it
+	// here would be a token-minting oracle (an anonymous caller could replay it
+	// to Conjur as this workload) — the exact attack handleSVID guards against.
+	// The decoded header/claims stay for display; only the replayable token drops.
+	if result.JWT != nil {
+		result.JWT.Token = ""
 	}
 	writeJSON(w, http.StatusOK, result)
 }
