@@ -3,7 +3,7 @@
 // path; both are served by this one SPA. The left pane selects a use case; the
 // inspector animates the provider's staged flow.
 import { useState, useCallback, useEffect, useMemo } from "react";
-import { GitFork, Layers, Terminal, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { GitFork, Layers, Terminal, PanelRightClose } from "lucide-react";
 import { PortalPane } from "./components/PortalPane";
 import { DarkSeg } from "./components/DarkSeg";
 import { InspectorChrome } from "./components/InspectorChrome";
@@ -140,63 +140,107 @@ export function App() {
       <div
         id="main-content"
         style={{
-          flex: collapsed ? "0 0 0px" : "0 0 44%",
-          minWidth: collapsed ? 0 : 440,
-          maxWidth: collapsed ? 0 : 640,
+          position: "relative",
+          flex: collapsed ? "0 0 80px" : "0 0 44%",
+          minWidth: collapsed ? 80 : 440,
+          maxWidth: collapsed ? 80 : 640,
           height: "100%",
           overflow: "hidden",
           transition:
             "flex-basis 260ms var(--ease-standard), min-width 260ms var(--ease-standard), max-width 260ms var(--ease-standard)",
         }}
       >
-        <PortalPane
-          provider={provider}
-          scenario={scenario}
-          setScenario={handleScenarioChange}
-          status={engine.status}
-          stageVerb={engine.stageVerb}
-          onResolve={handleResolve}
-          result={engine.result}
-          onLearnMore={handleLearnMore}
-        />
-      </div>
+        {/* Expanded portal (faded out under the collapsing width). */}
+        <div
+          style={{
+            height: "100%",
+            opacity: collapsed ? 0 : 1,
+            pointerEvents: collapsed ? "none" : "auto",
+            transition: "opacity 140ms var(--ease-standard)",
+          }}
+        >
+          <PortalPane
+            provider={provider}
+            scenario={scenario}
+            setScenario={handleScenarioChange}
+            status={engine.status}
+            stageVerb={engine.stageVerb}
+            onResolve={handleResolve}
+            result={engine.result}
+            onLearnMore={handleLearnMore}
+          />
+        </div>
 
-      <button
-        type="button"
-        onClick={() => setCollapsed((c) => !c)}
-        aria-label={collapsed ? "Show use cases" : "Hide use cases"}
-        aria-expanded={!collapsed}
-        title={collapsed ? "Show use cases" : "Hide use cases"}
-        style={{
-          flex: "0 0 auto",
-          width: 20,
-          height: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: 0,
-          border: "none",
-          borderRight: "1px solid rgba(97,134,252,0.18)",
-          background: "#070d20",
-          color: "rgba(196,210,250,0.65)",
-          cursor: "pointer",
-          transition: "background 160ms var(--ease-standard), color 160ms var(--ease-standard)",
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = "#0c1633";
-          e.currentTarget.style.color = "#fff";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = "#070d20";
-          e.currentTarget.style.color = "rgba(196,210,250,0.65)";
-        }}
-      >
-        {collapsed ? (
-          <PanelLeftOpen style={{ width: 15, height: 15 }} />
-        ) : (
-          <PanelLeftClose style={{ width: 15, height: 15 }} />
+        {/* Collapse control — top-right of the white pane (expanded only). */}
+        {!collapsed && (
+          <button
+            type="button"
+            onClick={() => setCollapsed(true)}
+            aria-label="Collapse use cases"
+            aria-expanded={true}
+            title="Collapse"
+            style={{
+              position: "absolute",
+              top: 20,
+              right: 20,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 34,
+              height: 34,
+              borderRadius: "var(--radius-md)",
+              border: "1px solid rgba(97,134,252,0.35)",
+              background: "#fff",
+              color: "var(--idira-blue-750)",
+              cursor: "pointer",
+              transition: "background 160ms var(--ease-standard), border-color 160ms var(--ease-standard)",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(97,134,252,0.10)";
+              e.currentTarget.style.borderColor = "var(--idira-blue-500)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "#fff";
+              e.currentTarget.style.borderColor = "rgba(97,134,252,0.35)";
+            }}
+          >
+            <PanelRightClose style={{ width: 18, height: 18 }} />
+          </button>
         )}
-      </button>
+
+        {/* Collapsed rail — ~80px white bar with just the Idira mark (collapsed only). */}
+        {collapsed && (
+          <button
+            type="button"
+            onClick={() => setCollapsed(false)}
+            aria-label="Show use cases"
+            aria-expanded={false}
+            title="Show use cases"
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 14,
+              paddingTop: 22,
+              background: "#fff",
+              border: "none",
+              borderRight: "1px solid rgba(16,24,64,0.10)",
+              cursor: "pointer",
+            }}
+          >
+            <img
+              src="/cp/assets/idira-icon-color.png"
+              alt="Idira — show use cases"
+              style={{ width: 44, height: 44 }}
+            />
+            <span style={{ width: 40, height: 1, background: "rgba(16,24,64,0.12)" }} />
+          </button>
+        )}
+      </div>
 
       <div style={{ flex: 1, minWidth: 0, height: "100%" }}>
         <InspectorChrome
