@@ -63,9 +63,10 @@ deploy_data() {
   kubectl apply -f "${ROOT}/k8s/postgres-netpol.yaml"
   kubectl apply -f "${ROOT}/k8s/pg-gateway.yaml"
   # One-time cleanup of the retired SVID/CA-rotation workarounds (no-op once gone).
-  # The subscriber-cleanup wedge is addressed by the SWA v1.0.3 upgrade (which also
-  # let us drop the agent's hostPID/hostNetwork), so the proactive resync CronJob
-  # and the old pg-gateway-recycler are removed.
+  # The proactive resync CronJob was removed (it failed with ContainerCannotRun and
+  # never worked reliably); the old pg-gateway-recycler is likewise gone. The
+  # underlying v1.0.2 subscriber-cleanup wedge is NOT confirmed fixed on v1.0.3 —
+  # see docs/SWA-SVID-ROTATION-BUG.md; restart the chain by hand if it recurs.
   kubectl -n swa-system delete cronjob,rolebinding,role,serviceaccount swa-svid-resync --ignore-not-found
   kubectl -n swa-data delete cronjob,rolebinding,role,serviceaccount pg-gateway-recycler --ignore-not-found
   kubectl apply -f "${ROOT}/k8s/untrusted-app.yaml"
