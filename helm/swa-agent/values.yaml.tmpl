@@ -61,10 +61,22 @@ socketHostPath: /tmp/swa-agent
 podLabels:
   swa_nodegroup: "${SWA_NODE_GROUP}"
 
-hostPID: true
-hostNetwork: true
+# EXPERIMENT (SWA v1.0.3): drop hostPID + hostNetwork to test whether the upgraded
+# agent/server still require them. Set to false EXPLICITLY (not removed) so the
+# chart's own defaults can't re-enable them.
+#   - hostPID was historically REQUIRED by the k8s workload attestor on the Docker
+#     driver (host-global PID -> pod resolution); without it SVIDs failed to issue,
+#     and its stable-PID behavior drove the subscriber-cleanup rotation wedge
+#     (docs/SWA-SVID-ROTATION-BUG.md).
+#   - hostNetwork is not needed for node attestation: setNodeNameEnv exposes the
+#     node name via the downward API (MY_NODE_NAME), which the k8s_psat/k8s
+#     attestors use directly.
+# ROLLBACK if workloads stop getting SVIDs (attestation regressed): restore
+#   hostPID: true / hostNetwork: true / dnsPolicy: ClusterFirstWithHostNet
+hostPID: false
+hostNetwork: false
 setNodeNameEnv: true
-dnsPolicy: ClusterFirstWithHostNet
+dnsPolicy: ClusterFirst
 
 securityContext:
   runAsUser: 65532

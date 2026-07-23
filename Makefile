@@ -106,7 +106,7 @@ configure: ## Run Ansible on the TARGET: minikube + load images (S3) + vendor ch
 # so deploy-swa.sh can Helm-install the SWA server + agent there.
 # ---------------------------------------------------------------------------
 # Release version drives the local bundle dir; override via env to match .env.
-SWA_RELEASE_VERSION ?= 1.0.2
+SWA_RELEASE_VERSION ?= 1.0.3
 SWA_RELEASE_DIR ?= $(HOME)/Downloads/Secure Workload Access/Secure Workload Access/swa-release-v$(SWA_RELEASE_VERSION)
 TFSWA_DIR := terraform-swa
 
