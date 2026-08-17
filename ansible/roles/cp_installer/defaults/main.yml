@@ -4,6 +4,47 @@
 cp_installer_s3_uri: ""
 # AWS region for the s3 client (instance profile supplies credentials).
 aws_region: "us-east-1"
-# Where the installer lands on the host. The install itself is run manually from
-# here — this role only keeps the artifact present across host rebuilds.
+# Where the installer lands on the host. The staging block keeps the artifact
+# present across host rebuilds; the install block (below) consumes it.
 cp_installer_local_dir: "/home/{{ minikube_user }}/cp-installer"
+
+# ---------------------------------------------------------------------------
+# CP install block (hand-rolled, Privilege Cloud). All of this is skipped unless
+# cp_install_enabled is true (set by `make cp-install`). The plain staging above
+# still runs on `make configure` with cp_install_enabled=false.
+# ---------------------------------------------------------------------------
+cp_install_enabled: false
+
+# Repo root on the CONTROL host — used to locate scripts/conjur-secret.sh for the
+# delegated secret fetch. playbook_dir is <repo>/ansible.
+cp_repo_root: "{{ playbook_dir }}/.."
+
+# Where the installer zip is extracted and where the install runs from.
+cp_install_work_dir: "{{ cp_installer_local_dir }}/extracted"
+# CP install root (SDK + bin land under here).
+cp_install_location: "/opt/CARKaim"
+
+# vault.ini connection to the Privilege Cloud Vault. ADDRESS is the Privilege
+# Cloud Vault address (NOT a PVWA URL); the host needs egress to it on PORT.
+cp_vault_address: ""
+cp_vault_port: "1858"
+
+# aimparms values (version-specific keys — confirm against the CyberArk install
+# guide for your CP version). Rendered to cp_aimparms_path before the RPM.
+cp_aimparms_path: "/var/tmp/aimparms"
+cp_accept_eula: "no"                 # set "yes" to accept the CyberArk EULA
+cp_license_products: "AAM"           # e.g. AAM (Application Access Manager / CP)
+
+# Provisioning (installer) Vault credential. Preferred: pull from Secrets Manager
+# SaaS by Conjur variable path (fetched on the control host via conjur-secret.sh).
+# Fallback: set cp_provision_user / cp_provision_pass directly (from .env).
+cp_provision_user_path: ""
+cp_provision_pass_path: ""
+# .env fallback creds: read from the controller environment (exported by ENVSH)
+# rather than passed on argv, so they don't show up in `ps` on the control host.
+cp_provision_user: "{{ lookup('env', 'CP_PROVISION_USER') }}"
+cp_provision_pass: "{{ lookup('env', 'CP_PROVISION_PASS') }}"
+
+# Where CreateCredFile writes the encrypted provider credential file. Referenced
+# by aimparms so the RPM install can log in and register the provider.
+cp_cred_file: "/etc/opt/CARKaim/vault/appuser.cred"

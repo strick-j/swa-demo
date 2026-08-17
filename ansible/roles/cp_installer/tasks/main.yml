@@ -58,3 +58,190 @@
     - name: Report the CP installer(s) present on the host
       ansible.builtin.debug:
         msg: "CP installer(s) in {{ cp_installer_local_dir }}: {{ cp_zips.files | map(attribute='path') | map('basename') | list }}"
+
+# ---------------------------------------------------------------------------
+# Install block (hand-rolled, Privilege Cloud). Skipped unless cp_install_enabled
+# is true — `make cp-install` sets it. Runs the 7-step manual flow: extract →
+# aimparms → vault.ini → fetch installer cred → CreateCredFile → rpm → aimprv.
+# Tagged cp-install so `make configure` (staging only) never triggers it.
+# Exact aimparms keys, CreateCredFile flags, and paths are CP-version-specific —
+# confirm against the CyberArk Credential Provider install guide for your version.
+# ---------------------------------------------------------------------------
+- name: Install the CyberArk Credential Provider (Privilege Cloud)
+  when: cp_install_enabled | bool
+  tags: [cp-install]
+  block:
+    - name: Ensure unzip is present (to extract the AAM installer)
+      ansible.builtin.dnf:
+        name: unzip
+        state: present
+
+    - name: Find the staged CP installer zip
+      ansible.builtin.find:
+        paths: "{{ cp_installer_local_dir }}"
+        patterns: "*.zip"
+      register: cp_install_zips
+
+    - name: Fail if the installer zip is not staged
+      ansible.builtin.fail:
+        msg: >-
+          No *.zip in {{ cp_installer_local_dir }}. Run `make cp-installer-fetch`
+          (or `make configure`) first, or upload the AAM installer to
+          {{ cp_installer_s3_uri | default('the cp-installer S3 prefix', true) }}.
+      when: cp_install_zips.matched | int == 0
+
+    - name: Select the installer zip (first match)
+      ansible.builtin.set_fact:
+        cp_zip: "{{ (cp_install_zips.files | sort(attribute='path'))[0].path }}"
+
+    - name: Ensure the extraction directory exists
+      ansible.builtin.file:
+        path: "{{ cp_install_work_dir }}"
+        state: directory
+        owner: "{{ minikube_user }}"
+        group: "{{ minikube_user }}"
+        mode: "0755"
+
+    - name: Extract the AAM installer
+      ansible.builtin.unarchive:
+        src: "{{ cp_zip }}"
+        dest: "{{ cp_install_work_dir }}"
+        remote_src: true
+
+    - name: Render vault.ini (Privilege Cloud Vault connection)
+      ansible.builtin.copy:
+        dest: "{{ cp_install_work_dir }}/vault.ini"
+        mode: "0644"
+        content: |
+          [VAULT]
+          ADDRESS={{ cp_vault_address }}
+          PORT={{ cp_vault_port }}
+
+    - name: Render aimparms
+      ansible.builtin.copy:
+        dest: "{{ cp_aimparms_path }}"
+        mode: "0644"
+        content: |
+          AcceptCyberArkEULA={{ cp_accept_eula }}
+          InstallationTarget={{ cp_install_location }}
+          LicensedProducts={{ cp_license_products }}
+          VaultFilePath={{ cp_install_work_dir }}/vault.ini
+          CredFilePath={{ cp_cred_file }}
+          CreateVaultEnvironment=no
+
+    # --- Provisioning (installer) Vault credential ------------------------------
+    # Pull from Secrets Manager SaaS on the CONTROL host (where .env + OIDC creds
+    # live) via scripts/conjur-secret.sh, else fall back to .env vars. no_log on
+    # every secret-bearing task. Note: CreateCredFile below places the password on
+    # argv briefly — acceptable on this single-tenant demo host; no_log keeps it
+    # out of Ansible output.
+    - name: Fetch provisioning username from Secrets Manager SaaS
+      ansible.builtin.command: "bash {{ cp_repo_root }}/scripts/conjur-secret.sh {{ cp_provision_user_path }}"
+      args:
+        chdir: "{{ cp_repo_root }}"
+      delegate_to: localhost
+      become: false
+      run_once: true
+      changed_when: false
+      no_log: true
+      register: cp_user_fetch
+      when: cp_provision_user_path | length > 0
+
+    - name: Fetch provisioning password from Secrets Manager SaaS
+      ansible.builtin.command: "bash {{ cp_repo_root }}/scripts/conjur-secret.sh {{ cp_provision_pass_path }}"
+      args:
+        chdir: "{{ cp_repo_root }}"
+      delegate_to: localhost
+      become: false
+      run_once: true
+      changed_when: false
+      no_log: true
+      register: cp_pass_fetch
+      when: cp_provision_pass_path | length > 0
+
+    - name: Resolve effective provisioning credentials (SM SaaS else .env fallback)
+      ansible.builtin.set_fact:
+        cp_provision_user_eff: "{{ cp_user_fetch.stdout if (cp_provision_user_path | length > 0) else cp_provision_user }}"
+        cp_provision_pass_eff: "{{ cp_pass_fetch.stdout if (cp_provision_pass_path | length > 0) else cp_provision_pass }}"
+      no_log: true
+
+    - name: Fail if provisioning credentials are missing
+      ansible.builtin.fail:
+        msg: >-
+          Provisioning credentials are empty. Set CP_PROVISION_USER_PATH /
+          CP_PROVISION_PASS_PATH (Secrets Manager SaaS) or CP_PROVISION_USER /
+          CP_PROVISION_PASS (.env fallback).
+      when: (cp_provision_user_eff | length == 0) or (cp_provision_pass_eff | length == 0)
+
+    # --- CreateCredFile (before the RPM, per the manual flow) --------------------
+    - name: Locate CreateCredFile in the extracted installer
+      ansible.builtin.find:
+        paths: "{{ cp_install_work_dir }}"
+        patterns: "CreateCredFile"
+        recurse: true
+        file_type: file
+      register: cp_ccf
+
+    - name: Fail if CreateCredFile was not found
+      ansible.builtin.fail:
+        msg: "CreateCredFile not found under {{ cp_install_work_dir }} — check the installer zip contents."
+      when: cp_ccf.matched | int == 0
+
+    - name: Ensure the credential-file directory exists
+      ansible.builtin.file:
+        path: "{{ cp_cred_file | dirname }}"
+        state: directory
+        mode: "0700"
+
+    - name: Create the provider credential file (CreateCredFile)
+      ansible.builtin.command: >-
+        {{ (cp_ccf.files | sort(attribute='path'))[0].path }}
+        {{ cp_cred_file }} Password
+        -Username {{ cp_provision_user_eff }}
+        -Password {{ cp_provision_pass_eff }}
+      args:
+        creates: "{{ cp_cred_file }}"
+      no_log: true
+
+    # --- RPM install (reads /var/tmp/aimparms) ----------------------------------
+    - name: Locate the CARKaim RPM in the extracted installer
+      ansible.builtin.find:
+        paths: "{{ cp_install_work_dir }}"
+        patterns: "CARKaim-*.rpm"
+        recurse: true
+        file_type: file
+      register: cp_rpm
+
+    - name: Fail if the CARKaim RPM was not found
+      ansible.builtin.fail:
+        msg: "CARKaim-*.rpm not found under {{ cp_install_work_dir }} — check the installer zip contents."
+      when: cp_rpm.matched | int == 0
+
+    - name: Install the Credential Provider RPM
+      ansible.builtin.command: "rpm -ihv {{ (cp_rpm.files | sort(attribute='path'))[0].path }}"
+      args:
+        creates: "{{ cp_install_location }}/sdk/javapasswordsdk.jar"
+
+    - name: Ensure the aimprv service is enabled and running
+      ansible.builtin.systemd:
+        name: aimprv
+        enabled: true
+        state: started
+
+    # --- Post-conditions every downstream CP script assumes ---------------------
+    - name: Confirm the CP artifacts downstream scripts expect
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ cp_install_location }}/sdk/javapasswordsdk.jar"
+        - "{{ cp_install_location }}/sdk/libjavapasswordsdk.so"
+        - "{{ cp_install_location }}/bin/javaaimgetappinfo.jar"
+      register: cp_artifacts
+
+    - name: Fail if any expected CP artifact is missing
+      ansible.builtin.fail:
+        msg: "Expected CP artifact missing after install: {{ item.item }}"
+      loop: "{{ cp_artifacts.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: not item.stat.exists

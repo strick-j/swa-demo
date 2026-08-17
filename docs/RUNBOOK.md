@@ -277,32 +277,47 @@ Terraform adds a scoped `${project}-cp-installer-s3-read` policy from
 `cp_installer_s3_uri`, so **re-run `terraform apply` (or `make tf-apply`) after
 setting it**, exactly like the per-version `swa-images` prefix. Then the
 `cp_installer` role (`make configure`) syncs the zip to
-`/home/ec2-user/cp-installer/`; the install itself stays manual (run it from
-there). Leave `CP_INSTALLER_S3_URI` empty to skip both the grant and the sync.
+`/home/ec2-user/cp-installer/`. Leave `CP_INSTALLER_S3_URI` empty to skip both the
+grant and the sync.
 
-**Installing the CP (manual — follow the CyberArk docs).** The automation only
-*stages* the zip; installation is not automated. Follow the official CyberArk
-**Credential Provider install guide** for Linux (docs.cyberark.com →
-*Credential Providers* → *Install the Credential Provider* — match the guide to
-your installed version, e.g. v14.2.6), which walks through roughly:
+**Installing the CP — `make cp-install`.** The `cp_installer` role also hand-rolls
+the install (gated on `cp_install_enabled`, set by this target). We hand-roll
+rather than use the CyberArk `cyberark.pas.aimprovider` role because that role
+provisions the App Provider user over the on-prem PAS Web Services SDK/REST, which
+**Privilege Cloud does not expose** — so we provision locally with `CreateCredFile`
+against the Privilege Cloud Vault address in `vault.ini`. The target runs the
+manual 7-step flow: stage/extract → render `aimparms` → render `vault.ini` →
+fetch the installer credential → `CreateCredFile` → `rpm -ihv CARKaim-*.rpm` →
+enable `aimprv`, then asserts the `/opt/CARKaim/{sdk,bin}` artifacts the
+cp-bridge/app-hash steps assume.
 
-1. **Unzip** the installer on the host and `cd` into it:
-   ```bash
-   cd /home/ec2-user/cp-installer && unzip -o AAM-RHELinux-Intel64-Rls-v14.2.6.zip
-   ```
-2. **Create the parameters file** — copy the sample `aimparms` and edit it
-   (`AcceptCyberArkEULA=Yes`, `LicensedProducts`, install location, etc.), then
-   place it where the RPM expects it (typically `/var/tmp/aimparms`).
-3. **Install the RPM**: `sudo rpm -ihv CARKaim-*.rpm` (it reads `aimparms`).
-4. **Provision the provider to the Vault** — create the provider user's
-   credential file / run the provisioning per the docs, then confirm the
-   `aimprv` service is enabled and running (`systemctl status aimprv`).
-5. Confirm the SDK artifacts exist (default `/opt/CARKaim/sdk/` —
-   `javapasswordsdk.jar` + `libjavapasswordsdk.so`) so `make cp-bridge-install`
-   can find them.
-
-Exact filenames, parameter keys, and provisioning steps are version-specific —
-**the CyberArk docs are authoritative**; the above is only an orientation.
+Set in `.env` first:
+```bash
+export CP_VAULT_ADDRESS="<privilege-cloud-vault-address>"   # ADDRESS in vault.ini; host needs egress on 1858
+# Installer (provisioning) cred — pull from Secrets Manager SaaS by Conjur path:
+export CP_PROVISION_USER_PATH="data/vault/<safe>/<account>/username"
+export CP_PROVISION_PASS_PATH="data/vault/<safe>/<account>/password"
+# ...or the .env fallback (kept off argv), if you can't fetch from Conjur:
+# export CP_PROVISION_USER="..."; export CP_PROVISION_PASS="..."
+```
+The credential fetch reuses the same Identity-OIDC → Conjur token flow as
+`make tenant-tf` (via `scripts/conjur-secret.sh`, run on the control host), so the
+existing `CONJUR_*` / `IDENTITY_*` vars must be set. Then:
+```bash
+make cp-install
+```
+Notes:
+- The **provisioning user** must be a Privilege Cloud identity permitted to add
+  the CP component / create the provider user.
+- Exact `aimparms` keys, `CreateCredFile` flags, the RPM name, and the vault.ini
+  fields are **CP-version-specific** — the CyberArk **Credential Provider install
+  guide** for your version (docs.cyberark.com → *Credential Providers* → *Install
+  the Credential Provider*) is authoritative. The role's defaults
+  (`ansible/roles/cp_installer/defaults/main.yml`) are the tuning point; override
+  via `.env`/`-e` as needed.
+- Idempotent: `CreateCredFile` and the RPM are guarded by `creates:`, so re-running
+  `make cp-install` is a no-op once installed. `CP_PROVISION_*` are handled with
+  `no_log`; note `CreateCredFile` briefly places the password on argv on the host.
 
 **Step 1 — `.env`.** Set the host build vars and the CP object coordinates. The
 Safe/Object values **default to the CCP demo's** — leave them empty to reuse the
